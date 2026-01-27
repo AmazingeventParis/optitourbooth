@@ -1,0 +1,389 @@
+// ===========================================
+// OptiTour Booth - Schéma Prisma
+// ===========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----- ENUMS -----
+
+enum UserRole {
+  admin
+  chauffeur
+}
+
+enum TourneeStatut {
+  planifiee
+  en_cours
+  terminee
+  annulee
+}
+
+enum PointType {
+  livraison
+  ramassage
+  livraison_ramassage
+}
+
+enum PointStatut {
+  a_faire
+  en_cours
+  termine
+  incident
+  annule
+}
+
+enum IncidentType {
+  client_absent
+  adresse_incorrecte
+  acces_impossible
+  materiel_endommage
+  retard_important
+  autre
+}
+
+enum IncidentStatut {
+  ouvert
+  en_cours
+  resolu
+  ferme
+}
+
+// ----- TABLES PRINCIPALES -----
+
+/// Utilisateurs (Administrateurs et Chauffeurs)
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(chauffeur)
+  nom          String
+  prenom       String
+  telephone    String?
+  couleur      String?  @default("#3B82F6") // Couleur pour identifier le chauffeur
+  actif        Boolean  @default(true)
+
+  // Métadonnées
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  lastLoginAt  DateTime? @map("last_login_at")
+
+  // Relations
+  tournees     Tournee[]
+  positions    Position[]
+
+  @@index([role, actif]) // Requêtes fréquentes: chauffeurs actifs
+  @@map("users")
+}
+
+/// Clients (lieux de livraison/ramassage)
+model Client {
+  id                 String   @id @default(uuid())
+  nom                String
+  email              String?
+  telephone          String?
+
+  // Adresse
+  adresse            String
+  complementAdresse  String?  @map("complement_adresse")
+  codePostal         String   @map("code_postal")
+  ville              String
+  pays               String   @default("France")
+
+  // Coordonnées géographiques
+  latitude           Float?
+  longitude          Float?
+
+  // Informations supplémentaires
+  instructionsAcces  String?  @map("instructions_acces") @db.Text
+  contactNom         String?  @map("contact_nom")
+  contactTelephone   String?  @map("contact_telephone")
+
+  // Statistiques
+  frequenceLivraison Int      @default(0) @map("frequence_livraison")
+
+  // Métadonnées
+  actif              Boolean  @default(true)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  points             Point[]
+
+  @@index([codePostal])
+  @@index([ville])
+  @@index([ville, actif]) // Recherche par ville + clients actifs
+  @@index([actif, codePostal]) // Filtrage clients actifs par code postal
+  @@map("clients")
+}
+
+/// Produits (types de bornes photobooth)
+model Produit {
+  id                    String   @id @default(uuid())
+  nom                   String   @unique
+  couleur               String?  // Couleur pour identification visuelle (hex)
+
+  // Durées en minutes
+  dureeInstallation     Int      @default(30) @map("duree_installation")
+  dureeDesinstallation  Int      @default(20) @map("duree_desinstallation")
+
+  // Dimensions et poids (pour planification véhicule)
+  poids                 Float?   // en kg
+  largeur               Float?   // en cm
+  hauteur               Float?   // en cm
+  profondeur            Float?   // en cm
+
+  // Métadonnées
+  actif                 Boolean  @default(true)
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  options               ProduitOption[]
+  pointProduits         PointProduit[]
+
+  @@map("produits")
+}
+
+/// Options produits (accessoires, suppléments)
+model ProduitOption {
+  id              String   @id @default(uuid())
+  produitId       String   @map("produit_id")
+  nom             String
+  description     String?
+  dureeSupp       Int      @default(0) @map("duree_supplementaire") // minutes en plus
+
+  // Métadonnées
+  actif           Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  produit         Produit  @relation(fields: [produitId], references: [id], onDelete: Cascade)
+  pointOptions    PointOption[]
+
+  @@map("produit_options")
+}
+
+/// Tournées
+model Tournee {
+  id                String        @id @default(uuid())
+  date              DateTime      @db.Date
+  chauffeurId       String        @map("chauffeur_id")
+  statut            TourneeStatut @default(planifiee)
+
+  // Horaires
+  heureDepart       DateTime?     @map("heure_depart") @db.Time
+  heureFinEstimee   DateTime?     @map("heure_fin_estimee") @db.Time
+  heureFinReelle    DateTime?     @map("heure_fin_reelle") @db.Time
+
+  // Statistiques calculées
+  distanceTotaleKm  Float?        @map("distance_totale_km")
+  dureeTotaleMin    Int?          @map("duree_totale_min")
+  nombrePoints      Int           @default(0) @map("nombre_points")
+
+  // Point de départ (entrepôt/dépôt)
+  depotAdresse      String?       @map("depot_adresse")
+  depotLatitude     Float?        @map("depot_latitude")
+  depotLongitude    Float?        @map("depot_longitude")
+
+  // Notes
+  notes             String?       @db.Text
+
+  // Métadonnées
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  chauffeur         User          @relation(fields: [chauffeurId], references: [id])
+  points            Point[]
+
+  @@index([date])
+  @@index([chauffeurId])
+  @@index([statut])
+  @@index([date, chauffeurId]) // Tournées d'un chauffeur par date
+  @@index([date, statut]) // Tournées par date et statut
+  @@index([chauffeurId, statut]) // Tournées d'un chauffeur par statut
+  @@index([date, chauffeurId, statut]) // Requête combinée courante
+  @@map("tournees")
+}
+
+/// Points de livraison/ramassage
+model Point {
+  id                  String      @id @default(uuid())
+  tourneeId           String      @map("tournee_id")
+  clientId            String      @map("client_id")
+
+  type                PointType
+  ordre               Int         // Position dans la tournée
+  statut              PointStatut @default(a_faire)
+
+  // Créneaux horaires demandés par le client
+  creneauDebut        DateTime?   @map("creneau_debut") @db.Time
+  creneauFin          DateTime?   @map("creneau_fin") @db.Time
+
+  // Heures calculées/réelles
+  heureArriveeEstimee DateTime?   @map("heure_arrivee_estimee") @db.Time
+  heureArriveeReelle  DateTime?   @map("heure_arrivee_reelle")
+  heureDepartReelle   DateTime?   @map("heure_depart_reelle")
+
+  // Durée prévue sur place (calculée depuis produits)
+  dureePrevue         Int         @default(30) @map("duree_prevue") // minutes
+
+  // Validation livraison
+  signatureData       String?     @map("signature_data") @db.Text
+  signatureNom        String?     @map("signature_nom")
+  signatureDate       DateTime?   @map("signature_date")
+
+  // Notes
+  notesInternes       String?     @map("notes_internes") @db.Text
+  notesClient         String?     @map("notes_client") @db.Text
+
+  // Métadonnées
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  tournee             Tournee     @relation(fields: [tourneeId], references: [id], onDelete: Cascade)
+  client              Client      @relation(fields: [clientId], references: [id])
+  produits            PointProduit[]
+  options             PointOption[]
+  photos              Photo[]
+  incidents           Incident[]
+
+  @@index([tourneeId])
+  @@index([clientId])
+  @@index([statut])
+  @@index([tourneeId, ordre]) // Points d'une tournée triés par ordre
+  @@index([tourneeId, statut]) // Points d'une tournée par statut
+  @@index([clientId, tourneeId]) // Historique des tournées d'un client
+  @@map("points")
+}
+
+/// Liaison Points <-> Produits
+model PointProduit {
+  id          String   @id @default(uuid())
+  pointId     String   @map("point_id")
+  produitId   String   @map("produit_id")
+  quantite    Int      @default(1)
+
+  // Relations
+  point       Point    @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  produit     Produit  @relation(fields: [produitId], references: [id])
+
+  @@unique([pointId, produitId])
+  @@map("point_produits")
+}
+
+/// Liaison Points <-> Options
+model PointOption {
+  id          String        @id @default(uuid())
+  pointId     String        @map("point_id")
+  optionId    String        @map("option_id")
+
+  // Relations
+  point       Point         @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  option      ProduitOption @relation(fields: [optionId], references: [id])
+
+  @@unique([pointId, optionId])
+  @@map("point_options")
+}
+
+/// Photos de preuve
+model Photo {
+  id          String   @id @default(uuid())
+  pointId     String   @map("point_id")
+
+  // Fichier
+  filename    String
+  path        String
+  mimetype    String
+  size        Int      // en bytes
+
+  // Métadonnées photo
+  latitude    Float?
+  longitude   Float?
+  takenAt     DateTime @map("taken_at")
+
+  // Type de photo
+  type        String   @default("preuve") // preuve, incident, avant, apres
+
+  // Métadonnées
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  point       Point    @relation(fields: [pointId], references: [id], onDelete: Cascade)
+
+  @@index([pointId])
+  @@map("photos")
+}
+
+/// Incidents
+model Incident {
+  id            String         @id @default(uuid())
+  pointId       String         @map("point_id")
+
+  type          IncidentType
+  statut        IncidentStatut @default(ouvert)
+
+  description   String         @db.Text
+  resolution    String?        @db.Text
+
+  // Photos associées (URLs ou références)
+  photosUrls    String[]       @map("photos_urls")
+
+  // Dates
+  dateDeclaration DateTime     @default(now()) @map("date_declaration")
+  dateResolution  DateTime?    @map("date_resolution")
+
+  // Métadonnées
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  point         Point          @relation(fields: [pointId], references: [id], onDelete: Cascade)
+
+  @@index([pointId])
+  @@index([statut])
+  @@index([statut, dateDeclaration]) // Incidents par statut triés par date
+  @@map("incidents")
+}
+
+/// Positions GPS des chauffeurs (historique)
+model Position {
+  id          String   @id @default(uuid())
+  chauffeurId String   @map("chauffeur_id")
+
+  latitude    Float
+  longitude   Float
+  accuracy    Float?   // précision en mètres
+  speed       Float?   // vitesse en km/h
+  heading     Float?   // direction en degrés
+
+  timestamp   DateTime @default(now())
+
+  // Relations
+  chauffeur   User     @relation(fields: [chauffeurId], references: [id], onDelete: Cascade)
+
+  @@index([chauffeurId, timestamp(sort: Desc)])
+  @@map("positions")
+}
+
+/// Sessions de refresh token
+model RefreshToken {
+  id          String   @id @default(uuid())
+  token       String   @unique
+  userId      String   @map("user_id")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}

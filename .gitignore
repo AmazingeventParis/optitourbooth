@@ -1,0 +1,70 @@
+# ===========================================
+# OptiTour Booth - Git Ignore
+# ===========================================
+
+# ----- Dependencies -----
+node_modules/
+.pnpm-store/
+
+# ----- Build outputs -----
+dist/
+build/
+.next/
+out/
+
+# ----- Environment files -----
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ----- Logs -----
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# ----- IDE -----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ----- OS -----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Testing -----
+coverage/
+.nyc_output/
+
+# ----- Prisma -----
+prisma/*.db
+prisma/*.db-journal
+
+# ----- Uploads -----
+uploads/
+!uploads/.gitkeep
+
+# ----- Docker volumes data (local) -----
+docker/postgres/data/
+docker/redis/data/
+docker/osrm-data/*.osrm*
+
+# ----- Temporary files -----
+tmp/
+temp/
+*.tmp
+*.temp
+
+# ----- SSL certificates (local dev) -----
+*.pem
+*.key
+*.crt
+
+# ----- Cache -----
+.cache/
+.parcel-cache/
+.eslintcache

@@ -1,0 +1,240 @@
+import api, { ApiResponse } from './api';
+import { Tournee, Point, PaginationMeta } from '@/types';
+
+interface TourneesFilters {
+  page?: number;
+  limit?: number;
+  date?: string;
+  chauffeurId?: string;
+  statut?: string;
+}
+
+interface CreateTourneeData {
+  date: string;
+  chauffeurId: string;
+  heureDepart?: string;
+  depotAdresse?: string;
+  depotLatitude?: number;
+  depotLongitude?: number;
+  notes?: string;
+}
+
+interface UpdateTourneeData {
+  date?: string;
+  chauffeurId?: string;
+  statut?: string;
+  heureDepart?: string;
+  heureFinEstimee?: string;
+  depotAdresse?: string;
+  depotLatitude?: number;
+  depotLongitude?: number;
+  notes?: string;
+}
+
+interface CreatePointData {
+  clientId: string;
+  type: 'livraison' | 'ramassage' | 'livraison_ramassage';
+  creneauDebut?: string;
+  creneauFin?: string;
+  dureePrevue?: number;
+  notesInternes?: string;
+  notesClient?: string;
+  produits?: Array<{ produitId: string; quantite: number }>;
+}
+
+interface UpdatePointData {
+  type?: 'livraison' | 'ramassage' | 'livraison_ramassage';
+  statut?: string;
+  creneauDebut?: string;
+  creneauFin?: string;
+  dureePrevue?: number;
+  notesInternes?: string;
+  notesClient?: string;
+}
+
+interface TourneeStats {
+  distanceTotaleKm: number;
+  dureeTotaleMin: number;
+  nombrePoints: number;
+  heureFinEstimee: string;
+}
+
+interface OptimizeResult {
+  tournee: Tournee;
+  stats: TourneeStats;
+  improvements: {
+    distanceSaved: number;
+    timeSaved: number;
+  };
+}
+
+export interface ImportParsedPoint {
+  clientName: string;
+  societe?: string;
+  produitName?: string;
+  produitCouleur?: string;
+  type: string;
+  creneauDebut?: string;
+  creneauFin?: string;
+  contactNom?: string;
+  contactTelephone?: string;
+  notes?: string;
+  clientId?: string;
+  produitId?: string;
+  clientFound: boolean;
+  produitFound: boolean;
+  errors: string[];
+}
+
+export interface ImportResult {
+  success: boolean;
+  totalRows: number;
+  imported: number;
+  errors: Array<{ row: number; message: string }>;
+  points: ImportParsedPoint[];
+}
+
+export const tourneesService = {
+  async list(filters: TourneesFilters = {}): Promise<{ data: Tournee[]; meta: PaginationMeta }> {
+    const params = new URLSearchParams();
+    if (filters.page) params.append('page', filters.page.toString());
+    if (filters.limit) params.append('limit', filters.limit.toString());
+    if (filters.date) params.append('date', filters.date);
+    if (filters.chauffeurId) params.append('chauffeurId', filters.chauffeurId);
+    if (filters.statut) params.append('statut', filters.statut);
+
+    const response = await api.get<ApiResponse<Tournee[]>>(`/tournees?${params}`);
+    return {
+      data: response.data.data,
+      meta: response.data.meta || { page: 1, limit: 20, total: 0, totalPages: 0 },
+    };
+  },
+
+  async getById(id: string): Promise<Tournee> {
+    const response = await api.get<ApiResponse<Tournee>>(`/tournees/${id}`);
+    return response.data.data;
+  },
+
+  async create(data: CreateTourneeData): Promise<Tournee> {
+    const response = await api.post<ApiResponse<Tournee>>('/tournees', data);
+    return response.data.data;
+  },
+
+  async update(id: string, data: UpdateTourneeData): Promise<Tournee> {
+    const response = await api.put<ApiResponse<Tournee>>(`/tournees/${id}`, data);
+    return response.data.data;
+  },
+
+  async delete(id: string): Promise<void> {
+    await api.delete(`/tournees/${id}`);
+  },
+
+  async duplicate(id: string, newDate: string): Promise<Tournee> {
+    const response = await api.post<ApiResponse<Tournee>>(`/tournees/${id}/duplicate`, { newDate });
+    return response.data.data;
+  },
+
+  // Points
+  async addPoint(tourneeId: string, data: CreatePointData): Promise<Point> {
+    const response = await api.post<ApiResponse<Point>>(`/tournees/${tourneeId}/points`, data);
+    return response.data.data;
+  },
+
+  async updatePoint(tourneeId: string, pointId: string, data: UpdatePointData): Promise<Point> {
+    const response = await api.put<ApiResponse<Point>>(`/tournees/${tourneeId}/points/${pointId}`, data);
+    return response.data.data;
+  },
+
+  async deletePoint(tourneeId: string, pointId: string): Promise<void> {
+    await api.delete(`/tournees/${tourneeId}/points/${pointId}`);
+  },
+
+  async reorderPoints(tourneeId: string, pointIds: string[]): Promise<Tournee> {
+    const response = await api.put<ApiResponse<Tournee>>(`/tournees/${tourneeId}/points/reorder`, { pointIds });
+    return response.data.data;
+  },
+
+  async movePoint(sourceTourneeId: string, pointId: string, targetTourneeId: string, ordre?: number): Promise<Point> {
+    const response = await api.put<ApiResponse<Point>>(
+      `/tournees/${sourceTourneeId}/points/${pointId}/move`,
+      { targetTourneeId, ordre }
+    );
+    return response.data.data;
+  },
+
+  // Optimization
+  async optimize(id: string): Promise<OptimizeResult> {
+    const response = await api.post<ApiResponse<OptimizeResult>>(`/tournees/${id}/optimize`);
+    return response.data.data;
+  },
+
+  async calculateStats(id: string): Promise<TourneeStats> {
+    const response = await api.get<ApiResponse<TourneeStats>>(`/tournees/${id}/stats`);
+    return response.data.data;
+  },
+
+  // Status changes
+  async start(id: string): Promise<Tournee> {
+    const response = await api.post<ApiResponse<Tournee>>(`/tournees/${id}/start`);
+    return response.data.data;
+  },
+
+  async finish(id: string): Promise<Tournee> {
+    const response = await api.post<ApiResponse<Tournee>>(`/tournees/${id}/finish`);
+    return response.data.data;
+  },
+
+  async cancel(id: string): Promise<Tournee> {
+    const response = await api.post<ApiResponse<Tournee>>(`/tournees/${id}/cancel`);
+    return response.data.data;
+  },
+
+  // Import Excel
+  async importPreviewGeneral(file: File): Promise<{ points: ImportParsedPoint[] }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.post<ApiResponse<{ points: ImportParsedPoint[] }>>(
+      `/tournees/import/preview`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data.data;
+  },
+
+  async importPreview(tourneeId: string, file: File): Promise<{ points: ImportParsedPoint[] }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.post<ApiResponse<{ points: ImportParsedPoint[] }>>(
+      `/tournees/${tourneeId}/import/preview`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data.data;
+  },
+
+  async importPoints(tourneeId: string, file: File): Promise<ImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.post<ApiResponse<ImportResult>>(
+      `/tournees/${tourneeId}/import`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data.data;
+  },
+};
