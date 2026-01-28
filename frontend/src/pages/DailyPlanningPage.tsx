@@ -1735,17 +1735,20 @@ export default function DailyPlanningPage() {
         creneauFin: pendingPoint.creneauFin,
         notesInternes: pendingPoint.notes,
         produits: pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : undefined,
-      }).then(createdPoint => {
-        // Remplacer l'ID optimiste par l'ID réel
-        setTournees(current => current.map(t => {
-          if (t.id === targetTourneeId && t.points) {
-            return {
-              ...t,
-              points: t.points.map(p => p.id === optimisticId ? { ...p, id: createdPoint.id } : p)
-            };
-          }
-          return t;
-        }));
+      }).then(async () => {
+        // Recharger la tournée complète pour avoir les ETAs calculées par le backend
+        // (temps de trajet OSRM + durées de service)
+        const updatedTournee = await tourneesService.getById(targetTourneeId);
+        setTournees(current => {
+          const updated = current.map(t => t.id === targetTourneeId ? updatedTournee : t);
+          // Notifier la carte avec les données à jour
+          broadcastChannel.current?.postMessage({
+            type: 'tournees-updated',
+            date: selectedDate,
+            tournees: updated
+          });
+          return updated;
+        });
       }).catch(error => {
         // ROLLBACK
         setTournees(rollbackTournees);
@@ -1817,7 +1820,19 @@ export default function DailyPlanningPage() {
       });
 
       // Appel API en arrière-plan
-      tourneesService.deletePoint(sourceTourneeId, point.id).catch(error => {
+      tourneesService.deletePoint(sourceTourneeId, point.id).then(async () => {
+        // Recharger la tournée pour recalculer les ETAs des points restants
+        const updatedTournee = await tourneesService.getById(sourceTourneeId);
+        setTournees(current => {
+          const updated = current.map(t => t.id === sourceTourneeId ? updatedTournee : t);
+          broadcastChannel.current?.postMessage({
+            type: 'tournees-updated',
+            date: selectedDate,
+            tournees: updated
+          });
+          return updated;
+        });
+      }).catch(error => {
         // ROLLBACK
         setTournees(rollbackTournees);
         setPendingPoints(rollbackPendingPoints);
@@ -1875,7 +1890,19 @@ export default function DailyPlanningPage() {
       });
 
       // Appel API en arrière-plan
-      tourneesService.reorderPoints(sourceTourneeId, reorderedPoints.map(p => p.id)).catch(() => {
+      tourneesService.reorderPoints(sourceTourneeId, reorderedPoints.map(p => p.id)).then(async () => {
+        // Recharger la tournée pour recalculer les ETAs avec le nouvel ordre
+        const updatedTournee = await tourneesService.getById(sourceTourneeId);
+        setTournees(current => {
+          const updated = current.map(t => t.id === sourceTourneeId ? updatedTournee : t);
+          broadcastChannel.current?.postMessage({
+            type: 'tournees-updated',
+            date: selectedDate,
+            tournees: updated
+          });
+          return updated;
+        });
+      }).catch(() => {
         setTournees(currentTournees); // Rollback
         toastError('Erreur', 'Impossible de réordonner');
       });
@@ -1928,7 +1955,26 @@ export default function DailyPlanningPage() {
     });
 
     // Appel API en arrière-plan
-    tourneesService.movePoint(sourceTourneeId, sourcePointId, targetTourneeId, insertIndex).catch(() => {
+    tourneesService.movePoint(sourceTourneeId, sourcePointId, targetTourneeId, insertIndex).then(async () => {
+      // Recharger les deux tournées pour recalculer les ETAs
+      const [updatedSource, updatedTarget] = await Promise.all([
+        tourneesService.getById(sourceTourneeId),
+        tourneesService.getById(targetTourneeId),
+      ]);
+      setTournees(current => {
+        const updated = current.map(t => {
+          if (t.id === sourceTourneeId) return updatedSource;
+          if (t.id === targetTourneeId) return updatedTarget;
+          return t;
+        });
+        broadcastChannel.current?.postMessage({
+          type: 'tournees-updated',
+          date: selectedDate,
+          tournees: updated
+        });
+        return updated;
+      });
+    }).catch(() => {
       setTournees(currentTournees); // Rollback
       toastError('Erreur', 'Impossible de déplacer le point');
     });
