@@ -1652,8 +1652,9 @@ export default function DailyPlanningPage() {
         if (overPointIndex !== -1) insertIndex = overPointIndex + 1;
       }
 
-      // Créer le point optimiste
+      // Créer le point optimiste - inclure les coordonnées pour la carte
       const now = new Date().toISOString();
+      const clientCoords = clientCoordsCacheRef.current.get(pendingPoint.clientId!);
       const optimisticPoint: Point = {
         id: optimisticId,
         tourneeId: targetTourneeId,
@@ -1666,6 +1667,8 @@ export default function DailyPlanningPage() {
           codePostal: '',
           ville: '',
           pays: 'France',
+          latitude: clientCoords?.latitude,
+          longitude: clientCoords?.longitude,
           createdAt: now,
           updatedAt: now,
         } as Client,
