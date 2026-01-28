@@ -22,6 +22,71 @@ function parseTime(timeStr: string): { hours: number; minutes: number } {
   };
 }
 
+// Helper pour récupérer une tournée complète avec tous les détails (utilisé après modifications)
+async function getFullTournee(tourneeId: string) {
+  return prisma.tournee.findUnique({
+    where: { id: tourneeId },
+    include: {
+      chauffeur: {
+        select: {
+          id: true,
+          nom: true,
+          prenom: true,
+          telephone: true,
+          email: true,
+          couleur: true,
+        },
+      },
+      points: {
+        orderBy: { ordre: 'asc' },
+        include: {
+          client: {
+            select: {
+              id: true,
+              nom: true,
+              adresse: true,
+              codePostal: true,
+              ville: true,
+              latitude: true,
+              longitude: true,
+              telephone: true,
+              contactNom: true,
+              contactTelephone: true,
+              instructionsAcces: true,
+            },
+          },
+          produits: {
+            select: {
+              id: true,
+              quantite: true,
+              produit: {
+                select: {
+                  id: true,
+                  nom: true,
+                  couleur: true,
+                  dureeInstallation: true,
+                  dureeDesinstallation: true,
+                },
+              },
+            },
+          },
+          options: {
+            select: {
+              option: {
+                select: {
+                  id: true,
+                  nom: true,
+                  dureeSupp: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 export const tourneeController = {
   /**
    * GET /api/tournees
@@ -300,10 +365,11 @@ export const tourneeController = {
     };
 
     if (data.heureDepart) {
-      // Convertir HH:MM en Date (avec la date de la tournée) en UTC pour éviter les décalages
+      // Convertir HH:MM en Date (avec la date de la tournée) en HEURE LOCALE
+      // pour cohérence avec les créneaux des points (aussi en heure locale)
       const { hours, minutes } = parseTime(data.heureDepart);
       const heureDepart = new Date(data.date);
-      heureDepart.setUTCHours(hours, minutes, 0, 0);
+      heureDepart.setHours(hours, minutes, 0, 0);
       createData.heureDepart = heureDepart;
     }
 
@@ -412,7 +478,7 @@ export const tourneeController = {
         const dateRef = data.date ? new Date(data.date) : tournee.date;
         const { hours, minutes } = parseTime(data.heureDepart);
         const heureDepart = new Date(dateRef);
-        heureDepart.setUTCHours(hours, minutes, 0, 0);
+        heureDepart.setHours(hours, minutes, 0, 0);
         updateData.heureDepart = heureDepart;
       } else {
         updateData.heureDepart = null;
@@ -424,7 +490,7 @@ export const tourneeController = {
         const dateRef = data.date ? new Date(data.date) : tournee.date;
         const { hours, minutes } = parseTime(data.heureFinEstimee);
         const heureFin = new Date(dateRef);
-        heureFin.setUTCHours(hours, minutes, 0, 0);
+        heureFin.setHours(hours, minutes, 0, 0);
         updateData.heureFinEstimee = heureFin;
       } else {
         updateData.heureFinEstimee = null;
@@ -1040,19 +1106,12 @@ export const tourneeController = {
       data: { dureePrevue },
     });
 
-    // Mettre à jour les stats de la tournée
+    // Mettre à jour les stats de la tournée (calcule les ETAs avec OSRM)
     await optimizationService.updateTourneeStats(id);
 
-    const updatedPoint = await prisma.point.findUnique({
-      where: { id: point.id },
-      include: {
-        client: true,
-        produits: { include: { produit: true } },
-        options: { include: { option: true } },
-      },
-    });
-
-    apiResponse.created(res, updatedPoint, 'Point ajouté');
+    // Retourner la tournée complète avec tous les points et leurs ETAs
+    const updatedTournee = await getFullTournee(id);
+    apiResponse.created(res, updatedTournee, 'Point ajouté');
   },
 
   /**
@@ -1217,10 +1276,12 @@ export const tourneeController = {
       )
     );
 
-    // Mettre à jour les stats
+    // Mettre à jour les stats (calcule les ETAs avec OSRM)
     await optimizationService.updateTourneeStats(id);
 
-    apiResponse.success(res, null, 'Point supprimé');
+    // Retourner la tournée complète avec tous les points et leurs ETAs
+    const updatedTournee = await getFullTournee(id);
+    apiResponse.success(res, updatedTournee, 'Point supprimé');
   },
 
   /**
@@ -1272,20 +1333,12 @@ export const tourneeController = {
       )
     );
 
-    // Mettre à jour les stats
+    // Mettre à jour les stats (calcule les ETAs avec OSRM)
     await optimizationService.updateTourneeStats(id);
 
-    const updated = await prisma.tournee.findUnique({
-      where: { id },
-      include: {
-        points: {
-          orderBy: { ordre: 'asc' },
-          include: { client: true },
-        },
-      },
-    });
-
-    apiResponse.success(res, updated, 'Ordre mis à jour');
+    // Retourner la tournée complète avec tous les points et leurs ETAs
+    const updatedTournee = await getFullTournee(id);
+    apiResponse.success(res, updatedTournee, 'Ordre mis à jour');
   },
 
   /**
@@ -1388,22 +1441,22 @@ export const tourneeController = {
       }
     });
 
-    // Mettre à jour les stats des deux tournées
+    // Mettre à jour les stats des deux tournées (calcule les ETAs avec OSRM)
     await Promise.all([
       optimizationService.updateTourneeStats(sourceTourneeId),
       optimizationService.updateTourneeStats(targetTourneeId),
     ]);
 
-    const movedPoint = await prisma.point.findUnique({
-      where: { id: pointId },
-      include: {
-        client: true,
-        produits: { include: { produit: true } },
-        options: { include: { option: true } },
-      },
-    });
+    // Retourner les deux tournées complètes avec tous les points et leurs ETAs
+    const [sourceTournee, updatedTargetTournee] = await Promise.all([
+      getFullTournee(sourceTourneeId),
+      getFullTournee(targetTourneeId),
+    ]);
 
-    apiResponse.success(res, movedPoint, 'Point déplacé vers la nouvelle tournée');
+    apiResponse.success(res, {
+      sourceTournee,
+      targetTournee: updatedTargetTournee
+    }, 'Point déplacé vers la nouvelle tournée');
   },
 
   /**
