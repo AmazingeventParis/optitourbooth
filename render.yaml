@@ -61,7 +61,7 @@ services:
     name: optitourbooth-web
     runtime: static
     rootDir: frontend
-    buildCommand: pnpm install && pnpm run build
+    buildCommand: npm install -g pnpm && pnpm install && pnpm run build
     staticPublishPath: dist
     headers:
       - path: /*
