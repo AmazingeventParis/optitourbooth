@@ -1690,14 +1690,19 @@ export default function DailyPlanningPage() {
         creneauFin: pendingPoint.creneauFin,
         notesInternes: pendingPoint.notes,
         produits: pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : undefined,
-      }).then(() => {
-        // Synchroniser avec le serveur en arrière-plan
-        tourneesService.getById(targetTourneeId).then(updatedTournee => {
-          setTournees(current => {
-            const newTournees = current.map(t => t.id === targetTourneeId ? updatedTournee : t);
-            notifyMapPopup(newTournees);
-            return newTournees;
+      }).then((createdPoint) => {
+        // Remplacer le point optimiste par le vrai point (sans recharger toute la tournée)
+        setTournees(current => {
+          const newTournees = current.map(t => {
+            if (t.id === targetTourneeId && t.points) {
+              const updatedPoints = t.points.map(p =>
+                p.id === optimisticId ? { ...createdPoint, client: optimisticPoint.client, produits: optimisticPoint.produits } : p
+              );
+              return { ...t, points: updatedPoints };
+            }
+            return t;
           });
+          return newTournees;
         });
       }).catch((error) => {
         // Rollback en cas d'erreur
@@ -1757,16 +1762,8 @@ export default function DailyPlanningPage() {
       setPendingPoints(prev => [...prev, pendingPoint]);
 
       // Appel API en arrière-plan (ne pas bloquer l'UI)
-      tourneesService.deletePoint(sourceTourneeId, point.id).then(() => {
-        // Synchroniser avec le serveur en arrière-plan
-        tourneesService.getById(sourceTourneeId).then(updatedTournee => {
-          setTournees(currentTournees => {
-            const finalTournees = currentTournees.map(t => t.id === sourceTourneeId ? updatedTournee : t);
-            notifyMapPopup(finalTournees);
-            return finalTournees;
-          });
-        });
-      }).catch((error) => {
+      // La mise à jour optimiste est déjà faite, pas besoin de recharger
+      tourneesService.deletePoint(sourceTourneeId, point.id).catch((error) => {
         // Rollback en cas d'erreur - restaurer l'état original
         setTournees(currentTournees => {
           const rollbackTournees = currentTournees.map(t => {
