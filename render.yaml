@@ -54,6 +54,7 @@ services:
     name: optitourbooth-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
+    ipAllowList: [] # Autoriser uniquement les services Render internes
 
   # ---- FRONTEND STATIC ----
   - type: web
