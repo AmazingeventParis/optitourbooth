@@ -107,7 +107,13 @@ export const importService = {
   async parseExcel(buffer: Buffer): Promise<ParsedPoint[]> {
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      throw new Error('Le fichier Excel ne contient aucune feuille');
+    }
     const sheet = workbook.Sheets[sheetName];
+    if (!sheet) {
+      throw new Error('Impossible de lire la feuille Excel');
+    }
 
     // Convertir en JSON avec les headers
     const rows = XLSX.utils.sheet_to_json<ImportedRow>(sheet, { defval: '' });
@@ -189,7 +195,7 @@ export const importService = {
     if (!timeStr) return undefined;
 
     const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
-    if (!match) return undefined;
+    if (!match || !match[1] || !match[2]) return undefined;
 
     const hours = parseInt(match[1], 10);
     const minutes = parseInt(match[2], 10);
@@ -226,12 +232,10 @@ export const importService = {
     // Calculer l'ordre de départ (après les points existants)
     let currentOrdre = tournee.points.length;
 
-    for (let i = 0; i < parsedPoints.length; i++) {
-      const parsed = parsedPoints[i];
-
+    for (const [index, parsed] of parsedPoints.entries()) {
       // Vérifier que le client existe
       if (!parsed.clientId) {
-        result.errors.push({ row: i + 2, message: `Client "${parsed.clientName}" non trouvé` });
+        result.errors.push({ row: index + 2, message: `Client "${parsed.clientName}" non trouvé` });
         continue;
       }
 
@@ -281,7 +285,7 @@ export const importService = {
         result.imported++;
       } catch (error) {
         result.errors.push({
-          row: i + 2,
+          row: index + 2,
           message: `Erreur lors de la création: ${(error as Error).message}`
         });
       }
