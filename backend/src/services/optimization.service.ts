@@ -118,18 +118,56 @@ export const optimizationService = {
       };
     }
 
-    // Calculer la durée totale (trajet + temps sur place)
+    // Calculer la durée totale de trajet
     const dureeTrajetMin = Math.ceil(route.duration / 60);
     const dureeSurPlaceMin = points.reduce((sum, p) => sum + p.dureePrevue, 0);
-    const dureeTotaleMin = dureeTrajetMin + dureeSurPlaceMin;
 
-    // Calculer l'heure de fin estimée
+    // Calculer l'heure de fin avec la logique métier (attente aux créneaux)
     let heureFinEstimee: Date | null = null;
+    let dureeTotaleMin = dureeTrajetMin + dureeSurPlaceMin;
     const startTime = heureDepart || tournee.heureDepart;
 
-    if (startTime) {
-      heureFinEstimee = new Date(startTime);
-      heureFinEstimee.setMinutes(heureFinEstimee.getMinutes() + dureeTotaleMin);
+    if (startTime && route.legs) {
+      let currentTime = new Date(startTime);
+
+      // Parcourir chaque point pour calculer le temps réel avec attentes
+      for (let i = 0; i < points.length; i++) {
+        const point = points[i];
+        if (!point) continue;
+
+        const legIndex = tournee.depotLatitude ? i : (i > 0 ? i - 1 : -1);
+
+        // Ajouter le temps de trajet
+        if (legIndex >= 0 && legIndex < route.legs.length) {
+          const leg = route.legs[legIndex];
+          if (leg) {
+            currentTime = new Date(currentTime.getTime() + leg.duration * 1000);
+          }
+        }
+
+        // Si on arrive avant le créneau, on attend
+        let serviceStartTime = new Date(currentTime);
+        if (point.creneauDebut) {
+          const creneauDebut = new Date(point.creneauDebut);
+          const creneauHours = creneauDebut.getUTCHours();
+          const creneauMinutes = creneauDebut.getUTCMinutes();
+
+          const creneauOnSameDay = new Date(currentTime);
+          creneauOnSameDay.setUTCHours(creneauHours, creneauMinutes, 0, 0);
+
+          if (currentTime < creneauOnSameDay) {
+            serviceStartTime = creneauOnSameDay;
+          }
+        }
+
+        // Départ = début service + durée prévue
+        currentTime = new Date(serviceStartTime.getTime() + point.dureePrevue * 60 * 1000);
+      }
+
+      heureFinEstimee = currentTime;
+
+      // Recalculer la durée totale réelle
+      dureeTotaleMin = Math.round((heureFinEstimee.getTime() - new Date(startTime).getTime()) / 60000);
     }
 
     return {
@@ -217,11 +255,33 @@ export const optimizationService = {
       let heureArriveeEstimee: Date | null = null;
 
       if (currentTime && point) {
+        // Heure d'arrivée = heure de départ du point précédent + temps de trajet
         currentTime = new Date(currentTime.getTime() + durationFromPrevious * 1000);
         heureArriveeEstimee = new Date(currentTime);
 
-        // Ajouter le temps sur place pour le prochain point
-        currentTime = new Date(currentTime.getTime() + point.dureePrevue * 60 * 1000);
+        // LOGIQUE MÉTIER: Si on arrive en avance par rapport au créneau,
+        // on attend le début du créneau avant de commencer le service.
+        // Le départ vers le point suivant = max(heureArrivée, creneauDebut) + duréeService
+        let serviceStartTime = new Date(currentTime);
+
+        if (point.creneauDebut) {
+          const creneauDebut = new Date(point.creneauDebut);
+          // Extraire l'heure du créneau (ignorer la date, utiliser seulement HH:MM)
+          const creneauHours = creneauDebut.getUTCHours();
+          const creneauMinutes = creneauDebut.getUTCMinutes();
+
+          // Créer une date avec l'heure du créneau sur le même jour que currentTime
+          const creneauOnSameDay = new Date(currentTime);
+          creneauOnSameDay.setUTCHours(creneauHours, creneauMinutes, 0, 0);
+
+          // Si on arrive avant le début du créneau, on attend
+          if (currentTime < creneauOnSameDay) {
+            serviceStartTime = creneauOnSameDay;
+          }
+        }
+
+        // Le départ vers le prochain point = début du service + durée prévue
+        currentTime = new Date(serviceStartTime.getTime() + point.dureePrevue * 60 * 1000);
       }
 
       if (point) {
