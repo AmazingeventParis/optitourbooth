@@ -4,6 +4,9 @@
   "type": "module",
   "description": "API Backend OptiTour Booth",
   "main": "dist/app.js",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/app.ts",
     "build": "tsc",
@@ -34,7 +37,8 @@
     "socket.io": "^4.7.4",
     "uuid": "^9.0.1",
     "xlsx": "^0.18.5",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "tsx": "^4.7.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -49,7 +53,6 @@
     "@typescript-eslint/parser": "^6.19.0",
     "eslint": "^8.56.0",
     "prisma": "^5.9.0",
-    "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }
 }

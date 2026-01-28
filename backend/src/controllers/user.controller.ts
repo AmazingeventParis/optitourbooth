@@ -227,7 +227,7 @@ export const userController = {
 
   /**
    * DELETE /api/users/:id
-   * Supprimer un utilisateur (soft delete = désactivation)
+   * Supprimer définitivement un utilisateur
    */
   async delete(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
@@ -235,6 +235,11 @@ export const userController = {
     // Vérifier que l'utilisateur existe
     const user = await prisma.user.findUnique({
       where: { id },
+      include: {
+        _count: {
+          select: { tournees: true },
+        },
+      },
     });
 
     if (!user) {
@@ -248,16 +253,24 @@ export const userController = {
       return;
     }
 
-    // Soft delete : désactiver plutôt que supprimer
-    await prisma.user.update({
-      where: { id },
-      data: { actif: false },
-    });
+    // Vérifier s'il a des tournées associées
+    if (user._count.tournees > 0) {
+      apiResponse.badRequest(
+        res,
+        `Impossible de supprimer cet utilisateur car il a ${user._count.tournees} tournée(s) associée(s). Réassignez ou supprimez d'abord ses tournées.`
+      );
+      return;
+    }
 
     // Invalider tous ses tokens
     await authService.logoutAll(user.id);
 
-    apiResponse.success(res, null, 'Utilisateur désactivé');
+    // Supprimer définitivement l'utilisateur (les positions sont supprimées en cascade)
+    await prisma.user.delete({
+      where: { id },
+    });
+
+    apiResponse.success(res, null, 'Utilisateur supprimé');
   },
 
   /**

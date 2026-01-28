@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # PostgreSQL avec PostGIS pour les requêtes géospatiales
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: optitour_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-optitour}
+      POSTGRES_USER: ${POSTGRES_USER:-optitour_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-optitour_secret_2024}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-optitour_user} -d ${POSTGRES_DB:-optitour}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - optitour_network
+
+  # Redis pour le cache et les sessions temps réel
+  redis:
+    image: redis:7-alpine
+    container_name: optitour_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - optitour_network
+
+  # OSRM pour le calcul d'itinéraires (optionnel en dev, requis en prod)
+  # Décommentez et téléchargez les données OSM pour activer
+  # osrm:
+  #   image: ghcr.io/project-osrm/osrm-backend
+  #   container_name: optitour_osrm
+  #   restart: unless-stopped
+  #   command: osrm-routed --algorithm mld /data/france-latest.osrm
+  #   ports:
+  #     - "${OSRM_PORT:-5000}:5000"
+  #   volumes:
+  #     - ./docker/osrm-data:/data
+  #   networks:
+  #     - optitour_network
+
+volumes:
+  postgres_data:
+    name: optitour_postgres_data
+  redis_data:
+    name: optitour_redis_data
+
+networks:
+  optitour_network:
+    name: optitour_network
+    driver: bridge

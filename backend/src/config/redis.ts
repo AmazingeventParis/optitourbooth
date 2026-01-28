@@ -1,29 +1,56 @@
-import { Redis as IORedis } from 'ioredis';
+import { Redis as IORedis, RedisOptions } from 'ioredis';
 
-// Configuration Redis
-const redisConfig = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
+// Configuration Redis - supporte REDIS_URL (Render) ou REDIS_HOST/PORT (local)
+const getRedisConfig = (): string | RedisOptions => {
+  const redisUrl = process.env.REDIS_URL;
+
+  if (redisUrl) {
+    // Utiliser l'URL complète (format Render/production)
+    return redisUrl;
+  }
+
+  // Configuration locale par host/port
+  return {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    maxRetriesPerRequest: 1,
+    retryStrategy(times: number) {
+      if (times > 3) {
+        return null;
+      }
+      const delay = Math.min(times * 50, 2000);
+      return delay;
+    },
+    lazyConnect: true,
+  };
+};
+
+const redisConfig = getRedisConfig();
+
+// Options communes pour les instances
+const commonOptions: Partial<RedisOptions> = {
   maxRetriesPerRequest: 1,
   retryStrategy(times: number) {
     if (times > 3) {
-      // Stop retrying after 3 attempts
       return null;
     }
-    const delay = Math.min(times * 50, 2000);
-    return delay;
+    return Math.min(times * 50, 2000);
   },
-  lazyConnect: true, // Don't connect immediately
+  lazyConnect: true,
 };
 
 // Track if Redis is available
 let redisAvailable = false;
 
 // Instance Redis principale
-export const redis = new IORedis(redisConfig);
+export const redis = typeof redisConfig === 'string'
+  ? new IORedis(redisConfig, commonOptions)
+  : new IORedis(redisConfig);
 
 // Instance pour le subscriber (pub/sub)
-export const redisSub = new IORedis(redisConfig);
+export const redisSub = typeof redisConfig === 'string'
+  ? new IORedis(redisConfig, commonOptions)
+  : new IORedis(redisConfig);
 
 // Try to connect to Redis (optional)
 async function tryConnectRedis(): Promise<void> {

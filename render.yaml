@@ -1,0 +1,78 @@
+# ===========================================
+# OptiTour Booth - Configuration Render
+# ===========================================
+# Déploiement: Dashboard Render > New > Blueprint > Connecter ce repo
+#
+# IMPORTANT: Après le premier déploiement, configurer manuellement:
+# 1. CORS_ORIGIN sur l'API avec l'URL du frontend
+# 2. VITE_API_URL sur le frontend avec l'URL de l'API
+
+services:
+  # ---- BACKEND API ----
+  - type: web
+    name: optitourbooth-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: pnpm install && npx prisma generate && pnpm run build
+    startCommand: npx prisma migrate deploy && pnpm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      # Base de données - Utiliser Neon existant ou Render PostgreSQL
+      - key: DATABASE_URL
+        sync: false # À configurer avec votre URL Neon ou Render DB
+      # Redis (optionnel - désactiver si pas besoin)
+      - key: REDIS_URL
+        fromService:
+          name: optitourbooth-redis
+          type: redis
+          property: connectionString
+      # JWT - Secrets générés automatiquement
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 30d
+      # CORS - À configurer après déploiement du frontend
+      - key: CORS_ORIGIN
+        sync: false
+      # Services externes
+      - key: OSRM_URL
+        value: https://router.project-osrm.org
+      - key: NOMINATIM_URL
+        value: https://nominatim.openstreetmap.org
+
+  # ---- REDIS CACHE (optionnel mais recommandé) ----
+  - type: redis
+    name: optitourbooth-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+
+  # ---- FRONTEND STATIC ----
+  - type: web
+    name: optitourbooth-web
+    runtime: static
+    plan: free
+    rootDir: frontend
+    buildCommand: pnpm install && pnpm run build
+    staticPublishPath: dist
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+    routes:
+      # SPA: toutes les routes vers index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # URL de l'API - À configurer après déploiement de l'API
+      - key: VITE_API_URL
+        sync: false

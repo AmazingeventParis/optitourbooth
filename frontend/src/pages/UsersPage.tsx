@@ -172,7 +172,7 @@ export default function UsersPage() {
     setIsSaving(true);
     try {
       await usersService.delete(selectedUser.id);
-      success('Utilisateur désactivé');
+      success('Utilisateur supprimé');
       setIsDeleteDialogOpen(false);
       fetchUsers();
     } catch (err) {
@@ -415,9 +415,10 @@ export default function UsersPage() {
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleDelete}
-        title="Désactiver l'utilisateur"
-        message={`Êtes-vous sûr de vouloir désactiver ${selectedUser?.prenom} ${selectedUser?.nom} ? L'utilisateur ne pourra plus se connecter.`}
-        confirmText="Désactiver"
+        title="Supprimer l'utilisateur"
+        message={`Êtes-vous sûr de vouloir supprimer définitivement ${selectedUser?.prenom} ${selectedUser?.nom} ? Cette action est irréversible.`}
+        confirmText="Supprimer"
+        variant="danger"
         isLoading={isSaving}
       />
     </div>
