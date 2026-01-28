@@ -60,7 +60,6 @@ services:
   - type: web
     name: optitourbooth-web
     runtime: static
-    plan: free
     rootDir: frontend
     buildCommand: pnpm install && pnpm run build
     staticPublishPath: dist
