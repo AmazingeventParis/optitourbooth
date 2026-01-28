@@ -24,10 +24,13 @@ import {
 } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Tournee, Point, Client, PointProduit, Produit, User, PointType } from '@/types';
+import { Tournee, Point, Client, PointProduit, Produit, User, PointType, ChauffeurPositionWithInfo } from '@/types';
 import { tourneesService, ImportParsedPoint } from '@/services/tournees.service';
 import { clientsService } from '@/services/clients.service';
 import { usersService } from '@/services/users.service';
+import { socketService, ChauffeurPosition } from '@/services/socket.service';
+import { useSocketStore, isPositionStale } from '@/store/socketStore';
+import { useAuthStore } from '@/store/authStore';
 import { Button, Badge, Modal, Input, Select, TimeSelect } from '@/components/ui';
 import MultiTourneeMap, { PendingPointWithCoords } from '@/components/map/MultiTourneeMap';
 import { useToast } from '@/hooks/useToast';
@@ -1125,6 +1128,8 @@ const initialEditPointFormData: EditPointFormData = {
 
 export default function DailyPlanningPage() {
   const navigate = useNavigate();
+  const { token } = useAuthStore();
+  const { chauffeurPositions, updateChauffeurPosition, setConnected, setAllPositions } = useSocketStore();
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     return format(today, 'yyyy-MM-dd');
@@ -1208,6 +1213,23 @@ export default function DailyPlanningPage() {
       if (pendingCollision) {
         return [pendingCollision];
       }
+    }
+
+    // Pour les points en attente (pending), privilégier les zones de tournée
+    if (activeData?.type === 'pending') {
+      const pointerCollisions = pointerWithin(args);
+      // Chercher une zone de tournée
+      const tourneeCollision = pointerCollisions.find(c => String(c.id).startsWith('tournee-'));
+      if (tourneeCollision) {
+        return [tourneeCollision];
+      }
+      // Sinon essayer rectIntersection pour les zones
+      const rectCollisions = rectIntersection(args);
+      const tourneeRect = rectCollisions.find(c => String(c.id).startsWith('tournee-'));
+      if (tourneeRect) {
+        return [tourneeRect];
+      }
+      return pointerCollisions;
     }
 
     // Pour tous les cas, utiliser pointerWithin pour les zones puis closestCenter pour les éléments
@@ -1312,6 +1334,45 @@ export default function DailyPlanningPage() {
     loadTournees();
   }, [loadTournees]);
 
+  // Initialiser la connexion Socket.io pour le suivi GPS temps réel
+  useEffect(() => {
+    if (!token) return;
+
+    const initSocket = async () => {
+      try {
+        await socketService.connect(token);
+        setConnected(true);
+
+        // Demander toutes les positions actuelles
+        socketService.requestAllPositions();
+      } catch (error) {
+        console.error('[DailyPlanningPage] Socket connection failed:', error);
+        setConnected(false);
+      }
+    };
+
+    initSocket();
+
+    // Écouter les nouvelles positions de chauffeurs
+    const handleChauffeurPosition = (data: ChauffeurPosition) => {
+      updateChauffeurPosition(data.chauffeurId, data);
+    };
+
+    // Écouter toutes les positions (réponse à positions:getAll)
+    const handleAllPositions = (positions: ChauffeurPosition[]) => {
+      setAllPositions(positions);
+    };
+
+    socketService.on('chauffeur:position', handleChauffeurPosition);
+    socketService.on('positions:all', handleAllPositions);
+
+    return () => {
+      socketService.off('chauffeur:position', handleChauffeurPosition);
+      socketService.off('positions:all', handleAllPositions);
+      // Ne pas déconnecter ici car d'autres composants peuvent utiliser la connexion
+    };
+  }, [token, setConnected, updateChauffeurPosition, setAllPositions]);
+
   // Charger les coordonnées des clients pour les points à dispatcher
   useEffect(() => {
     const loadClientCoords = async () => {
@@ -1379,6 +1440,29 @@ export default function DailyPlanningPage() {
     });
     return result;
   }, [pendingPoints, clientCoordsVersion]);
+
+  // Transformer les positions des chauffeurs avec infos pour la carte
+  const chauffeurPositionsWithInfo = useMemo((): ChauffeurPositionWithInfo[] => {
+    const result: ChauffeurPositionWithInfo[] = [];
+    chauffeurPositions.forEach((position) => {
+      // Trouver le chauffeur correspondant
+      const chauffeur = chauffeurs.find((c) => c.id === position.chauffeurId);
+      // Ou chercher dans les tournées
+      const tournee = tournees.find((t) => t.chauffeurId === position.chauffeurId);
+      const chauffeurFromTournee = tournee?.chauffeur;
+
+      const foundChauffeur = chauffeur || chauffeurFromTournee;
+
+      result.push({
+        ...position,
+        chauffeurNom: foundChauffeur?.nom,
+        chauffeurPrenom: foundChauffeur?.prenom,
+        chauffeurCouleur: foundChauffeur?.couleur,
+        isStale: isPositionStale(position),
+      });
+    });
+    return result;
+  }, [chauffeurPositions, chauffeurs, tournees]);
 
   // Navigation de date
   const goToPreviousDay = () => {
@@ -2120,6 +2204,7 @@ export default function DailyPlanningPage() {
                             ? [] // N'afficher aucun point pending si on filtre sur une tournée
                             : pendingPointsWithCoords
                         }
+                        chauffeurPositions={chauffeurPositionsWithInfo}
                         selectedPointId={selectedPointId}
                         selectedPendingIndex={selectedPendingIndex}
                         selectedDepotId={selectedDepotId}
