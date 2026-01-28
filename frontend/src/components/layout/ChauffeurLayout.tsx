@@ -1,18 +1,99 @@
+import { useEffect, useState, useCallback } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { useSocketStore } from '@/store/socketStore';
+import { socketService } from '@/services/socket.service';
+import { useGPSTracking } from '@/hooks/useGPSTracking';
+import { tourneesService } from '@/services/tournees.service';
+import { format } from 'date-fns';
 import {
   HomeIcon,
   MapIcon,
   UserCircleIcon,
   ArrowRightOnRectangleIcon,
+  SignalIcon,
+  SignalSlashIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
 export default function ChauffeurLayout() {
-  const { user, logout } = useAuthStore();
+  const { user, token, logout } = useAuthStore();
+  const { isConnected, setConnected } = useSocketStore();
   const navigate = useNavigate();
 
+  // Track if the chauffeur has an active tournee (en_cours status)
+  const [hasActiveTournee, setHasActiveTournee] = useState(false);
+
+  // Check for active tournee
+  const checkActiveTournee = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const result = await tourneesService.list({
+        date: today,
+        chauffeurId: user.id,
+        limit: 10,
+      });
+
+      // Check if any tournee is en_cours
+      const hasActive = result.data.some((t) => t.statut === 'en_cours');
+      setHasActiveTournee(hasActive);
+    } catch (error) {
+      console.error('[ChauffeurLayout] Error checking active tournee:', error);
+    }
+  }, [user?.id]);
+
+  // Initialize socket connection
+  useEffect(() => {
+    if (!token) return;
+
+    const connectSocket = async () => {
+      try {
+        await socketService.connect(token);
+        setConnected(true);
+      } catch (error) {
+        console.error('[ChauffeurLayout] Socket connection failed:', error);
+        setConnected(false);
+      }
+    };
+
+    connectSocket();
+
+    // Check for active tournee initially
+    checkActiveTournee();
+
+    // Periodically check for active tournee (every 30 seconds)
+    const tourneeCheckInterval = setInterval(checkActiveTournee, 30000);
+
+    return () => {
+      clearInterval(tourneeCheckInterval);
+      socketService.disconnect();
+      setConnected(false);
+    };
+  }, [token, setConnected, checkActiveTournee]);
+
+  // Listen for tournee updates from socket
+  useEffect(() => {
+    const handleTourneeUpdate = () => {
+      // Re-check active tournee when we get an update
+      checkActiveTournee();
+    };
+
+    socketService.on('tournee:updated', handleTourneeUpdate);
+
+    return () => {
+      socketService.off('tournee:updated', handleTourneeUpdate);
+    };
+  }, [checkActiveTournee]);
+
+  // GPS tracking - only enabled when there's an active tournee
+  const { isTracking, error: gpsError, accuracy } = useGPSTracking({
+    enabled: hasActiveTournee && isConnected,
+  });
+
   const handleLogout = () => {
+    socketService.disconnect();
     logout();
     navigate('/login');
   };
@@ -22,6 +103,14 @@ export default function ChauffeurLayout() {
     { name: 'Tournée', href: '/chauffeur/tournee', icon: MapIcon },
     { name: 'Profil', href: '/chauffeur/profil', icon: UserCircleIcon },
   ];
+
+  // Format GPS accuracy for display
+  const getAccuracyText = () => {
+    if (!accuracy) return '';
+    if (accuracy <= 10) return 'GPS précis';
+    if (accuracy <= 30) return 'GPS moyen';
+    return 'GPS imprécis';
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -50,18 +139,70 @@ export default function ChauffeurLayout() {
             </p>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="p-2 rounded-lg hover:bg-primary-700 transition-colors"
-          title="Déconnexion"
-        >
-          <ArrowRightOnRectangleIcon className="h-6 w-6" />
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* Connection status indicator */}
+          <div
+            className={clsx(
+              'flex items-center gap-1 px-2 py-1 rounded-full text-xs',
+              isConnected ? 'bg-green-500/20 text-green-100' : 'bg-red-500/20 text-red-100'
+            )}
+            title={isConnected ? 'Connecté au serveur' : 'Déconnecté du serveur'}
+          >
+            {isConnected ? (
+              <SignalIcon className="h-4 w-4" />
+            ) : (
+              <SignalSlashIcon className="h-4 w-4" />
+            )}
+          </div>
+
+          {/* GPS tracking indicator */}
+          {hasActiveTournee && (
+            <div
+              className={clsx(
+                'flex items-center gap-1 px-2 py-1 rounded-full text-xs',
+                isTracking && !gpsError
+                  ? 'bg-blue-500/20 text-blue-100'
+                  : 'bg-orange-500/20 text-orange-100'
+              )}
+              title={
+                gpsError
+                  ? gpsError
+                  : isTracking
+                  ? `GPS actif - ${getAccuracyText()}`
+                  : 'GPS inactif'
+              }
+            >
+              <span className="relative flex h-2 w-2">
+                {isTracking && !gpsError && (
+                  <>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                  </>
+                )}
+                {(!isTracking || gpsError) && (
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                )}
+              </span>
+              <span className="hidden sm:inline">
+                {gpsError ? 'GPS erreur' : isTracking ? 'GPS' : 'GPS off'}
+              </span>
+            </div>
+          )}
+
+          <button
+            onClick={handleLogout}
+            className="p-2 rounded-lg hover:bg-primary-700 transition-colors"
+            title="Déconnexion"
+          >
+            <ArrowRightOnRectangleIcon className="h-6 w-6" />
+          </button>
+        </div>
       </header>
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-20">
-        <Outlet />
+        <Outlet context={{ hasActiveTournee, checkActiveTournee }} />
       </main>
 
       {/* Bottom Navigation */}

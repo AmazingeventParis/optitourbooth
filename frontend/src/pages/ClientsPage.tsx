@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Button, Card, Input, Select, Badge, Modal } from '@/components/ui';
+import { Button, Card, Input, Badge, Modal } from '@/components/ui';
 import DataTable, { Column } from '@/components/ui/DataTable';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { clientsService } from '@/services/clients.service';
@@ -7,7 +7,6 @@ import { useToast } from '@/hooks/useToast';
 import { Client, PaginationMeta } from '@/types';
 import {
   PlusIcon,
-  MagnifyingGlassIcon,
   PencilIcon,
   TrashIcon,
   MapPinIcon,
@@ -45,13 +44,12 @@ export default function ClientsPage() {
   const { success, error: showError } = useToast();
 
   const [clients, setClients] = useState<Client[]>([]);
-  const [villes, setVilles] = useState<string[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters
   const [search, setSearch] = useState('');
-  const [villeFilter, setVilleFilter] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -65,8 +63,7 @@ export default function ClientsPage() {
     setIsLoading(true);
     try {
       const filters: Record<string, unknown> = { page, limit: 20 };
-      if (search) filters.search = search;
-      if (villeFilter) filters.ville = villeFilter;
+      if (debouncedSearch) filters.search = debouncedSearch;
 
       const result = await clientsService.list(filters);
       setClients(result.data);
@@ -76,26 +73,20 @@ export default function ClientsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [search, villeFilter, showError]);
+  }, [debouncedSearch, showError]);
 
-  const fetchVilles = async () => {
-    try {
-      const result = await clientsService.listVilles();
-      setVilles(result);
-    } catch (err) {
-      console.error('Erreur chargement villes:', err);
-    }
-  };
+  // Debounce de la recherche
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     fetchClients();
-    fetchVilles();
   }, [fetchClients]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchClients(1);
-  };
 
   const openCreateModal = () => {
     setSelectedClient(null);
@@ -303,26 +294,13 @@ export default function ClientsPage() {
       </div>
 
       <Card>
-        <form onSubmit={handleSearch} className="flex gap-4 mb-6">
-          <div className="flex-1">
-            <Input
-              placeholder="Rechercher par nom, adresse..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <Select
-            value={villeFilter}
-            onChange={(e) => setVilleFilter(e.target.value)}
-            options={[
-              { value: '', label: 'Toutes les villes' },
-              ...villes.map((v) => ({ value: v, label: v })),
-            ]}
+        <div className="mb-6">
+          <Input
+            placeholder="Rechercher par nom, adresse, ville..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
-          <Button type="submit" variant="secondary">
-            <MagnifyingGlassIcon className="h-5 w-5" />
-          </Button>
-        </form>
+        </div>
 
         <DataTable
           columns={columns}

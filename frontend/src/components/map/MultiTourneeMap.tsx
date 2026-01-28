@@ -1,7 +1,7 @@
 import { useEffect, useRef, memo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Tournee, Client, PointProduit, Produit } from '@/types';
+import { Tournee, Client, PointProduit, Produit, ChauffeurPositionWithInfo } from '@/types';
 
 // Fix for default marker icons in Leaflet with bundlers
 delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
@@ -28,10 +28,12 @@ export interface PendingPointWithCoords {
 interface MultiTourneeMapProps {
   tournees: Tournee[];
   pendingPoints?: PendingPointWithCoords[];
+  chauffeurPositions?: ChauffeurPositionWithInfo[];
   onTourneeClick?: (tournee: Tournee) => void;
   onPointClick?: (pointId: string, tourneeId: string) => void;
   onPendingPointClick?: (index: number) => void;
   onDepotClick?: (tourneeId: string) => void;
+  onChauffeurClick?: (chauffeurId: string) => void;
   selectedPointId?: string | null;
   selectedPendingIndex?: number | null;
   selectedDepotId?: string | null;
@@ -167,6 +169,20 @@ const createHighlightedIcon = (number: number, color: string, isLate: boolean = 
   return icon;
 };
 
+// Helper pour afficher le temps écoulé
+const getTimeAgo = (date: Date): string => {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+
+  if (diffSec < 60) return 'à l\'instant';
+  if (diffMin < 60) return `il y a ${diffMin} min`;
+  if (diffHour < 24) return `il y a ${diffHour}h`;
+  return date.toLocaleString('fr-FR');
+};
+
 // Convertir une heure en minutes depuis minuit
 const timeToMinutes = (time: string | undefined): number | null => {
   if (!time) return null;
@@ -277,6 +293,95 @@ const createDepotIcon = (color: string, isSelected: boolean = false): L.DivIcon 
   return icon;
 };
 
+// Icône pour les chauffeurs (camion avec direction)
+const createChauffeurIcon = (
+  color: string,
+  heading?: number,
+  isStale: boolean = false
+): L.DivIcon => {
+  const cacheKey = `chauffeur-${color}-${heading ?? 'none'}-${isStale}`;
+
+  if (iconCache.has(cacheKey)) {
+    return iconCache.get(cacheKey)!;
+  }
+
+  // Rotation based on heading (0 = North)
+  const rotation = heading !== undefined ? heading : 0;
+  const opacity = isStale ? 0.5 : 1;
+
+  const icon = L.divIcon({
+    className: 'chauffeur-marker',
+    html: `
+      <div style="
+        position: relative;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: ${opacity};
+      ">
+        <!-- Pulse animation for active chauffeurs -->
+        ${!isStale ? `
+          <div style="
+            position: absolute;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: ${color};
+            opacity: 0.3;
+            animation: chauffeur-pulse 2s ease-out infinite;
+          "></div>
+        ` : ''}
+        <!-- Main marker -->
+        <div style="
+          position: relative;
+          background-color: ${isStale ? '#9CA3AF' : color};
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 3px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+          transform: rotate(${rotation}deg);
+        ">
+          <!-- Truck icon -->
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white" style="transform: rotate(-${rotation}deg);">
+            <path d="M18 18.5c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5-1.5.67-1.5 1.5.67 1.5 1.5 1.5zm1.5-9H17V12h4.46L19.5 9.5zM6 18.5c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5-1.5.67-1.5 1.5.67 1.5 1.5 1.5zM20 8l3 4v5h-2c0 1.66-1.34 3-3 3s-3-1.34-3-3H9c0 1.66-1.34 3-3 3s-3-1.34-3-3H1V6c0-1.11.89-2 2-2h14v4h3zM3 6v9h.76c.55-.61 1.35-1 2.24-1 .89 0 1.69.39 2.24 1H15V6H3z"/>
+          </svg>
+        </div>
+        <!-- Direction arrow -->
+        ${heading !== undefined ? `
+          <div style="
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%) rotate(${rotation}deg);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 10px solid ${isStale ? '#9CA3AF' : color};
+          "></div>
+        ` : ''}
+      </div>
+      <style>
+        @keyframes chauffeur-pulse {
+          0% { transform: scale(1); opacity: 0.3; }
+          100% { transform: scale(2); opacity: 0; }
+        }
+      </style>
+    `,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+
+  iconCache.set(cacheKey, icon);
+  return icon;
+};
+
 // Icône pour les points à dispatcher (orange avec bordure pointillée)
 const createPendingIcon = (number: number, color?: string, isSelected: boolean = false): L.DivIcon => {
   const cacheKey = `pending-${number}-${color || 'orange'}-${isSelected}`;
@@ -330,10 +435,12 @@ const createPendingIcon = (number: number, color?: string, isSelected: boolean =
 const MultiTourneeMap = memo(function MultiTourneeMap({
   tournees,
   pendingPoints = [],
+  chauffeurPositions = [],
   onTourneeClick,
   onPointClick,
   onPendingPointClick,
   onDepotClick,
+  onChauffeurClick,
   selectedPointId,
   selectedPendingIndex,
   selectedDepotId,
@@ -342,6 +449,7 @@ const MultiTourneeMap = memo(function MultiTourneeMap({
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
+  const chauffeurMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const routeLinesRef = useRef<L.Polyline[]>([]);
 
   useEffect(() => {
@@ -525,6 +633,70 @@ const MultiTourneeMap = memo(function MultiTourneeMap({
       });
     }
   }, [tournees, pendingPoints, onTourneeClick, onPointClick, onPendingPointClick, onDepotClick, selectedPointId, selectedPendingIndex, selectedDepotId]);
+
+  // Separate effect for chauffeur positions to allow smooth updates without re-rendering all markers
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const existingMarkers = chauffeurMarkersRef.current;
+    const currentChauffeurIds = new Set(chauffeurPositions.map((p) => p.chauffeurId));
+
+    // Remove markers for chauffeurs no longer in the list
+    existingMarkers.forEach((marker, chauffeurId) => {
+      if (!currentChauffeurIds.has(chauffeurId)) {
+        marker.remove();
+        existingMarkers.delete(chauffeurId);
+      }
+    });
+
+    // Add or update markers for current chauffeurs
+    chauffeurPositions.forEach((position) => {
+      const color = position.chauffeurCouleur || '#3B82F6';
+      const existingMarker = existingMarkers.get(position.chauffeurId);
+
+      if (existingMarker) {
+        // Update existing marker position with smooth animation
+        existingMarker.setLatLng([position.latitude, position.longitude]);
+        existingMarker.setIcon(createChauffeurIcon(color, position.heading, position.isStale));
+      } else {
+        // Create new marker
+        const marker = L.marker([position.latitude, position.longitude], {
+          icon: createChauffeurIcon(color, position.heading, position.isStale),
+          zIndexOffset: 2000, // Chauffeurs always on top
+        }).addTo(mapRef.current!);
+
+        const chauffeurName = position.chauffeurPrenom && position.chauffeurNom
+          ? `${position.chauffeurPrenom} ${position.chauffeurNom}`
+          : 'Chauffeur';
+
+        const lastUpdate = new Date(position.timestamp);
+        const timeAgo = getTimeAgo(lastUpdate);
+
+        marker.bindPopup(`
+          <strong>${chauffeurName}</strong><br/>
+          ${position.isStale ? '<span style="color: #EF4444;">Position obsolète</span><br/>' : ''}
+          <em>Dernière mise à jour: ${timeAgo}</em>
+          ${position.speed ? `<br/>Vitesse: ${Math.round(position.speed * 3.6)} km/h` : ''}
+        `);
+
+        marker.on('click', () => {
+          if (onChauffeurClick) {
+            onChauffeurClick(position.chauffeurId);
+          }
+        });
+
+        existingMarkers.set(position.chauffeurId, marker);
+      }
+    });
+  }, [chauffeurPositions, onChauffeurClick]);
+
+  // Cleanup chauffeur markers on unmount
+  useEffect(() => {
+    return () => {
+      chauffeurMarkersRef.current.forEach((marker) => marker.remove());
+      chauffeurMarkersRef.current.clear();
+    };
+  }, []);
 
   return (
     <div

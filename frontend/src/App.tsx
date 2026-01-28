@@ -22,7 +22,6 @@ const TourneesPage = lazy(() => import('@/pages/TourneesPage'));
 const TourneeDetailPage = lazy(() => import('@/pages/TourneeDetailPage'));
 const DailyPlanningPage = lazy(() => import('@/pages/DailyPlanningPage'));
 const RapportsPage = lazy(() => import('@/pages/RapportsPage'));
-const SuiviGPSPage = lazy(() => import('@/pages/SuiviGPSPage'));
 const MapPopupPage = lazy(() => import('@/pages/MapPopupPage'));
 
 // ============================================
@@ -162,7 +161,6 @@ function App() {
         <Route path="tournees/:id" element={<LazyPage><TourneeDetailPage /></LazyPage>} />
         <Route path="planning" element={<LazyPage><DailyPlanningPage /></LazyPage>} />
         <Route path="rapports" element={<LazyPage><RapportsPage /></LazyPage>} />
-        <Route path="suivi-gps" element={<LazyPage><SuiviGPSPage /></LazyPage>} />
       </Route>
 
       {/* Routes Chauffeur */}

@@ -8,7 +8,6 @@ import {
   UsersIcon,
   CubeIcon,
   ChartBarIcon,
-  MapPinIcon,
   CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
@@ -22,7 +21,6 @@ interface SidebarProps {
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Planning', href: '/planning', icon: CalendarDaysIcon },
-  { name: 'Suivi GPS', href: '/suivi-gps', icon: MapPinIcon },
   { name: 'Clients', href: '/clients', icon: UserGroupIcon },
   { name: 'Utilisateurs', href: '/utilisateurs', icon: UsersIcon },
   { name: 'Produits', href: '/produits', icon: CubeIcon },

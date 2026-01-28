@@ -151,6 +151,14 @@ export interface Position {
   timestamp: number;
 }
 
+// Position chauffeur avec informations supplémentaires pour l'affichage
+export interface ChauffeurPositionWithInfo extends Position {
+  chauffeurNom?: string;
+  chauffeurPrenom?: string;
+  chauffeurCouleur?: string;
+  isStale: boolean; // Position > 5 min
+}
+
 // Types pour la pagination
 export interface PaginationMeta {
   page: number;
