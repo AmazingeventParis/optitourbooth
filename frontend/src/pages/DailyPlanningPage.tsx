@@ -1595,6 +1595,12 @@ export default function DailyPlanningPage() {
     }
   }, []);
 
+  // Utiliser une ref pour avoir toujours accès aux dernières valeurs sans recreer le callback
+  const tourneesRef = useRef(tournees);
+  const pendingPointsRef = useRef(pendingPoints);
+  useEffect(() => { tourneesRef.current = tournees; }, [tournees]);
+  useEffect(() => { pendingPointsRef.current = pendingPoints; }, [pendingPoints]);
+
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     // Reset immédiat des états de drag
     setActivePoint(null);
@@ -1630,94 +1636,95 @@ export default function DailyPlanningPage() {
       }
       if (!targetTourneeId) return;
 
-      // Créer l'ID optimiste une seule fois
+      // Utiliser la ref pour avoir l'état actuel
+      const currentTournees = tourneesRef.current;
+      const targetTournee = currentTournees.find(t => t.id === targetTourneeId);
+      if (!targetTournee) return;
+
+      // Créer l'ID optimiste
       const optimisticId = `opt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const currentPoints = [...(targetTournee.points || [])].sort((a, b) => a.ordre - b.ordre);
 
-      // MISE À JOUR OPTIMISTE IMMÉDIATE - utiliser setState fonctionnel
-      setTournees(currentTournees => {
-        const targetTournee = currentTournees.find(t => t.id === targetTourneeId);
-        if (!targetTournee) return currentTournees;
+      // Déterminer l'index d'insertion
+      let insertIndex = currentPoints.length;
+      if (overData?.point) {
+        const overPointIndex = currentPoints.findIndex(p => p.id === (overData.point as Point).id);
+        if (overPointIndex !== -1) insertIndex = overPointIndex + 1;
+      }
 
-        const currentPoints = [...(targetTournee.points || [])].sort((a, b) => a.ordre - b.ordre);
-
-        // Déterminer l'index d'insertion
-        let insertIndex = currentPoints.length;
-        if (overData?.point) {
-          const overPointIndex = currentPoints.findIndex(p => p.id === (overData.point as Point).id);
-          if (overPointIndex !== -1) insertIndex = overPointIndex + 1;
-        }
-
-        // Créer le point optimiste avec toutes les données nécessaires
-        const now = new Date().toISOString();
-        const optimisticPoint: Point = {
-          id: optimisticId,
-          tourneeId: targetTourneeId!,
-          clientId: pendingPoint.clientId!,
-          client: {
-            id: pendingPoint.clientId!,
-            nom: pendingPoint.clientName,
-            actif: true,
-            adresse: '',
-            codePostal: '',
-            ville: '',
-            pays: 'France',
-            createdAt: now,
-            updatedAt: now,
-          } as Client,
-          type: (pendingPoint.type as PointType) || 'livraison',
-          ordre: insertIndex,
-          statut: 'a_faire',
-          creneauDebut: pendingPoint.creneauDebut || undefined,
-          creneauFin: pendingPoint.creneauFin || undefined,
-          notesInternes: pendingPoint.notes || undefined,
-          dureePrevue: 30,
+      // Créer le point optimiste
+      const now = new Date().toISOString();
+      const optimisticPoint: Point = {
+        id: optimisticId,
+        tourneeId: targetTourneeId,
+        clientId: pendingPoint.clientId!,
+        client: {
+          id: pendingPoint.clientId!,
+          nom: pendingPoint.clientName,
+          actif: true,
+          adresse: '',
+          codePostal: '',
+          ville: '',
+          pays: 'France',
           createdAt: now,
           updatedAt: now,
-          produits: pendingPoint.produitId ? [{
-            id: `opt-pp-${Date.now()}`,
-            pointId: optimisticId,
-            produitId: pendingPoint.produitId,
-            produit: {
-              id: pendingPoint.produitId,
-              nom: pendingPoint.produitName || '',
-              couleur: pendingPoint.produitCouleur || undefined,
-              actif: true,
-              createdAt: now,
-              updatedAt: now,
-            } as Produit,
-            quantite: 1,
-          }] as PointProduit[] : [],
-        };
+        } as Client,
+        type: (pendingPoint.type as PointType) || 'livraison',
+        ordre: insertIndex,
+        statut: 'a_faire',
+        creneauDebut: pendingPoint.creneauDebut || undefined,
+        creneauFin: pendingPoint.creneauFin || undefined,
+        notesInternes: pendingPoint.notes || undefined,
+        dureePrevue: 30,
+        createdAt: now,
+        updatedAt: now,
+        produits: pendingPoint.produitId ? [{
+          id: `opt-pp-${Date.now()}`,
+          pointId: optimisticId,
+          produitId: pendingPoint.produitId,
+          produit: {
+            id: pendingPoint.produitId,
+            nom: pendingPoint.produitName || '',
+            couleur: pendingPoint.produitCouleur || undefined,
+            actif: true,
+            createdAt: now,
+            updatedAt: now,
+          } as Produit,
+          quantite: 1,
+        }] as PointProduit[] : [],
+      };
 
-        // Insérer et réordonner
-        currentPoints.splice(insertIndex, 0, optimisticPoint);
-        const newPoints = currentPoints.map((p, idx) => ({ ...p, ordre: idx }));
+      // Insérer et réordonner
+      currentPoints.splice(insertIndex, 0, optimisticPoint);
+      const newPoints = currentPoints.map((p, idx) => ({ ...p, ordre: idx }));
 
-        const newTournees = currentTournees.map(t => {
-          if (t.id === targetTourneeId) {
-            return { ...t, points: newPoints, nombrePoints: newPoints.length };
-          }
-          return t;
-        });
-
-        // Notifier la popup carte immédiatement
-        broadcastChannel.current?.postMessage({
-          type: 'tournees-updated',
-          date: selectedDate,
-          tournees: newTournees
-        });
-
-        return newTournees;
+      // Créer le nouveau tableau de tournées
+      const newTournees = currentTournees.map(t => {
+        if (t.id === targetTourneeId) {
+          return { ...t, points: newPoints, nombrePoints: newPoints.length };
+        }
+        return t;
       });
 
-      // Retirer immédiatement des pending points
-      setPendingPoints(prev => prev.filter((_, i) => i !== pendingIndex));
+      // Retirer des pending points
+      const newPendingPoints = pendingPointsRef.current.filter((_, i) => i !== pendingIndex);
 
-      // Sauvegarder les données pour rollback
-      const rollbackPendingPoint = pendingPoint;
-      const rollbackPendingIndex = pendingIndex;
+      // MISE À JOUR IMMÉDIATE (synchrone)
+      setTournees(newTournees);
+      setPendingPoints(newPendingPoints);
 
-      // Appel API en arrière-plan - ne bloque PAS l'UI
+      // Notifier la popup carte
+      broadcastChannel.current?.postMessage({
+        type: 'tournees-updated',
+        date: selectedDate,
+        tournees: newTournees
+      });
+
+      // Sauvegarder pour rollback
+      const rollbackTournees = currentTournees;
+      const rollbackPendingPoints = pendingPointsRef.current;
+
+      // Appel API en arrière-plan
       tourneesService.addPoint(targetTourneeId, {
         clientId: pendingPoint.clientId,
         type: (pendingPoint.type as 'livraison' | 'ramassage' | 'livraison_ramassage') || 'livraison',
@@ -1726,7 +1733,7 @@ export default function DailyPlanningPage() {
         notesInternes: pendingPoint.notes,
         produits: pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : undefined,
       }).then(createdPoint => {
-        // Remplacer l'ID optimiste par l'ID réel du serveur (silencieusement)
+        // Remplacer l'ID optimiste par l'ID réel
         setTournees(current => current.map(t => {
           if (t.id === targetTourneeId && t.points) {
             return {
@@ -1737,23 +1744,9 @@ export default function DailyPlanningPage() {
           return t;
         }));
       }).catch(error => {
-        // ROLLBACK: restaurer l'état précédent
-        setTournees(current => current.map(t => {
-          if (t.id === targetTourneeId && t.points) {
-            return {
-              ...t,
-              points: t.points.filter(p => p.id !== optimisticId),
-              nombrePoints: t.points.filter(p => p.id !== optimisticId).length
-            };
-          }
-          return t;
-        }));
-        // Remettre le point dans pending
-        setPendingPoints(prev => [
-          ...prev.slice(0, rollbackPendingIndex),
-          rollbackPendingPoint,
-          ...prev.slice(rollbackPendingIndex)
-        ]);
+        // ROLLBACK
+        setTournees(rollbackTournees);
+        setPendingPoints(rollbackPendingPoints);
         toastError('Erreur', (error as Error).message);
       });
 
@@ -1787,52 +1780,44 @@ export default function DailyPlanningPage() {
         errors: [],
       };
 
-      // Sauvegarder pour rollback
-      const pointToRemove = point;
-      const sourceId = sourceTourneeId;
+      // Utiliser les refs pour l'état actuel
+      const currentTournees = tourneesRef.current;
+      const sourceTournee = currentTournees.find(t => t.id === sourceTourneeId);
+      if (!sourceTournee?.points) return;
 
-      // MISE À JOUR OPTIMISTE IMMÉDIATE
-      setTournees(currentTournees => {
-        const sourceTournee = currentTournees.find(t => t.id === sourceId);
-        if (!sourceTournee?.points) return currentTournees;
+      const newSourcePoints = sourceTournee.points
+        .filter(p => p.id !== point.id)
+        .map((p, idx) => ({ ...p, ordre: idx }));
 
-        const newPoints = sourceTournee.points
-          .filter(p => p.id !== pointToRemove.id)
-          .map((p, idx) => ({ ...p, ordre: idx }));
-
-        const newTournees = currentTournees.map(t => {
-          if (t.id === sourceId) {
-            return { ...t, points: newPoints, nombrePoints: newPoints.length };
-          }
-          return t;
-        });
-
-        // Notifier la popup carte
-        broadcastChannel.current?.postMessage({
-          type: 'tournees-updated',
-          date: selectedDate,
-          tournees: newTournees
-        });
-
-        return newTournees;
+      const newTournees = currentTournees.map(t => {
+        if (t.id === sourceTourneeId) {
+          return { ...t, points: newSourcePoints, nombrePoints: newSourcePoints.length };
+        }
+        return t;
       });
 
-      // Ajouter aux pending points
-      setPendingPoints(prev => [...prev, newPendingPoint]);
+      const newPendingPoints = [...pendingPointsRef.current, newPendingPoint];
+
+      // Sauvegarder pour rollback
+      const rollbackTournees = currentTournees;
+      const rollbackPendingPoints = pendingPointsRef.current;
+
+      // MISE À JOUR IMMÉDIATE
+      setTournees(newTournees);
+      setPendingPoints(newPendingPoints);
+
+      // Notifier la popup carte
+      broadcastChannel.current?.postMessage({
+        type: 'tournees-updated',
+        date: selectedDate,
+        tournees: newTournees
+      });
 
       // Appel API en arrière-plan
-      tourneesService.deletePoint(sourceId, pointToRemove.id).catch(error => {
+      tourneesService.deletePoint(sourceTourneeId, point.id).catch(error => {
         // ROLLBACK
-        setTournees(current => current.map(t => {
-          if (t.id === sourceId) {
-            const restoredPoints = [...(t.points || []), pointToRemove]
-              .sort((a, b) => a.ordre - b.ordre)
-              .map((p, idx) => ({ ...p, ordre: idx }));
-            return { ...t, points: restoredPoints, nombrePoints: restoredPoints.length };
-          }
-          return t;
-        }));
-        setPendingPoints(prev => prev.slice(0, -1));
+        setTournees(rollbackTournees);
+        setPendingPoints(rollbackPendingPoints);
         toastError('Erreur', (error as Error).message);
       });
 
@@ -1851,83 +1836,33 @@ export default function DailyPlanningPage() {
     }
     if (!targetTourneeId) return;
 
+    const currentTournees = tourneesRef.current;
+
     if (sourceTourneeId === targetTourneeId) {
-      // Réordonnancement dans la même tournée
-      setTournees(currentTournees => {
-        const tournee = currentTournees.find(t => t.id === sourceTourneeId);
-        if (!tournee?.points) return currentTournees;
+      const tournee = currentTournees.find(t => t.id === sourceTourneeId);
+      if (!tournee?.points) return;
 
-        const sortedPoints = [...tournee.points].sort((a, b) => a.ordre - b.ordre);
-        const oldIndex = sortedPoints.findIndex(p => p.id === sourcePointId);
-        const overPoint = sortedPoints.find(p => p.id === overId);
-        const newIndex = overPoint ? sortedPoints.indexOf(overPoint) : sortedPoints.length - 1;
+      const sortedPoints = [...tournee.points].sort((a, b) => a.ordre - b.ordre);
+      const oldIndex = sortedPoints.findIndex(p => p.id === sourcePointId);
+      const overPoint = sortedPoints.find(p => p.id === overId);
+      const newIndex = overPoint ? sortedPoints.indexOf(overPoint) : sortedPoints.length - 1;
 
-        if (oldIndex === -1 || oldIndex === newIndex) return currentTournees;
+      if (oldIndex === -1 || oldIndex === newIndex) return;
 
-        const newPoints = [...sortedPoints];
-        const [movedPoint] = newPoints.splice(oldIndex, 1);
-        newPoints.splice(newIndex, 0, movedPoint);
-        const reorderedPoints = newPoints.map((p, idx) => ({ ...p, ordre: idx }));
-
-        const newTournees = currentTournees.map(t => {
-          if (t.id === sourceTourneeId) {
-            return { ...t, points: reorderedPoints };
-          }
-          return t;
-        });
-
-        // Notifier la popup carte
-        broadcastChannel.current?.postMessage({
-          type: 'tournees-updated',
-          date: selectedDate,
-          tournees: newTournees
-        });
-
-        // Appel API en arrière-plan
-        tourneesService.reorderPoints(sourceTourneeId, reorderedPoints.map(p => p.id)).catch(() => {
-          toastError('Erreur', 'Impossible de réordonner');
-        });
-
-        return newTournees;
-      });
-
-      return;
-    }
-
-    // ========== CAS 4: Déplacement entre tournées ==========
-    setTournees(currentTournees => {
-      const sourceTournee = currentTournees.find(t => t.id === sourceTourneeId);
-      const targetTournee = currentTournees.find(t => t.id === targetTourneeId);
-      if (!sourceTournee?.points || !targetTournee) return currentTournees;
-
-      const movedPoint = sourceTournee.points.find(p => p.id === sourcePointId);
-      if (!movedPoint) return currentTournees;
-
-      // Retirer de la source
-      const newSourcePoints = sourceTournee.points
-        .filter(p => p.id !== sourcePointId)
-        .map((p, idx) => ({ ...p, ordre: idx }));
-
-      // Ajouter à la cible
-      const sortedTargetPoints = [...(targetTournee.points || [])].sort((a, b) => a.ordre - b.ordre);
-      let insertIndex = sortedTargetPoints.length;
-      if (overData?.point) {
-        const overPointIndex = sortedTargetPoints.findIndex(p => p.id === (overData.point as Point).id);
-        if (overPointIndex !== -1) insertIndex = overPointIndex + 1;
-      }
-
-      sortedTargetPoints.splice(insertIndex, 0, { ...movedPoint, tourneeId: targetTourneeId! });
-      const newTargetPoints = sortedTargetPoints.map((p, idx) => ({ ...p, ordre: idx }));
+      const newPoints = [...sortedPoints];
+      const [movedPoint] = newPoints.splice(oldIndex, 1);
+      newPoints.splice(newIndex, 0, movedPoint);
+      const reorderedPoints = newPoints.map((p, idx) => ({ ...p, ordre: idx }));
 
       const newTournees = currentTournees.map(t => {
         if (t.id === sourceTourneeId) {
-          return { ...t, points: newSourcePoints, nombrePoints: newSourcePoints.length };
-        }
-        if (t.id === targetTourneeId) {
-          return { ...t, points: newTargetPoints, nombrePoints: newTargetPoints.length };
+          return { ...t, points: reorderedPoints };
         }
         return t;
       });
+
+      // MISE À JOUR IMMÉDIATE
+      setTournees(newTournees);
 
       // Notifier la popup carte
       broadcastChannel.current?.postMessage({
@@ -1937,11 +1872,62 @@ export default function DailyPlanningPage() {
       });
 
       // Appel API en arrière-plan
-      tourneesService.movePoint(sourceTourneeId, sourcePointId, targetTourneeId!, insertIndex).catch(() => {
-        toastError('Erreur', 'Impossible de déplacer le point');
+      tourneesService.reorderPoints(sourceTourneeId, reorderedPoints.map(p => p.id)).catch(() => {
+        setTournees(currentTournees); // Rollback
+        toastError('Erreur', 'Impossible de réordonner');
       });
 
-      return newTournees;
+      return;
+    }
+
+    // ========== CAS 4: Déplacement entre tournées ==========
+    const sourceTournee = currentTournees.find(t => t.id === sourceTourneeId);
+    const targetTournee = currentTournees.find(t => t.id === targetTourneeId);
+    if (!sourceTournee?.points || !targetTournee) return;
+
+    const movedPoint = sourceTournee.points.find(p => p.id === sourcePointId);
+    if (!movedPoint) return;
+
+    // Retirer de la source
+    const newSourcePoints = sourceTournee.points
+      .filter(p => p.id !== sourcePointId)
+      .map((p, idx) => ({ ...p, ordre: idx }));
+
+    // Ajouter à la cible
+    const sortedTargetPoints = [...(targetTournee.points || [])].sort((a, b) => a.ordre - b.ordre);
+    let insertIndex = sortedTargetPoints.length;
+    if (overData?.point) {
+      const overPointIndex = sortedTargetPoints.findIndex(p => p.id === (overData.point as Point).id);
+      if (overPointIndex !== -1) insertIndex = overPointIndex + 1;
+    }
+
+    sortedTargetPoints.splice(insertIndex, 0, { ...movedPoint, tourneeId: targetTourneeId });
+    const newTargetPoints = sortedTargetPoints.map((p, idx) => ({ ...p, ordre: idx }));
+
+    const newTournees = currentTournees.map(t => {
+      if (t.id === sourceTourneeId) {
+        return { ...t, points: newSourcePoints, nombrePoints: newSourcePoints.length };
+      }
+      if (t.id === targetTourneeId) {
+        return { ...t, points: newTargetPoints, nombrePoints: newTargetPoints.length };
+      }
+      return t;
+    });
+
+    // MISE À JOUR IMMÉDIATE
+    setTournees(newTournees);
+
+    // Notifier la popup carte
+    broadcastChannel.current?.postMessage({
+      type: 'tournees-updated',
+      date: selectedDate,
+      tournees: newTournees
+    });
+
+    // Appel API en arrière-plan
+    tourneesService.movePoint(sourceTourneeId, sourcePointId, targetTourneeId, insertIndex).catch(() => {
+      setTournees(currentTournees); // Rollback
+      toastError('Erreur', 'Impossible de déplacer le point');
     });
   }, [selectedDate, toastError]);
 
