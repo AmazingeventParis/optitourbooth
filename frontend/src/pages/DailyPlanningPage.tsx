@@ -1760,15 +1760,25 @@ export default function DailyPlanningPage() {
         await tourneesService.deletePoint(sourceTourneeId, point.id);
         toastSuccess('Point retiré de la tournée');
 
-        // Recharger la tournée pour sync
+        // Recharger la tournée pour sync (utiliser l'état actuel)
         const updatedTournee = await tourneesService.getById(sourceTourneeId);
-        const finalTournees = tournees.map(t => t.id === sourceTourneeId ? updatedTournee : t);
-        setTournees(finalTournees);
-        notifyMapPopup(finalTournees);
+        setTournees(currentTournees => {
+          const finalTournees = currentTournees.map(t => t.id === sourceTourneeId ? updatedTournee : t);
+          notifyMapPopup(finalTournees);
+          return finalTournees;
+        });
       } catch (error) {
-        // Rollback en cas d'erreur
-        setTournees(tournees);
-        notifyMapPopup(tournees);
+        // Rollback en cas d'erreur - restaurer l'état original
+        setTournees(currentTournees => {
+          const rollbackTournees = currentTournees.map(t => {
+            if (t.id === sourceTourneeId && sourceTournee) {
+              return sourceTournee;
+            }
+            return t;
+          });
+          notifyMapPopup(rollbackTournees);
+          return rollbackTournees;
+        });
         setPendingPoints(prev => prev.slice(0, -1));
         toastError('Erreur', (error as Error).message);
       }
