@@ -159,7 +159,6 @@ export default function ClientsPage() {
       }
       setIsModalOpen(false);
       fetchClients();
-      fetchVilles();
     } catch (err) {
       showError('Erreur', (err as Error).message);
     } finally {
