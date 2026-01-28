@@ -1682,29 +1682,30 @@ export default function DailyPlanningPage() {
       setPendingPoints(prev => prev.filter((_, i) => i !== pendingIndex));
       notifyMapPopup(optimisticTournees);
 
-      try {
-        await tourneesService.addPoint(targetTourneeId, {
-          clientId: pendingPoint.clientId,
-          type: (pendingPoint.type as 'livraison' | 'ramassage' | 'livraison_ramassage') || 'livraison',
-          creneauDebut: pendingPoint.creneauDebut,
-          creneauFin: pendingPoint.creneauFin,
-          notesInternes: pendingPoint.notes,
-          produits: pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : undefined,
+      // Appel API en arrière-plan (ne pas bloquer l'UI)
+      tourneesService.addPoint(targetTourneeId, {
+        clientId: pendingPoint.clientId,
+        type: (pendingPoint.type as 'livraison' | 'ramassage' | 'livraison_ramassage') || 'livraison',
+        creneauDebut: pendingPoint.creneauDebut,
+        creneauFin: pendingPoint.creneauFin,
+        notesInternes: pendingPoint.notes,
+        produits: pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : undefined,
+      }).then(() => {
+        // Synchroniser avec le serveur en arrière-plan
+        tourneesService.getById(targetTourneeId).then(updatedTournee => {
+          setTournees(current => {
+            const newTournees = current.map(t => t.id === targetTourneeId ? updatedTournee : t);
+            notifyMapPopup(newTournees);
+            return newTournees;
+          });
         });
-
-        // Recharger pour avoir les vraies données
-        const updatedTournee = await tourneesService.getById(targetTourneeId);
-        const newTournees = optimisticTournees.map(t => t.id === targetTourneeId ? updatedTournee : t);
-        setTournees(newTournees);
-        notifyMapPopup(newTournees);
-        toastSuccess('Point ajouté');
-      } catch (error) {
+      }).catch((error) => {
         // Rollback en cas d'erreur
         setTournees(tournees);
         setPendingPoints(prev => [...prev.slice(0, pendingIndex), pendingPoint, ...prev.slice(pendingIndex)]);
         notifyMapPopup(tournees);
         toastError('Erreur', (error as Error).message);
-      }
+      });
       return;
     }
 
@@ -1755,19 +1756,17 @@ export default function DailyPlanningPage() {
       // Ajouter à la zone pending
       setPendingPoints(prev => [...prev, pendingPoint]);
 
-      try {
-        // Supprimer le point de la tournée côté serveur
-        await tourneesService.deletePoint(sourceTourneeId, point.id);
-        toastSuccess('Point retiré de la tournée');
-
-        // Recharger la tournée pour sync (utiliser l'état actuel)
-        const updatedTournee = await tourneesService.getById(sourceTourneeId);
-        setTournees(currentTournees => {
-          const finalTournees = currentTournees.map(t => t.id === sourceTourneeId ? updatedTournee : t);
-          notifyMapPopup(finalTournees);
-          return finalTournees;
+      // Appel API en arrière-plan (ne pas bloquer l'UI)
+      tourneesService.deletePoint(sourceTourneeId, point.id).then(() => {
+        // Synchroniser avec le serveur en arrière-plan
+        tourneesService.getById(sourceTourneeId).then(updatedTournee => {
+          setTournees(currentTournees => {
+            const finalTournees = currentTournees.map(t => t.id === sourceTourneeId ? updatedTournee : t);
+            notifyMapPopup(finalTournees);
+            return finalTournees;
+          });
         });
-      } catch (error) {
+      }).catch((error) => {
         // Rollback en cas d'erreur - restaurer l'état original
         setTournees(currentTournees => {
           const rollbackTournees = currentTournees.map(t => {
@@ -1781,7 +1780,7 @@ export default function DailyPlanningPage() {
         });
         setPendingPoints(prev => prev.slice(0, -1));
         toastError('Erreur', (error as Error).message);
-      }
+      });
       return;
     }
 
