@@ -45,7 +45,7 @@ import {
 
 const getStatutConfig = (statut: TourneeStatut) => {
   const configs = {
-    brouillon: { variant: 'secondary' as const, label: 'Brouillon' },
+    brouillon: { variant: 'default' as const, label: 'Brouillon' },
     planifiee: { variant: 'info' as const, label: 'Planifiée' },
     en_cours: { variant: 'warning' as const, label: 'En cours' },
     terminee: { variant: 'success' as const, label: 'Terminée' },
