@@ -772,6 +772,17 @@ export default function TourneeDetailPage() {
               </div>
             </div>
 
+            {/* Debug info */}
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
+              <p><strong>Debug:</strong> Statut: {selectedPointData.statut}</p>
+              <p>Photos: {selectedPointData.photos?.length || 0}</p>
+              <p>Signature: {selectedPointData.signatureData ? 'Oui' : 'Non'}</p>
+              <p>SignatureNom: {selectedPointData.signatureNom || '-'}</p>
+              <p>Incidents: {selectedPointData.incidents?.length || 0}</p>
+              <p>Arrivée réelle: {selectedPointData.heureArriveeReelle || '-'}</p>
+              <p>Départ réel: {selectedPointData.heureDepartReelle || '-'}</p>
+            </div>
+
             {!hasDriverData && (
               <div className="text-center py-8 text-gray-500">
                 <ClockIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
