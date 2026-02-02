@@ -744,27 +744,28 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
             )}
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          {tournee.statut === 'brouillon' && onValidate && (
-            <button
-              onClick={onValidate}
-              className="px-2 py-0.5 rounded bg-white/20 hover:bg-white/30 transition-colors text-xs font-medium flex items-center gap-1"
-              title="Valider la tournée pour la rendre visible au livreur"
-            >
-              <CheckIcon className="h-3 w-3" />
-              Valider
-            </button>
-          )}
+        <div className="flex items-center gap-2">
           {tournee.statut === 'brouillon' && (
             <span className="text-[10px] opacity-70 bg-white/10 px-1.5 py-0.5 rounded">Brouillon</span>
           )}
-          <button
-            onClick={onEdit}
-            className="p-1 rounded hover:bg-white/20 transition-colors"
-            title="Modifier la tournée"
-          >
-            <PencilIcon className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={onEdit}
+              className="p-1 rounded hover:bg-white/20 transition-colors"
+              title="Modifier la tournée"
+            >
+              <PencilIcon className="h-4 w-4" />
+            </button>
+            {tournee.statut === 'brouillon' && onValidate && (
+              <button
+                onClick={onValidate}
+                className="p-1 rounded bg-green-500/80 hover:bg-green-500 transition-colors"
+                title="Valider la tournée pour la rendre visible au livreur"
+              >
+                <CheckIcon className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
