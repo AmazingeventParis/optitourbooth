@@ -41,6 +41,10 @@ import {
   ArrowPathIcon,
   DocumentArrowUpIcon,
   TrashIcon,
+  PhotoIcon,
+  PencilSquareIcon,
+  ExclamationTriangleIcon,
+  UserIcon,
 } from '@heroicons/react/24/outline';
 
 const getStatutConfig = (statut: TourneeStatut) => {
@@ -52,6 +56,29 @@ const getStatutConfig = (statut: TourneeStatut) => {
     annulee: { variant: 'danger' as const, label: 'Annulée' },
   };
   return configs[statut];
+};
+
+const getPointStatutConfig = (statut: string) => {
+  const configs: Record<string, { variant: 'default' | 'warning' | 'success' | 'danger'; label: string }> = {
+    a_faire: { variant: 'default', label: 'À faire' },
+    en_cours: { variant: 'warning', label: 'En cours' },
+    termine: { variant: 'success', label: 'Terminé' },
+    incident: { variant: 'danger', label: 'Incident' },
+    annule: { variant: 'default', label: 'Annulé' },
+  };
+  return configs[statut] || configs.a_faire;
+};
+
+const getIncidentTypeLabel = (type: string) => {
+  const labels: Record<string, string> = {
+    client_absent: 'Client absent',
+    adresse_incorrecte: 'Adresse incorrecte',
+    acces_impossible: 'Accès impossible',
+    materiel_endommage: 'Matériel endommagé',
+    retard_important: 'Retard important',
+    autre: 'Autre',
+  };
+  return labels[type] || type;
 };
 
 interface PointFormData {
@@ -687,6 +714,201 @@ export default function TourneeDetailPage() {
           )}
         </Card>
       </div>
+
+      {/* Point Detail Panel - Shows driver-submitted information */}
+      {selectedPointId && (() => {
+        const selectedPointData = points.find(p => p.id === selectedPointId);
+        if (!selectedPointData) return null;
+
+        const pointStatutConfig = getPointStatutConfig(selectedPointData.statut);
+        const hasDriverData = selectedPointData.statut === 'termine' || selectedPointData.statut === 'incident' ||
+          selectedPointData.photos?.length || selectedPointData.signatureData || selectedPointData.incidents?.length;
+
+        // Construct the API base URL for photos
+        const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
+        const uploadsBaseUrl = apiBaseUrl.replace('/api', '') + '/uploads';
+
+        return (
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold">
+                  Détails du point - {selectedPointData.client?.nom}
+                </h2>
+                <Badge variant={pointStatutConfig.variant}>{pointStatutConfig.label}</Badge>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedPointId(undefined)}>
+                <XMarkIcon className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Times */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Créneau</p>
+                <p className="font-medium">
+                  {selectedPointData.creneauDebut && selectedPointData.creneauFin
+                    ? `${formatTime(selectedPointData.creneauDebut)} - ${formatTime(selectedPointData.creneauFin)}`
+                    : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">ETA</p>
+                <p className="font-medium">
+                  {selectedPointData.heureArriveeEstimee ? formatTime(selectedPointData.heureArriveeEstimee) : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Arrivée réelle</p>
+                <p className="font-medium text-green-600">
+                  {selectedPointData.heureArriveeReelle ? formatTime(selectedPointData.heureArriveeReelle) : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Départ réel</p>
+                <p className="font-medium text-green-600">
+                  {selectedPointData.heureDepartReelle ? formatTime(selectedPointData.heureDepartReelle) : '-'}
+                </p>
+              </div>
+            </div>
+
+            {!hasDriverData && (
+              <div className="text-center py-8 text-gray-500">
+                <ClockIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>Ce point n'a pas encore été complété par le livreur</p>
+              </div>
+            )}
+
+            {hasDriverData && (
+              <div className="space-y-6">
+                {/* Photos */}
+                {selectedPointData.photos && selectedPointData.photos.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <PhotoIcon className="h-5 w-5" />
+                      Photos ({selectedPointData.photos.length})
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {selectedPointData.photos.map((photo) => (
+                        <a
+                          key={photo.id}
+                          href={`${uploadsBaseUrl}/${photo.filename}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block aspect-square rounded-lg overflow-hidden border border-gray-200 hover:border-primary-500 transition-colors"
+                        >
+                          <img
+                            src={`${uploadsBaseUrl}/${photo.filename}`}
+                            alt={`Photo ${photo.type}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Signature */}
+                {selectedPointData.signatureData && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <PencilSquareIcon className="h-5 w-5" />
+                      Signature
+                    </h3>
+                    <div className="flex items-start gap-4">
+                      <div className="bg-white border border-gray-200 rounded-lg p-2">
+                        <img
+                          src={selectedPointData.signatureData}
+                          alt="Signature client"
+                          className="max-w-[200px] h-auto"
+                        />
+                      </div>
+                      <div>
+                        {selectedPointData.signatureNom && (
+                          <p className="flex items-center gap-2 text-sm">
+                            <UserIcon className="h-4 w-4 text-gray-400" />
+                            <span className="font-medium">{selectedPointData.signatureNom}</span>
+                          </p>
+                        )}
+                        {selectedPointData.signatureDate && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Signé le {format(new Date(selectedPointData.signatureDate), 'dd/MM/yyyy à HH:mm', { locale: fr })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes */}
+                {(selectedPointData.notesInternes || selectedPointData.notesClient) && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Notes</h3>
+                    <div className="space-y-3">
+                      {selectedPointData.notesInternes && (
+                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <p className="text-xs text-yellow-700 font-medium mb-1">Notes internes</p>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedPointData.notesInternes}</p>
+                        </div>
+                      )}
+                      {selectedPointData.notesClient && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs text-blue-700 font-medium mb-1">Notes client</p>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedPointData.notesClient}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Incidents */}
+                {selectedPointData.incidents && selectedPointData.incidents.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-red-700 mb-3 flex items-center gap-2">
+                      <ExclamationTriangleIcon className="h-5 w-5" />
+                      Incidents ({selectedPointData.incidents.length})
+                    </h3>
+                    <div className="space-y-3">
+                      {selectedPointData.incidents.map((incident) => (
+                        <div key={incident.id} className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <Badge variant="danger">{getIncidentTypeLabel(incident.type)}</Badge>
+                            <span className="text-xs text-gray-500">
+                              {format(new Date(incident.dateDeclaration), 'dd/MM/yyyy HH:mm', { locale: fr })}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{incident.description}</p>
+                          {incident.resolution && (
+                            <div className="mt-2 pt-2 border-t border-red-200">
+                              <p className="text-xs text-green-700 font-medium mb-1">Résolution</p>
+                              <p className="text-sm text-gray-700">{incident.resolution}</p>
+                            </div>
+                          )}
+                          {incident.photosUrls && incident.photosUrls.length > 0 && (
+                            <div className="mt-3 flex gap-2">
+                              {incident.photosUrls.map((url, index) => (
+                                <a
+                                  key={index}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block w-16 h-16 rounded overflow-hidden border border-red-200"
+                                >
+                                  <img src={url} alt={`Incident photo ${index + 1}`} className="w-full h-full object-cover" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+        );
+      })()}
 
       {/* Add/Edit Point Modal */}
       <Modal

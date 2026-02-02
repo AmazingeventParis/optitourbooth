@@ -265,11 +265,13 @@ export const tourneeController = {
                 id: true,
                 nom: true,
                 adresse: true,
+                complementAdresse: true,
                 codePostal: true,
                 ville: true,
                 latitude: true,
                 longitude: true,
                 telephone: true,
+                email: true,
                 contactNom: true,
                 contactTelephone: true,
                 instructionsAcces: true,
@@ -277,6 +279,8 @@ export const tourneeController = {
             },
             produits: {
               select: {
+                id: true,
+                produitId: true,
                 quantite: true,
                 produit: {
                   select: {
@@ -300,11 +304,37 @@ export const tourneeController = {
                 },
               },
             },
-            _count: {
+            // Include photos for admin view
+            photos: {
               select: {
-                photos: true,
-                incidents: true,
+                id: true,
+                filename: true,
+                path: true,
+                mimetype: true,
+                size: true,
+                type: true,
+                latitude: true,
+                longitude: true,
+                takenAt: true,
+                createdAt: true,
               },
+              orderBy: { createdAt: 'asc' },
+            },
+            // Include incidents for admin view
+            incidents: {
+              select: {
+                id: true,
+                type: true,
+                statut: true,
+                description: true,
+                resolution: true,
+                photosUrls: true,
+                dateDeclaration: true,
+                dateResolution: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+              orderBy: { dateDeclaration: 'desc' },
             },
           },
         },
