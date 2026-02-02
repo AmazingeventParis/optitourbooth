@@ -2345,8 +2345,11 @@ export default function DailyPlanningPage() {
   // Valider une tournée (passer de brouillon à planifiee)
   const handleValidateTournee = async (tourneeId: string) => {
     try {
-      const updatedTournee = await tourneesService.update(tourneeId, { statut: 'planifiee' });
-      setTournees(current => current.map(t => t.id === tourneeId ? updatedTournee : t));
+      await tourneesService.update(tourneeId, { statut: 'planifiee' });
+      // Mettre à jour uniquement le statut sans perdre les points
+      setTournees(current => current.map(t =>
+        t.id === tourneeId ? { ...t, statut: 'planifiee' as const } : t
+      ));
       toastSuccess('Tournée validée', 'La tournée est maintenant visible par le livreur');
     } catch (error) {
       toastError('Erreur', (error as Error).message);
