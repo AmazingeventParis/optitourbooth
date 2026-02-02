@@ -1,7 +1,7 @@
 // Types pour les entités
 
 export type UserRole = 'admin' | 'chauffeur';
-export type TourneeStatut = 'planifiee' | 'en_cours' | 'terminee' | 'annulee';
+export type TourneeStatut = 'brouillon' | 'planifiee' | 'en_cours' | 'terminee' | 'annulee';
 export type PointType = 'livraison' | 'ramassage' | 'livraison_ramassage';
 export type PointStatut = 'a_faire' | 'en_cours' | 'termine' | 'incident' | 'annule';
 export type IncidentType = 'client_absent' | 'adresse_incorrecte' | 'acces_impossible' | 'materiel_endommage' | 'retard_important' | 'autre';

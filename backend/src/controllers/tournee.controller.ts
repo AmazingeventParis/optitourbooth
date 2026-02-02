@@ -991,7 +991,7 @@ export const tourneeController = {
       return;
     }
 
-    if (tournee.statut !== 'planifiee') {
+    if (tournee.statut !== 'planifiee' && tournee.statut !== 'brouillon') {
       apiResponse.badRequest(res, 'Cette tournée ne peut plus être modifiée');
       return;
     }
@@ -1253,7 +1253,7 @@ export const tourneeController = {
       return;
     }
 
-    if (point.tournee.statut !== 'planifiee') {
+    if (point.tournee.statut !== 'planifiee' && point.tournee.statut !== 'brouillon') {
       apiResponse.badRequest(res, 'Cette tournée ne peut plus être modifiée');
       return;
     }
@@ -1301,7 +1301,7 @@ export const tourneeController = {
       return;
     }
 
-    if (tournee.statut !== 'planifiee') {
+    if (tournee.statut !== 'planifiee' && tournee.statut !== 'brouillon') {
       apiResponse.badRequest(res, 'Cette tournée ne peut plus être modifiée');
       return;
     }
@@ -1383,7 +1383,7 @@ export const tourneeController = {
       return;
     }
 
-    if (targetTournee.statut !== 'planifiee') {
+    if (targetTournee.statut !== 'planifiee' && targetTournee.statut !== 'brouillon') {
       apiResponse.badRequest(res, 'La tournée cible ne peut plus être modifiée');
       return;
     }
@@ -1517,7 +1517,7 @@ export const tourneeController = {
       return;
     }
 
-    if (tournee.statut !== 'planifiee') {
+    if (tournee.statut !== 'planifiee' && tournee.statut !== 'brouillon') {
       apiResponse.badRequest(res, 'Cette tournée ne peut plus être modifiée');
       return;
     }

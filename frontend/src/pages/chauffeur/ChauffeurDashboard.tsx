@@ -38,9 +38,11 @@ export default function ChauffeurDashboard() {
         chauffeurId: user?.id,
       });
 
-      if (result.data.length > 0) {
+      // Filtrer les tournées en brouillon (non validées)
+      const validTournees = result.data.filter(t => t.statut !== 'brouillon');
+      if (validTournees.length > 0) {
         // Get full details
-        const fullTournee = await tourneesService.getById(result.data[0].id);
+        const fullTournee = await tourneesService.getById(validTournees[0].id);
         setTournee(fullTournee);
       } else {
         setTournee(null);

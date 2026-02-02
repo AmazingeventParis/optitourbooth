@@ -52,6 +52,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   ArrowTopRightOnSquareIcon,
+  CheckIcon,
 } from '@heroicons/react/24/outline';
 
 // Couleurs hex pour la légende de la carte
@@ -665,6 +666,7 @@ interface TourneeTimelineProps {
   tournee: Tournee;
   colorIndex: number;
   onEdit: () => void;
+  onValidate?: () => void;
   selectedPointId?: string | null;
   onSelectPoint?: (pointId: string | null) => void;
   selectedDepotId?: string | null;
@@ -673,7 +675,7 @@ interface TourneeTimelineProps {
   isTargeted?: boolean;
 }
 
-const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onEdit, selectedPointId, onSelectPoint, selectedDepotId, onSelectDepot, isDragging, isTargeted }: TourneeTimelineProps) {
+const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onEdit, onValidate, selectedPointId, onSelectPoint, selectedDepotId, onSelectDepot, isDragging, isTargeted }: TourneeTimelineProps) {
   const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
   const chauffeurColor = tournee.chauffeur?.couleur || TOURNEE_HEX_COLORS[colorIndex % TOURNEE_HEX_COLORS.length];
   const points = (tournee.points || []).sort((a, b) => a.ordre - b.ordre);
@@ -742,13 +744,28 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
             )}
           </span>
         </div>
-        <button
-          onClick={onEdit}
-          className="p-1 rounded hover:bg-white/20 transition-colors"
-          title="Modifier la tournée"
-        >
-          <PencilIcon className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {tournee.statut === 'brouillon' && onValidate && (
+            <button
+              onClick={onValidate}
+              className="px-2 py-0.5 rounded bg-white/20 hover:bg-white/30 transition-colors text-xs font-medium flex items-center gap-1"
+              title="Valider la tournée pour la rendre visible au livreur"
+            >
+              <CheckIcon className="h-3 w-3" />
+              Valider
+            </button>
+          )}
+          {tournee.statut === 'brouillon' && (
+            <span className="text-[10px] opacity-70 bg-white/10 px-1.5 py-0.5 rounded">Brouillon</span>
+          )}
+          <button
+            onClick={onEdit}
+            className="p-1 rounded hover:bg-white/20 transition-colors"
+            title="Modifier la tournée"
+          >
+            <PencilIcon className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Frise chronologique (masquée par défaut) */}
@@ -2324,6 +2341,17 @@ export default function DailyPlanningPage() {
     toastSuccess('Point modifié');
   };
 
+  // Valider une tournée (passer de brouillon à planifiee)
+  const handleValidateTournee = async (tourneeId: string) => {
+    try {
+      const updatedTournee = await tourneesService.update(tourneeId, { statut: 'planifiee' });
+      setTournees(current => current.map(t => t.id === tourneeId ? updatedTournee : t));
+      toastSuccess('Tournée validée', 'La tournée est maintenant visible par le livreur');
+    } catch (error) {
+      toastError('Erreur', (error as Error).message);
+    }
+  };
+
   const chauffeurOptions = useMemo(() => [
     { value: '', label: 'Sélectionner un chauffeur' },
     ...chauffeurs.map((c) => ({
@@ -2851,6 +2879,7 @@ export default function DailyPlanningPage() {
                       tournee={tournee}
                       colorIndex={index}
                       onEdit={() => navigate(`/tournees/${tournee.id}`)}
+                      onValidate={() => handleValidateTournee(tournee.id)}
                       selectedPointId={selectedPointId}
                       onSelectPoint={(id) => {
                         setSelectedPointId(id);

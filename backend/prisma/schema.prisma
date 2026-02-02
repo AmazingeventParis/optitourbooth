@@ -19,6 +19,7 @@ enum UserRole {
 }
 
 enum TourneeStatut {
+  brouillon
   planifiee
   en_cours
   terminee
@@ -176,7 +177,7 @@ model Tournee {
   id                String        @id @default(uuid())
   date              DateTime      @db.Date
   chauffeurId       String        @map("chauffeur_id")
-  statut            TourneeStatut @default(planifiee)
+  statut            TourneeStatut @default(brouillon)
 
   // Horaires
   heureDepart       DateTime?     @map("heure_depart") @db.Time
