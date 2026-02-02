@@ -149,11 +149,12 @@ export const optimizationService = {
         let serviceStartTime = new Date(currentTime);
         if (point.creneauDebut) {
           const creneauDebut = new Date(point.creneauDebut);
-          const creneauHours = creneauDebut.getUTCHours();
-          const creneauMinutes = creneauDebut.getUTCMinutes();
+          // Utiliser getHours/setHours (heure locale) pour cohérence avec le stockage
+          const creneauHours = creneauDebut.getHours();
+          const creneauMinutes = creneauDebut.getMinutes();
 
           const creneauOnSameDay = new Date(currentTime);
-          creneauOnSameDay.setUTCHours(creneauHours, creneauMinutes, 0, 0);
+          creneauOnSameDay.setHours(creneauHours, creneauMinutes, 0, 0);
 
           if (currentTime < creneauOnSameDay) {
             serviceStartTime = creneauOnSameDay;
@@ -266,13 +267,13 @@ export const optimizationService = {
 
         if (point.creneauDebut) {
           const creneauDebut = new Date(point.creneauDebut);
-          // Extraire l'heure du créneau (ignorer la date, utiliser seulement HH:MM)
-          const creneauHours = creneauDebut.getUTCHours();
-          const creneauMinutes = creneauDebut.getUTCMinutes();
+          // Extraire l'heure du créneau en HEURE LOCALE (cohérent avec le stockage via setHours)
+          const creneauHours = creneauDebut.getHours();
+          const creneauMinutes = creneauDebut.getMinutes();
 
           // Créer une date avec l'heure du créneau sur le même jour que currentTime
           const creneauOnSameDay = new Date(currentTime);
-          creneauOnSameDay.setUTCHours(creneauHours, creneauMinutes, 0, 0);
+          creneauOnSameDay.setHours(creneauHours, creneauMinutes, 0, 0);
 
           // Si on arrive avant le début du créneau, on attend
           if (currentTime < creneauOnSameDay) {

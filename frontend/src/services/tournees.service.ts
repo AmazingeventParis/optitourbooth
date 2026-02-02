@@ -134,9 +134,9 @@ export const tourneesService = {
     return response.data.data;
   },
 
-  // Points
-  async addPoint(tourneeId: string, data: CreatePointData): Promise<Point> {
-    const response = await api.post<ApiResponse<Point>>(`/tournees/${tourneeId}/points`, data);
+  // Points - Les endpoints retournent maintenant la tournée complète avec ETAs calculées
+  async addPoint(tourneeId: string, data: CreatePointData): Promise<Tournee> {
+    const response = await api.post<ApiResponse<Tournee>>(`/tournees/${tourneeId}/points`, data);
     return response.data.data;
   },
 
@@ -145,8 +145,9 @@ export const tourneesService = {
     return response.data.data;
   },
 
-  async deletePoint(tourneeId: string, pointId: string): Promise<void> {
-    await api.delete(`/tournees/${tourneeId}/points/${pointId}`);
+  async deletePoint(tourneeId: string, pointId: string): Promise<Tournee> {
+    const response = await api.delete<ApiResponse<Tournee>>(`/tournees/${tourneeId}/points/${pointId}`);
+    return response.data.data;
   },
 
   async reorderPoints(tourneeId: string, pointIds: string[]): Promise<Tournee> {
@@ -154,8 +155,8 @@ export const tourneesService = {
     return response.data.data;
   },
 
-  async movePoint(sourceTourneeId: string, pointId: string, targetTourneeId: string, ordre?: number): Promise<Point> {
-    const response = await api.put<ApiResponse<Point>>(
+  async movePoint(sourceTourneeId: string, pointId: string, targetTourneeId: string, ordre?: number): Promise<{ sourceTournee: Tournee; targetTournee: Tournee }> {
+    const response = await api.put<ApiResponse<{ sourceTournee: Tournee; targetTournee: Tournee }>>(
       `/tournees/${sourceTourneeId}/points/${pointId}/move`,
       { targetTourneeId, ordre }
     );
