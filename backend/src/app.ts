@@ -5,6 +5,11 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import { config, connectDatabase, disconnectDatabase } from './config/index.js';
 import { disconnectRedis } from './config/redis.js';
@@ -68,6 +73,12 @@ if (config.isDev) {
     next();
   });
 }
+
+// ===========================================
+// Static files (uploads)
+// ===========================================
+const uploadsDir = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
+app.use('/uploads', express.static(uploadsDir));
 
 // ===========================================
 // Routes
