@@ -133,7 +133,7 @@ export default function TourneeDetailPage() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isDeleteTourneeDialogOpen, setIsDeleteTourneeDialogOpen] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState<Point | null>(null);
-  const [statusAction, setStatusAction] = useState<'start' | 'finish' | 'cancel' | null>(null);
+  const [statusAction, setStatusAction] = useState<'validate' | 'start' | 'finish' | 'cancel' | null>(null);
   const [pointFormData, setPointFormData] = useState<PointFormData>(initialPointFormData);
   const [pointFormErrors, setPointFormErrors] = useState<Partial<PointFormData>>({});
 
@@ -402,6 +402,10 @@ export default function TourneeDetailPage() {
     try {
       let result: Tournee;
       switch (statusAction) {
+        case 'validate':
+          result = await tourneesService.update(id, { statut: 'planifiee' });
+          success('Tournée validée');
+          break;
         case 'start':
           result = await tourneesService.start(id);
           success('Tournée démarrée');
@@ -417,7 +421,9 @@ export default function TourneeDetailPage() {
         default:
           return;
       }
-      setTournee(result);
+      // Recharger la tournée complète pour avoir tous les points
+      const fullTournee = await tourneesService.getById(id);
+      setTournee(fullTournee);
       setIsStatusDialogOpen(false);
     } catch (err) {
       showError('Erreur', (err as Error).message);
@@ -513,6 +519,25 @@ export default function TourneeDetailPage() {
         </div>
 
         <div className="flex gap-2">
+          {tournee.statut === 'brouillon' && (
+            <>
+              <Button
+                variant="ghost"
+                onClick={() => setIsDeleteTourneeDialogOpen(true)}
+                title="Supprimer la tournée"
+              >
+                <TrashIcon className="h-5 w-5 text-red-500" />
+              </Button>
+              <Button variant="secondary" onClick={handleOptimize} isLoading={isOptimizing}>
+                <BoltIcon className="h-5 w-5 mr-2" />
+                Optimiser
+              </Button>
+              <Button onClick={() => openStatusDialog('validate')}>
+                <CheckIcon className="h-5 w-5 mr-2" />
+                Valider
+              </Button>
+            </>
+          )}
           {tournee.statut === 'planifiee' && (
             <>
               <Button
@@ -528,7 +553,7 @@ export default function TourneeDetailPage() {
               </Button>
               <Button onClick={() => openStatusDialog('start')}>
                 <PlayIcon className="h-5 w-5 mr-2" />
-                Valider
+                Démarrer
               </Button>
             </>
           )}
@@ -976,22 +1001,28 @@ export default function TourneeDetailPage() {
         onClose={() => setIsStatusDialogOpen(false)}
         onConfirm={handleStatusChange}
         title={
-          statusAction === 'start'
+          statusAction === 'validate'
             ? 'Valider la tournée'
+            : statusAction === 'start'
+            ? 'Démarrer la tournée'
             : statusAction === 'finish'
             ? 'Terminer la tournée'
             : 'Annuler la tournée'
         }
         message={
-          statusAction === 'start'
-            ? 'Confirmez-vous la validation de cette tournée ?'
+          statusAction === 'validate'
+            ? 'La tournée sera visible par le livreur. Confirmez-vous ?'
+            : statusAction === 'start'
+            ? 'Confirmez-vous le démarrage de cette tournée ?'
             : statusAction === 'finish'
             ? 'Confirmez-vous que cette tournée est terminée ?'
             : 'Êtes-vous sûr de vouloir annuler cette tournée ?'
         }
         confirmText={
-          statusAction === 'start'
+          statusAction === 'validate'
             ? 'Valider'
+            : statusAction === 'start'
+            ? 'Démarrer'
             : statusAction === 'finish'
             ? 'Terminer'
             : 'Annuler'
