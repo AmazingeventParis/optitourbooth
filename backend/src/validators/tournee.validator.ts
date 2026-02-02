@@ -77,6 +77,16 @@ export const updatePointSchema = z.object({
   notesClient: z.string().optional().nullable(),
   produits: z.array(pointProduitSchema).optional(),
   options: z.array(pointOptionSchema).optional(),
+  // Signature client (chauffeur)
+  signatureData: z.string().optional().nullable(),
+  signatureNom: z.string().optional().nullable(),
+});
+
+// Schema pour créer un incident
+export const createIncidentSchema = z.object({
+  type: z.enum(['client_absent', 'adresse_incorrecte', 'acces_impossible', 'materiel_endommage', 'retard_important', 'autre']),
+  description: z.string().min(1, 'Description requise'),
+  photosUrls: z.array(z.string()).optional(),
 });
 
 export const reorderPointsSchema = z.union([
@@ -107,3 +117,4 @@ export type CreatePointInput = z.infer<typeof createPointSchema>;
 export type UpdatePointInput = z.infer<typeof updatePointSchema>;
 export type ReorderPointsInput = z.infer<typeof reorderPointsSchema>;
 export type MovePointInput = z.infer<typeof movePointSchema>;
+export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;

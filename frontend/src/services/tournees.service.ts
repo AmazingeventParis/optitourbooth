@@ -50,6 +50,14 @@ interface UpdatePointData {
   dureePrevue?: number;
   notesInternes?: string;
   notesClient?: string;
+  signatureData?: string;
+  signatureNom?: string;
+}
+
+interface CreateIncidentData {
+  type: 'client_absent' | 'adresse_incorrecte' | 'acces_impossible' | 'materiel_endommage' | 'retard_important' | 'autre';
+  description: string;
+  photosUrls?: string[];
 }
 
 interface TourneeStats {
@@ -235,6 +243,34 @@ export const tourneesService = {
           'Content-Type': 'multipart/form-data',
         },
       }
+    );
+    return response.data.data;
+  },
+
+  // Photos - Chauffeur
+  async uploadPhotos(tourneeId: string, pointId: string, files: File[]): Promise<unknown[]> {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('photos', file);
+    });
+
+    const response = await api.post<ApiResponse<unknown[]>>(
+      `/tournees/${tourneeId}/points/${pointId}/photos`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data.data;
+  },
+
+  // Incidents - Chauffeur
+  async createIncident(tourneeId: string, pointId: string, data: CreateIncidentData): Promise<unknown> {
+    const response = await api.post<ApiResponse<unknown>>(
+      `/tournees/${tourneeId}/points/${pointId}/incidents`,
+      data
     );
     return response.data.data;
   },

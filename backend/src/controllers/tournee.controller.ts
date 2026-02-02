@@ -10,6 +10,7 @@ import {
   UpdatePointInput,
   ReorderPointsInput,
   MovePointInput,
+  CreateIncidentInput,
 } from '../validators/tournee.validator.js';
 import { TourneeStatut, PointStatut } from '@prisma/client';
 
@@ -1183,10 +1184,29 @@ export const tourneeController = {
     }
 
     if (data.type) updateData.type = data.type;
-    if (data.statut) updateData.statut = data.statut;
     if (data.ordre !== undefined) updateData.ordre = data.ordre;
     if (data.notesInternes !== undefined) updateData.notesInternes = data.notesInternes;
     if (data.notesClient !== undefined) updateData.notesClient = data.notesClient;
+
+    // Signature client
+    if (data.signatureData !== undefined) {
+      updateData.signatureData = data.signatureData;
+      updateData.signatureDate = data.signatureData ? new Date() : null;
+    }
+    if (data.signatureNom !== undefined) updateData.signatureNom = data.signatureNom;
+
+    // Gestion du changement de statut avec horodatage
+    if (data.statut) {
+      updateData.statut = data.statut;
+      // Si on passe en_cours, enregistrer l'heure d'arrivée réelle
+      if (data.statut === 'en_cours' && point.statut === 'a_faire') {
+        updateData.heureArriveeReelle = new Date();
+      }
+      // Si on termine ou incident, enregistrer l'heure de départ
+      if ((data.statut === 'termine' || data.statut === 'incident') && point.statut === 'en_cours') {
+        updateData.heureDepartReelle = new Date();
+      }
+    }
 
     if (data.creneauDebut !== undefined) {
       if (data.creneauDebut) {
@@ -1580,5 +1600,104 @@ export const tourneeController = {
     } catch (error) {
       apiResponse.badRequest(res, `Erreur d'import: ${(error as Error).message}`);
     }
+  },
+
+  /**
+   * POST /api/tournees/:id/points/:pointId/photos
+   * Ajouter des photos à un point
+   */
+  async addPhotos(req: Request, res: Response): Promise<void> {
+    const tourneeId = req.params.id as string;
+    const pointId = req.params.pointId as string;
+
+    // Vérifier que le point existe et appartient à la tournée
+    const point = await prisma.point.findFirst({
+      where: { id: pointId, tourneeId },
+      include: { tournee: true },
+    });
+
+    if (!point) {
+      apiResponse.notFound(res, 'Point non trouvé');
+      return;
+    }
+
+    if (point.tournee.statut !== 'en_cours') {
+      apiResponse.badRequest(res, 'La tournée doit être en cours pour ajouter des photos');
+      return;
+    }
+
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      apiResponse.badRequest(res, 'Aucun fichier fourni');
+      return;
+    }
+
+    // Créer les entrées photo en base
+    const photos = await prisma.$transaction(
+      files.map((file) =>
+        prisma.photo.create({
+          data: {
+            pointId,
+            filename: file.filename,
+            path: file.path,
+            mimetype: file.mimetype,
+            size: file.size,
+            type: 'preuve',
+            takenAt: new Date(),
+          },
+        })
+      )
+    );
+
+    apiResponse.success(res, photos, `${photos.length} photo(s) ajoutée(s)`);
+  },
+
+  /**
+   * POST /api/tournees/:id/points/:pointId/incidents
+   * Créer un incident pour un point
+   */
+  async createIncident(req: Request, res: Response): Promise<void> {
+    const tourneeId = req.params.id as string;
+    const pointId = req.params.pointId as string;
+    const data = req.body as CreateIncidentInput;
+
+    // Vérifier que le point existe et appartient à la tournée
+    const point = await prisma.point.findFirst({
+      where: { id: pointId, tourneeId },
+      include: { tournee: true },
+    });
+
+    if (!point) {
+      apiResponse.notFound(res, 'Point non trouvé');
+      return;
+    }
+
+    if (point.tournee.statut !== 'en_cours') {
+      apiResponse.badRequest(res, 'La tournée doit être en cours pour signaler un incident');
+      return;
+    }
+
+    // Créer l'incident
+    const incident = await prisma.incident.create({
+      data: {
+        pointId,
+        type: data.type,
+        description: data.description,
+        photosUrls: data.photosUrls || [],
+        statut: 'ouvert',
+        dateDeclaration: new Date(),
+      },
+    });
+
+    // Mettre à jour le statut du point
+    await prisma.point.update({
+      where: { id: pointId },
+      data: {
+        statut: 'incident',
+        heureDepartReelle: new Date(),
+      },
+    });
+
+    apiResponse.success(res, incident, 'Incident créé');
   },
 };

@@ -14,7 +14,16 @@ import {
   updatePointSchema,
   reorderPointsSchema,
   movePointSchema,
+  createIncidentSchema,
 } from '../validators/tournee.validator.js';
+import path from 'path';
+import fs from 'fs';
+
+// Créer le dossier uploads s'il n'existe pas
+const uploadsDir = process.env.UPLOAD_DIR || './uploads';
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 // Configuration multer pour l'upload de fichiers Excel
 const upload = multer({
@@ -32,6 +41,30 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error('Format de fichier non supporté. Utilisez .xlsx, .xls ou .csv'));
+    }
+  },
+});
+
+// Configuration multer pour l'upload de photos
+const photoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, uploadsDir);
+    },
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    },
+  }),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max per photo
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Format de fichier non supporté. Utilisez JPEG, PNG ou WebP'));
     }
   },
 });
@@ -208,6 +241,28 @@ router.delete(
   requireAdmin,
   validate(pointIdSchema, 'params'),
   asyncHandler(tourneeController.deletePoint)
+);
+
+// ========== PHOTOS ==========
+
+// Ajouter des photos à un point (chauffeur)
+router.post(
+  '/:id/points/:pointId/photos',
+  validate(pointIdSchema, 'params'),
+  photoUpload.array('photos', 10), // Max 10 photos
+  asyncHandler(tourneeController.addPhotos)
+);
+
+// ========== INCIDENTS ==========
+
+// Créer un incident pour un point (chauffeur)
+router.post(
+  '/:id/points/:pointId/incidents',
+  validateMultiple({
+    params: pointIdSchema,
+    body: createIncidentSchema,
+  }),
+  asyncHandler(tourneeController.createIncident)
 );
 
 export default router;

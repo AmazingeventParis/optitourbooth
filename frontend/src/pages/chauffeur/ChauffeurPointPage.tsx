@@ -139,13 +139,12 @@ export default function ChauffeurPointPage() {
 
     setIsSaving(true);
     try {
-      // Update point status to incident
-      await tourneesService.updatePoint(tournee.id, point.id, {
-        statut: 'incident',
+      // Create incident record (this also updates point status)
+      await tourneesService.createIncident(tournee.id, point.id, {
+        type: incidentType as 'client_absent' | 'adresse_incorrecte' | 'acces_impossible' | 'materiel_endommage' | 'retard_important' | 'autre',
+        description: incidentDescription || 'Incident signalé par le chauffeur',
       });
 
-      // In a real app, we would also create an incident record
-      // For now, we just update the status
       success('Incident signalé');
       setIsIncidentModalOpen(false);
       navigate('/chauffeur/tournee');
@@ -213,33 +212,57 @@ export default function ChauffeurPointPage() {
   };
 
   const handleSaveSignature = async () => {
-    if (!canvasRef.current || !signatureName) {
+    if (!canvasRef.current || !signatureName || !tournee || !point) {
       showError('Erreur', 'Veuillez signer et entrer un nom');
       return;
     }
 
-    // In a real app, we would save the signature to the server
-    const signatureData = canvasRef.current.toDataURL();
-    console.log('Signature saved:', signatureData, signatureName);
+    setIsSaving(true);
+    try {
+      const signatureData = canvasRef.current.toDataURL();
 
-    success('Signature enregistrée');
-    setIsSignatureModalOpen(false);
+      await tourneesService.updatePoint(tournee.id, point.id, {
+        signatureData,
+        signatureNom: signatureName,
+      });
+
+      success('Signature enregistrée');
+      setIsSignatureModalOpen(false);
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || !tournee || !point) return;
 
-    // In a real app, we would upload these to the server
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.result) {
-          setPhotos((prev) => [...prev, e.target!.result as string]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    const newFiles = Array.from(files);
+
+    // Upload immediately to server
+    setIsSaving(true);
+    try {
+      await tourneesService.uploadPhotos(tournee.id, point.id, newFiles);
+
+      // Also show preview
+      newFiles.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          if (ev.target?.result) {
+            setPhotos((prev) => [...prev, ev.target!.result as string]);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+
+      success(`${newFiles.length} photo(s) ajoutée(s)`);
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const openNavigation = () => {
