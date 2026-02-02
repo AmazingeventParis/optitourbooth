@@ -9,6 +9,7 @@ import {
   CubeIcon,
   ChartBarIcon,
   CalendarDaysIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
 import clsx from 'clsx';
@@ -21,6 +22,7 @@ interface SidebarProps {
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Planning', href: '/planning', icon: CalendarDaysIcon },
+  { name: 'Historique', href: '/historique', icon: ClockIcon },
   { name: 'Clients', href: '/clients', icon: UserGroupIcon },
   { name: 'Utilisateurs', href: '/utilisateurs', icon: UsersIcon },
   { name: 'Produits', href: '/produits', icon: CubeIcon },

@@ -160,6 +160,7 @@ function App() {
         <Route path="tournees" element={<LazyPage><TourneesPage /></LazyPage>} />
         <Route path="tournees/:id" element={<LazyPage><TourneeDetailPage /></LazyPage>} />
         <Route path="planning" element={<LazyPage><DailyPlanningPage /></LazyPage>} />
+        <Route path="historique" element={<LazyPage><TourneesPage /></LazyPage>} />
         <Route path="rapports" element={<LazyPage><RapportsPage /></LazyPage>} />
       </Route>
 
