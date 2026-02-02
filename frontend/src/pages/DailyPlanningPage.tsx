@@ -405,6 +405,148 @@ const TIMELINE_LABEL_HOURS = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24];
 // Lignes de graduation toutes les heures
 const TIMELINE_GRID_HOURS = Array.from({ length: 25 }, (_, i) => i);
 
+// === CALCUL ETA APPROXIMATIF CÔTÉ FRONTEND ===
+// Vitesse moyenne estimée en km/h (prend en compte trafic urbain)
+const AVERAGE_SPEED_KMH = 35;
+
+// Calcule la distance à vol d'oiseau entre deux points (formule de Haversine)
+const haversineDistance = (
+  lat1: number, lon1: number,
+  lat2: number, lon2: number
+): number => {
+  const R = 6371; // Rayon de la Terre en km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+// Parse une heure dans différents formats et retourne {hours, minutes} en HEURE LOCALE
+// Formats supportés: "09:00", "9:00", "09h00", "9h00", "1970-01-01T09:00:00.000Z"
+const parseTimeToHoursMinutes = (time: string | undefined): { hours: number; minutes: number } | null => {
+  if (!time) return null;
+
+  try {
+    // Format ISO avec T (ex: "1970-01-01T09:00:00.000Z" ou "2026-01-28T09:00:00")
+    // Toujours utiliser l'heure LOCALE pour cohérence avec l'affichage utilisateur
+    if (time.includes('T')) {
+      const date = new Date(time);
+      if (isNaN(date.getTime())) return null;
+      return {
+        hours: date.getHours(),
+        minutes: date.getMinutes(),
+      };
+    }
+
+    // Format "09h00" ou "9h00"
+    if (time.includes('h')) {
+      const parts = time.split('h');
+      return {
+        hours: parseInt(parts[0], 10) || 0,
+        minutes: parseInt(parts[1], 10) || 0,
+      };
+    }
+
+    // Format "09:00" ou "9:00"
+    if (time.includes(':')) {
+      const parts = time.split(':');
+      return {
+        hours: parseInt(parts[0], 10) || 0,
+        minutes: parseInt(parts[1], 10) || 0,
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+// Calcule les ETAs approximatives pour tous les points d'une tournée
+// Retourne les points avec heureArriveeEstimee calculée
+// LOGIQUE MÉTIER:
+// - L'arrivée peut être en avance, mais le SERVICE commence au creneauDebut (pas avant)
+// - Heure de départ vers point suivant = max(heureArrivee, creneauDebut) + dureePrevue
+const calculateApproximateETAs = (
+  points: Point[],
+  heureDepart: string | null | undefined,
+  depotLat?: number | null,
+  depotLon?: number | null
+): Point[] => {
+  if (points.length === 0) return points;
+
+  // Parser l'heure de départ du dépôt (HEURE LOCALE)
+  let currentTime: Date;
+  const parsedDepart = parseTimeToHoursMinutes(heureDepart || undefined);
+  if (parsedDepart) {
+    currentTime = new Date();
+    currentTime.setHours(parsedDepart.hours, parsedDepart.minutes, 0, 0);
+  } else {
+    currentTime = new Date();
+    currentTime.setHours(7, 0, 0, 0); // Défaut: 7h00
+  }
+
+  // Coordonnées précédentes (dépôt ou point précédent)
+  let prevLat = depotLat || null;
+  let prevLon = depotLon || null;
+
+  // Trier les points par ordre
+  const sortedPoints = [...points].sort((a, b) => a.ordre - b.ordre);
+
+  return sortedPoints.map((point) => {
+    const clientLat = (point.client as Client | undefined)?.latitude;
+    const clientLon = (point.client as Client | undefined)?.longitude;
+
+    // Calculer le temps de trajet depuis le point précédent
+    let travelTimeMinutes = 0;
+    if (prevLat && prevLon && clientLat && clientLon) {
+      const distance = haversineDistance(prevLat, prevLon, clientLat, clientLon);
+      // Multiplier par 1.3 pour approximer la distance routière (pas à vol d'oiseau)
+      const roadDistance = distance * 1.3;
+      travelTimeMinutes = (roadDistance / AVERAGE_SPEED_KMH) * 60;
+    }
+
+    // Ajouter le temps de trajet pour obtenir l'heure d'arrivée physique
+    currentTime = new Date(currentTime.getTime() + travelTimeMinutes * 60 * 1000);
+    const heureArriveeEstimee = currentTime.toISOString();
+
+    // LOGIQUE MÉTIER: Le service commence au plus tôt au creneauDebut
+    // Si on arrive en avance, on ATTEND le début du créneau pour commencer
+    let serviceStartTime = new Date(currentTime);
+
+    const parsedCreneauDebut = parseTimeToHoursMinutes(point.creneauDebut);
+    if (parsedCreneauDebut) {
+      // Créer une date avec l'heure du créneau sur le même jour (HEURE LOCALE)
+      const creneauOnSameDay = new Date(currentTime);
+      creneauOnSameDay.setHours(parsedCreneauDebut.hours, parsedCreneauDebut.minutes, 0, 0);
+
+      // Si on arrive avant le créneau, le service commence au creneauDebut
+      if (currentTime < creneauOnSameDay) {
+        serviceStartTime = creneauOnSameDay;
+      }
+    }
+
+    // Heure de départ vers le prochain point = début du service + durée prévue (installation/désinstallation)
+    const dureePrevue = point.dureePrevue || 30;
+    currentTime = new Date(serviceStartTime.getTime() + dureePrevue * 60 * 1000);
+
+    // Mettre à jour les coordonnées précédentes pour le calcul du prochain trajet
+    if (clientLat && clientLon) {
+      prevLat = clientLat;
+      prevLon = clientLon;
+    }
+
+    return {
+      ...point,
+      heureArriveeEstimee,
+    };
+  });
+};
+
 // Convertir une heure en minutes depuis minuit pour comparaison
 const timeToMinutes = (time: string | undefined): number | null => {
   if (!time) return null;
@@ -1699,12 +1841,20 @@ export default function DailyPlanningPage() {
 
       // Insérer et réordonner
       currentPoints.splice(insertIndex, 0, optimisticPoint);
-      const newPoints = currentPoints.map((p, idx) => ({ ...p, ordre: idx }));
+      const reorderedPoints = currentPoints.map((p, idx) => ({ ...p, ordre: idx }));
 
-      // Créer le nouveau tableau de tournées
+      // Calculer les ETAs approximatives pour affichage immédiat des couleurs
+      const pointsWithETAs = calculateApproximateETAs(
+        reorderedPoints,
+        targetTournee.heureDepart as string | null,
+        targetTournee.depotLatitude,
+        targetTournee.depotLongitude
+      );
+
+      // Créer le nouveau tableau de tournées avec ETAs calculées
       const newTournees = currentTournees.map(t => {
         if (t.id === targetTourneeId) {
-          return { ...t, points: newPoints, nombrePoints: newPoints.length };
+          return { ...t, points: pointsWithETAs, nombrePoints: pointsWithETAs.length };
         }
         return t;
       });
@@ -1712,7 +1862,11 @@ export default function DailyPlanningPage() {
       // Retirer des pending points
       const newPendingPoints = pendingPointsRef.current.filter((_, i) => i !== pendingIndex);
 
-      // MISE À JOUR IMMÉDIATE (synchrone)
+      // Sauvegarder pour rollback
+      const rollbackTournees = currentTournees;
+      const rollbackPendingPoints = pendingPointsRef.current;
+
+      // MISE À JOUR IMMÉDIATE avec ETAs approximatives
       setTournees(newTournees);
       setPendingPoints(newPendingPoints);
 
@@ -1723,11 +1877,7 @@ export default function DailyPlanningPage() {
         tournees: newTournees
       });
 
-      // Sauvegarder pour rollback
-      const rollbackTournees = currentTournees;
-      const rollbackPendingPoints = pendingPointsRef.current;
-
-      // Appel API en arrière-plan
+      // Appel API en arrière-plan - l'API retourne maintenant la tournée complète
       tourneesService.addPoint(targetTourneeId, {
         clientId: pendingPoint.clientId,
         type: (pendingPoint.type as 'livraison' | 'ramassage' | 'livraison_ramassage') || 'livraison',
@@ -1735,13 +1885,10 @@ export default function DailyPlanningPage() {
         creneauFin: pendingPoint.creneauFin,
         notesInternes: pendingPoint.notes,
         produits: pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : undefined,
-      }).then(async () => {
-        // Recharger la tournée complète pour avoir les ETAs calculées par le backend
-        // (temps de trajet OSRM + durées de service)
-        const updatedTournee = await tourneesService.getById(targetTourneeId);
+      }).then((updatedTournee: Tournee) => {
+        // L'API retourne directement la tournée complète avec ETAs OSRM
         setTournees(current => {
           const updated = current.map(t => t.id === targetTourneeId ? updatedTournee : t);
-          // Notifier la carte avec les données à jour
           broadcastChannel.current?.postMessage({
             type: 'tournees-updated',
             date: selectedDate,
@@ -1791,9 +1938,17 @@ export default function DailyPlanningPage() {
       const sourceTournee = currentTournees.find(t => t.id === sourceTourneeId);
       if (!sourceTournee?.points) return;
 
-      const newSourcePoints = sourceTournee.points
+      const filteredPoints = sourceTournee.points
         .filter(p => p.id !== point.id)
         .map((p, idx) => ({ ...p, ordre: idx }));
+
+      // Calculer les ETAs approximatives pour les points restants
+      const newSourcePoints = calculateApproximateETAs(
+        filteredPoints,
+        sourceTournee.heureDepart as string | null,
+        sourceTournee.depotLatitude,
+        sourceTournee.depotLongitude
+      );
 
       const newTournees = currentTournees.map(t => {
         if (t.id === sourceTourneeId) {
@@ -1808,7 +1963,7 @@ export default function DailyPlanningPage() {
       const rollbackTournees = currentTournees;
       const rollbackPendingPoints = pendingPointsRef.current;
 
-      // MISE À JOUR IMMÉDIATE
+      // MISE À JOUR IMMÉDIATE avec ETAs approximatives
       setTournees(newTournees);
       setPendingPoints(newPendingPoints);
 
@@ -1819,10 +1974,9 @@ export default function DailyPlanningPage() {
         tournees: newTournees
       });
 
-      // Appel API en arrière-plan
-      tourneesService.deletePoint(sourceTourneeId, point.id).then(async () => {
-        // Recharger la tournée pour recalculer les ETAs des points restants
-        const updatedTournee = await tourneesService.getById(sourceTourneeId);
+      // Appel API en arrière-plan - l'API retourne maintenant la tournée complète
+      tourneesService.deletePoint(sourceTourneeId, point.id).then((updatedTournee: Tournee) => {
+        // L'API retourne directement la tournée complète avec ETAs OSRM
         setTournees(current => {
           const updated = current.map(t => t.id === sourceTourneeId ? updatedTournee : t);
           broadcastChannel.current?.postMessage({
@@ -1872,14 +2026,22 @@ export default function DailyPlanningPage() {
       newPoints.splice(newIndex, 0, movedPoint);
       const reorderedPoints = newPoints.map((p, idx) => ({ ...p, ordre: idx }));
 
+      // Calculer les ETAs approximatives avec le nouvel ordre
+      const pointsWithETAs = calculateApproximateETAs(
+        reorderedPoints,
+        tournee.heureDepart as string | null,
+        tournee.depotLatitude,
+        tournee.depotLongitude
+      );
+
       const newTournees = currentTournees.map(t => {
         if (t.id === sourceTourneeId) {
-          return { ...t, points: reorderedPoints };
+          return { ...t, points: pointsWithETAs };
         }
         return t;
       });
 
-      // MISE À JOUR IMMÉDIATE
+      // MISE À JOUR IMMÉDIATE avec ETAs approximatives
       setTournees(newTournees);
 
       // Notifier la popup carte
@@ -1889,10 +2051,9 @@ export default function DailyPlanningPage() {
         tournees: newTournees
       });
 
-      // Appel API en arrière-plan
-      tourneesService.reorderPoints(sourceTourneeId, reorderedPoints.map(p => p.id)).then(async () => {
-        // Recharger la tournée pour recalculer les ETAs avec le nouvel ordre
-        const updatedTournee = await tourneesService.getById(sourceTourneeId);
+      // Appel API en arrière-plan - l'API retourne maintenant la tournée complète
+      tourneesService.reorderPoints(sourceTourneeId, reorderedPoints.map(p => p.id)).then((updatedTournee: Tournee) => {
+        // L'API retourne directement la tournée complète avec ETAs OSRM
         setTournees(current => {
           const updated = current.map(t => t.id === sourceTourneeId ? updatedTournee : t);
           broadcastChannel.current?.postMessage({
@@ -1918,8 +2079,8 @@ export default function DailyPlanningPage() {
     const movedPoint = sourceTournee.points.find(p => p.id === sourcePointId);
     if (!movedPoint) return;
 
-    // Retirer de la source
-    const newSourcePoints = sourceTournee.points
+    // Retirer de la source et réordonner
+    const filteredSourcePoints = sourceTournee.points
       .filter(p => p.id !== sourcePointId)
       .map((p, idx) => ({ ...p, ordre: idx }));
 
@@ -1932,7 +2093,22 @@ export default function DailyPlanningPage() {
     }
 
     sortedTargetPoints.splice(insertIndex, 0, { ...movedPoint, tourneeId: targetTourneeId });
-    const newTargetPoints = sortedTargetPoints.map((p, idx) => ({ ...p, ordre: idx }));
+    const reorderedTargetPoints = sortedTargetPoints.map((p, idx) => ({ ...p, ordre: idx }));
+
+    // Calculer les ETAs approximatives pour les deux tournées
+    const newSourcePoints = calculateApproximateETAs(
+      filteredSourcePoints,
+      sourceTournee.heureDepart as string | null,
+      sourceTournee.depotLatitude,
+      sourceTournee.depotLongitude
+    );
+
+    const newTargetPoints = calculateApproximateETAs(
+      reorderedTargetPoints,
+      targetTournee.heureDepart as string | null,
+      targetTournee.depotLatitude,
+      targetTournee.depotLongitude
+    );
 
     const newTournees = currentTournees.map(t => {
       if (t.id === sourceTourneeId) {
@@ -1944,7 +2120,7 @@ export default function DailyPlanningPage() {
       return t;
     });
 
-    // MISE À JOUR IMMÉDIATE
+    // MISE À JOUR IMMÉDIATE avec ETAs approximatives
     setTournees(newTournees);
 
     // Notifier la popup carte
@@ -1954,17 +2130,13 @@ export default function DailyPlanningPage() {
       tournees: newTournees
     });
 
-    // Appel API en arrière-plan
-    tourneesService.movePoint(sourceTourneeId, sourcePointId, targetTourneeId, insertIndex).then(async () => {
-      // Recharger les deux tournées pour recalculer les ETAs
-      const [updatedSource, updatedTarget] = await Promise.all([
-        tourneesService.getById(sourceTourneeId),
-        tourneesService.getById(targetTourneeId),
-      ]);
+    // Appel API en arrière-plan - l'API retourne maintenant les deux tournées
+    tourneesService.movePoint(sourceTourneeId, sourcePointId, targetTourneeId, insertIndex).then((result: { sourceTournee: Tournee; targetTournee: Tournee }) => {
+      // L'API retourne directement les deux tournées complètes avec ETAs OSRM
       setTournees(current => {
         const updated = current.map(t => {
-          if (t.id === sourceTourneeId) return updatedSource;
-          if (t.id === targetTourneeId) return updatedTarget;
+          if (t.id === sourceTourneeId) return result.sourceTournee;
+          if (t.id === targetTourneeId) return result.targetTournee;
           return t;
         });
         broadcastChannel.current?.postMessage({
@@ -2362,6 +2534,19 @@ export default function DailyPlanningPage() {
                             <div className="col-span-2 text-xs text-gray-600">
                               {client?.adresse}, {client?.codePostal} {client?.ville}
                             </div>
+                            {client?.adresse && (
+                              <div className="col-span-2">
+                                <a
+                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${client.adresse}, ${client.codePostal} ${client.ville}`)}&layer=c`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 hover:underline"
+                                >
+                                  <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+                                  Voir dans Street View
+                                </a>
+                              </div>
+                            )}
                             {client?.telephone && (
                               <div>
                                 <div className="text-[10px] text-gray-400">Tél</div>
