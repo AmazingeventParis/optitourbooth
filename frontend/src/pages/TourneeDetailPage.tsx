@@ -390,7 +390,7 @@ export default function TourneeDetailPage() {
     }
   };
 
-  const openStatusDialog = (action: 'start' | 'finish' | 'cancel') => {
+  const openStatusDialog = (action: 'validate' | 'start' | 'finish' | 'cancel') => {
     setStatusAction(action);
     setIsStatusDialogOpen(true);
   };
@@ -400,22 +400,21 @@ export default function TourneeDetailPage() {
 
     setIsSaving(true);
     try {
-      let result: Tournee;
       switch (statusAction) {
         case 'validate':
-          result = await tourneesService.update(id, { statut: 'planifiee' });
+          await tourneesService.update(id, { statut: 'planifiee' });
           success('Tournée validée');
           break;
         case 'start':
-          result = await tourneesService.start(id);
+          await tourneesService.start(id);
           success('Tournée démarrée');
           break;
         case 'finish':
-          result = await tourneesService.finish(id);
+          await tourneesService.finish(id);
           success('Tournée terminée');
           break;
         case 'cancel':
-          result = await tourneesService.cancel(id);
+          await tourneesService.cancel(id);
           success('Tournée annulée');
           break;
         default:
