@@ -32,6 +32,7 @@ import { socketService, ChauffeurPosition } from '@/services/socket.service';
 import { useSocketStore, isPositionStale } from '@/store/socketStore';
 import { useAuthStore } from '@/store/authStore';
 import { Button, Badge, Modal, Input, Select, TimeSelect } from '@/components/ui';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import MultiTourneeMap, { PendingPointWithCoords } from '@/components/map/MultiTourneeMap';
 import { useToast } from '@/hooks/useToast';
 import { formatTime } from '@/utils/format';
@@ -1349,6 +1350,11 @@ export default function DailyPlanningPage() {
   const [editingPendingIndex, setEditingPendingIndex] = useState<number | null>(null);
   const [editPendingFormData, setEditPendingFormData] = useState<Partial<ImportParsedPoint>>({});
 
+  // Dialog validation tournée
+  const [isValidateDialogOpen, setIsValidateDialogOpen] = useState(false);
+  const [tourneeToValidate, setTourneeToValidate] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -2342,17 +2348,30 @@ export default function DailyPlanningPage() {
     toastSuccess('Point modifié');
   };
 
+  // Ouvrir le dialog de validation
+  const openValidateDialog = (tourneeId: string) => {
+    setTourneeToValidate(tourneeId);
+    setIsValidateDialogOpen(true);
+  };
+
   // Valider une tournée (passer de brouillon à planifiee)
-  const handleValidateTournee = async (tourneeId: string) => {
+  const confirmValidateTournee = async () => {
+    if (!tourneeToValidate) return;
+
+    setIsValidating(true);
     try {
-      await tourneesService.update(tourneeId, { statut: 'planifiee' });
+      await tourneesService.update(tourneeToValidate, { statut: 'planifiee' });
       // Mettre à jour uniquement le statut sans perdre les points
       setTournees(current => current.map(t =>
-        t.id === tourneeId ? { ...t, statut: 'planifiee' as const } : t
+        t.id === tourneeToValidate ? { ...t, statut: 'planifiee' as const } : t
       ));
       toastSuccess('Tournée validée', 'La tournée est maintenant visible par le livreur');
+      setIsValidateDialogOpen(false);
+      setTourneeToValidate(null);
     } catch (error) {
       toastError('Erreur', (error as Error).message);
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -2883,7 +2902,7 @@ export default function DailyPlanningPage() {
                       tournee={tournee}
                       colorIndex={index}
                       onEdit={() => navigate(`/tournees/${tournee.id}`)}
-                      onValidate={() => handleValidateTournee(tournee.id)}
+                      onValidate={() => openValidateDialog(tournee.id)}
                       selectedPointId={selectedPointId}
                       onSelectPoint={(id) => {
                         setSelectedPointId(id);
@@ -3240,6 +3259,21 @@ export default function DailyPlanningPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Dialog validation tournée */}
+      <ConfirmDialog
+        isOpen={isValidateDialogOpen}
+        onClose={() => {
+          setIsValidateDialogOpen(false);
+          setTourneeToValidate(null);
+        }}
+        onConfirm={confirmValidateTournee}
+        title="Valider la tournée"
+        message="La tournée sera visible par le livreur. Confirmez-vous la validation ?"
+        confirmText="Valider"
+        variant="warning"
+        isLoading={isValidating}
+      />
 
     </div>
   );
