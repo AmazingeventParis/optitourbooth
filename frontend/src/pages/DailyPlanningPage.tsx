@@ -1326,6 +1326,11 @@ export default function DailyPlanningPage() {
   const [editPointFormErrors, setEditPointFormErrors] = useState<Partial<EditPointFormData>>({});
   const [isEditingSaving, setIsEditingSaving] = useState(false);
 
+  // Modal édition point pending
+  const [isEditPendingModalOpen, setIsEditPendingModalOpen] = useState(false);
+  const [editingPendingIndex, setEditingPendingIndex] = useState<number | null>(null);
+  const [editPendingFormData, setEditPendingFormData] = useState<Partial<ImportParsedPoint>>({});
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -2285,6 +2290,40 @@ export default function DailyPlanningPage() {
     }
   };
 
+  // Ouvrir le modal d'édition de point pending
+  const openEditPendingModal = (index: number) => {
+    const point = pendingPoints[index];
+    if (!point) return;
+    setEditingPendingIndex(index);
+    setEditPendingFormData({
+      clientName: point.clientName,
+      societe: point.societe || '',
+      type: point.type,
+      creneauDebut: point.creneauDebut || '',
+      creneauFin: point.creneauFin || '',
+      contactNom: point.contactNom || '',
+      contactTelephone: point.contactTelephone || '',
+      notes: point.notes || '',
+      produitName: point.produitName || '',
+    });
+    setIsEditPendingModalOpen(true);
+  };
+
+  // Sauvegarder les modifications du point pending
+  const handleSaveEditPending = () => {
+    if (editingPendingIndex === null) return;
+
+    const updatedPoints = [...pendingPoints];
+    updatedPoints[editingPendingIndex] = {
+      ...updatedPoints[editingPendingIndex],
+      ...editPendingFormData,
+    };
+    setPendingPoints(updatedPoints);
+    setIsEditPendingModalOpen(false);
+    setEditingPendingIndex(null);
+    toastSuccess('Point modifié');
+  };
+
   const chauffeurOptions = useMemo(() => [
     { value: '', label: 'Sélectionner un chauffeur' },
     ...chauffeurs.map((c) => ({
@@ -2617,12 +2656,21 @@ export default function DailyPlanningPage() {
                         <div className="w-[300px] bg-white rounded-lg border shadow-sm flex-shrink-0">
                           <div className="px-3 py-2 border-b bg-orange-50 flex items-center justify-between">
                             <h3 className="font-semibold text-sm text-orange-700">Point à dispatcher</h3>
-                            <button
-                              onClick={() => setSelectedPendingIndex(null)}
-                              className="text-gray-400 hover:text-gray-600 text-lg leading-none"
-                            >
-                              ×
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => openEditPendingModal(selectedPendingIndex)}
+                                className="text-gray-400 hover:text-orange-600 p-1 rounded transition-colors"
+                                title="Modifier le point"
+                              >
+                                <PencilIcon className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => setSelectedPendingIndex(null)}
+                                className="text-gray-400 hover:text-gray-600 text-lg leading-none p-1"
+                              >
+                                ×
+                              </button>
+                            </div>
                           </div>
                           <div className="p-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
                             <div className="col-span-2">
@@ -3064,6 +3112,96 @@ export default function DailyPlanningPage() {
               Annuler
             </Button>
             <Button onClick={handleSaveEditPoint} isLoading={isEditingSaving}>
+              Enregistrer
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal édition point pending */}
+      <Modal
+        isOpen={isEditPendingModalOpen}
+        onClose={() => setIsEditPendingModalOpen(false)}
+        title="Modifier le point à dispatcher"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Nom du client"
+            value={editPendingFormData.clientName || ''}
+            onChange={(e) => setEditPendingFormData({ ...editPendingFormData, clientName: e.target.value })}
+            required
+          />
+
+          <Input
+            label="Société"
+            value={editPendingFormData.societe || ''}
+            onChange={(e) => setEditPendingFormData({ ...editPendingFormData, societe: e.target.value })}
+          />
+
+          <Select
+            label="Type"
+            value={editPendingFormData.type || 'livraison'}
+            onChange={(e) => setEditPendingFormData({ ...editPendingFormData, type: e.target.value })}
+            options={[
+              { value: 'livraison', label: 'Livraison' },
+              { value: 'ramassage', label: 'Ramassage' },
+              { value: 'livraison_ramassage', label: 'Livraison + Ramassage' },
+            ]}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Créneau début"
+              value={editPendingFormData.creneauDebut || ''}
+              onChange={(e) => setEditPendingFormData({ ...editPendingFormData, creneauDebut: e.target.value })}
+              placeholder="09:00"
+            />
+            <Input
+              label="Créneau fin"
+              value={editPendingFormData.creneauFin || ''}
+              onChange={(e) => setEditPendingFormData({ ...editPendingFormData, creneauFin: e.target.value })}
+              placeholder="11:00"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Nom du contact"
+              value={editPendingFormData.contactNom || ''}
+              onChange={(e) => setEditPendingFormData({ ...editPendingFormData, contactNom: e.target.value })}
+            />
+            <Input
+              label="Téléphone du contact"
+              value={editPendingFormData.contactTelephone || ''}
+              onChange={(e) => setEditPendingFormData({ ...editPendingFormData, contactTelephone: e.target.value })}
+            />
+          </div>
+
+          <Input
+            label="Produit"
+            value={editPendingFormData.produitName || ''}
+            onChange={(e) => setEditPendingFormData({ ...editPendingFormData, produitName: e.target.value })}
+          />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes
+            </label>
+            <textarea
+              value={editPendingFormData.notes || ''}
+              onChange={(e) => setEditPendingFormData({ ...editPendingFormData, notes: e.target.value })}
+              rows={2}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Notes..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="secondary" onClick={() => setIsEditPendingModalOpen(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleSaveEditPending}>
               Enregistrer
             </Button>
           </div>
