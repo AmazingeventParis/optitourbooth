@@ -64,6 +64,7 @@ const statutOptions: { value: TourneeStatut | ''; label: string }[] = [
 
 const getStatutBadge = (statut: TourneeStatut) => {
   const config = {
+    brouillon: { variant: 'secondary' as const, label: 'Brouillon' },
     planifiee: { variant: 'info' as const, label: 'Planifiée' },
     en_cours: { variant: 'warning' as const, label: 'En cours' },
     terminee: { variant: 'success' as const, label: 'Terminée' },

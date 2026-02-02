@@ -56,6 +56,7 @@ export default function ChauffeurDashboard() {
 
   const getStatutConfig = (statut: string) => {
     const configs: Record<string, { variant: 'info' | 'warning' | 'success' | 'danger'; label: string; icon: React.ElementType }> = {
+      brouillon: { variant: 'info', label: 'Brouillon', icon: ClockIcon },
       planifiee: { variant: 'info', label: 'Planifiée', icon: ClockIcon },
       en_cours: { variant: 'warning', label: 'En cours', icon: TruckIcon },
       terminee: { variant: 'success', label: 'Terminée', icon: CheckCircleIcon },
