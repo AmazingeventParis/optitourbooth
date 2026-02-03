@@ -17,7 +17,6 @@ import {
   PencilSquareIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  XMarkIcon,
   DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
@@ -64,7 +63,7 @@ export default function ChauffeurPointPage() {
 
   // Photos
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState<string[]>([]); // Local previews during upload
 
   // Get point from store
   const point = useMemo(() => {
@@ -146,25 +145,32 @@ export default function ChauffeurPointPage() {
 
     const newFiles = Array.from(files);
 
-    // Upload immediately to server
+    // Show local preview during upload
+    const previews: string[] = [];
+    for (const file of newFiles) {
+      const reader = new FileReader();
+      const preview = await new Promise<string>((resolve) => {
+        reader.onload = (ev) => resolve(ev.target?.result as string);
+        reader.readAsDataURL(file);
+      });
+      previews.push(preview);
+    }
+    setUploadingPhotos(previews);
+
+    // Upload to server
     setIsSaving(true);
     try {
       await tourneesService.uploadPhotos(tournee.id, point.id, newFiles);
-
-      // Also show preview
-      newFiles.forEach((file) => {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          if (ev.target?.result) {
-            setPhotos((prev) => [...prev, ev.target!.result as string]);
-          }
-        };
-        reader.readAsDataURL(file);
-      });
-
       success(`${newFiles.length} photo(s) ajoutée(s)`);
+
+      // Refresh tournee to get updated photos from server
+      await refreshTournee();
+
+      // Clear local previews (photos now come from server)
+      setUploadingPhotos([]);
     } catch (err) {
       showError('Erreur', (err as Error).message);
+      setUploadingPhotos([]); // Clear previews on error
     } finally {
       setIsSaving(false);
     }
@@ -336,52 +342,63 @@ export default function ChauffeurPointPage() {
       )}
 
       {/* Photos Section */}
-      {isActive && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">Photos</h3>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <CameraIcon className="h-4 w-4 mr-1" />
-              Ajouter
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              multiple
-              className="hidden"
-              onChange={handlePhotoCapture}
-            />
-          </div>
-
-          {photos.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2">
-              {photos.map((photo, index) => (
-                <div key={index} className="relative aspect-square">
-                  <img
-                    src={photo}
-                    alt={`Photo ${index + 1}`}
-                    className="w-full h-full object-cover rounded"
-                  />
-                  <button
-                    onClick={() => setPhotos((prev) => prev.filter((_, i) => i !== index))}
-                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
-                  >
-                    <XMarkIcon className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-400 text-center py-4">Aucune photo</p>
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold">Photos ({(point.photos?.length || 0) + uploadingPhotos.length})</h3>
+          {isActive && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isSaving}
+              >
+                <CameraIcon className="h-4 w-4 mr-1" />
+                {isSaving ? 'Envoi...' : 'Ajouter'}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                multiple
+                className="hidden"
+                onChange={handlePhotoCapture}
+              />
+            </>
           )}
-        </Card>
-      )}
+        </div>
+
+        {(point.photos && point.photos.length > 0) || uploadingPhotos.length > 0 ? (
+          <div className="grid grid-cols-3 gap-2">
+            {/* Photos from server */}
+            {point.photos?.map((photo) => (
+              <div key={photo.id} className="relative aspect-square">
+                <img
+                  src={photo.path}
+                  alt={photo.filename}
+                  className="w-full h-full object-cover rounded"
+                />
+              </div>
+            ))}
+            {/* Local previews during upload */}
+            {uploadingPhotos.map((preview, index) => (
+              <div key={`uploading-${index}`} className="relative aspect-square">
+                <img
+                  src={preview}
+                  alt={`Upload ${index + 1}`}
+                  className="w-full h-full object-cover rounded opacity-60"
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-400 text-center py-4">Aucune photo</p>
+        )}
+      </Card>
 
       {/* Action Buttons */}
       {isActive && (

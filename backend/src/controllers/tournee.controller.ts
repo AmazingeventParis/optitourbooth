@@ -82,6 +82,18 @@ async function getFullTournee(tourneeId: string) {
               },
             },
           },
+          photos: {
+            select: {
+              id: true,
+              filename: true,
+              path: true,
+              mimetype: true,
+              size: true,
+              type: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'asc' },
+          },
         },
       },
     },
