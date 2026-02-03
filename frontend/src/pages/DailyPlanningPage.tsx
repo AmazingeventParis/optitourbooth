@@ -69,13 +69,6 @@ const TOURNEE_HEX_COLORS = [
 ];
 import clsx from 'clsx';
 
-const TIME_STATUS_COLORS: Record<TimeStatus, string> = {
-  early: 'bg-blue-500',
-  ontime: 'bg-green-500',
-  late: 'bg-red-500',
-  unknown: 'bg-gray-400',
-};
-
 // Valeurs par défaut pour le dépôt
 const DEFAULT_DEPOT_ADRESSE = '3, sentier des marécages 93100 Montreuil';
 const DEFAULT_HEURE_DEPART = '07:00';
@@ -84,13 +77,12 @@ const DEFAULT_HEURE_DEPART = '07:00';
 interface TimelinePointProps {
   point: Point;
   tourneeId: string;
-  timeStatus: TimeStatus;
   isOverlay?: boolean;
   isSelected?: boolean;
   onSelect?: (pointId: string) => void;
 }
 
-const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus, isOverlay, isSelected, onSelect }: TimelinePointProps) {
+const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, isOverlay, isSelected, onSelect }: TimelinePointProps) {
   const {
     attributes,
     listeners,
@@ -152,10 +144,10 @@ const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus
     >
       {/* Ligne 1: numéro + client + type */}
       <div className="flex items-center gap-1.5">
-        <div className={clsx(
-          'w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0',
-          TIME_STATUS_COLORS[timeStatus]
-        )}>
+        <div
+          className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+          style={{ backgroundColor: productColor || '#6366F1' }}
+        >
           {point.ordre + 1}
         </div>
         <div className="font-medium text-xs truncate flex-1">
@@ -911,24 +903,15 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
                   )}
                 </div>
               </div>
-              {points.map((point) => {
-                // Utiliser l'ETA calculée par le backend (OSRM + durées de service)
-                const timeStatus = getTimeStatusFromETA(
-                  point.heureArriveeEstimee,
-                  point.creneauDebut,
-                  point.creneauFin
-                );
-                return (
+              {points.map((point) => (
                   <TimelinePoint
                     key={point.id}
                     point={point}
                     tourneeId={tournee.id}
-                    timeStatus={timeStatus}
                     isSelected={selectedPointId === point.id}
                     onSelect={(id) => onSelectPoint?.(selectedPointId === id ? null : id)}
                   />
-                );
-              })}
+              ))}
               {/* Zone de drop pour le drag */}
               {isDragging && (
                 <div className={clsx(
@@ -2934,7 +2917,6 @@ export default function DailyPlanningPage() {
                   <TimelinePoint
                     point={activePoint}
                     tourneeId=""
-                    timeStatus="unknown"
                     isOverlay
                   />
                 </div>
