@@ -804,34 +804,28 @@ export default function TourneeDetailPage() {
                   </div>
                 )}
 
-                {/* Signature */}
-                {selectedPointData.signatureData && (
+                {/* Commentaire client */}
+                {(selectedPointData.signatureNom || selectedPointData.signatureData) && (
                   <div>
                     <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                       <PencilSquareIcon className="h-5 w-5" />
-                      Signature
+                      Validation client
                     </h3>
-                    <div className="flex items-start gap-4">
-                      <div className="bg-white border border-gray-200 rounded-lg p-2">
-                        <img
-                          src={selectedPointData.signatureData}
-                          alt="Signature client"
-                          className="max-w-[200px] h-auto"
-                        />
-                      </div>
-                      <div>
-                        {selectedPointData.signatureNom && (
-                          <p className="flex items-center gap-2 text-sm">
-                            <UserIcon className="h-4 w-4 text-gray-400" />
-                            <span className="font-medium">{selectedPointData.signatureNom}</span>
-                          </p>
-                        )}
-                        {selectedPointData.signatureDate && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            Signé le {format(new Date(selectedPointData.signatureDate), 'dd/MM/yyyy à HH:mm', { locale: fr })}
-                          </p>
-                        )}
-                      </div>
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      {selectedPointData.signatureNom && (
+                        <p className="flex items-center gap-2 text-sm mb-2">
+                          <UserIcon className="h-4 w-4 text-blue-500" />
+                          <span className="font-medium">{selectedPointData.signatureNom}</span>
+                        </p>
+                      )}
+                      {selectedPointData.signatureData && (
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedPointData.signatureData}</p>
+                      )}
+                      {selectedPointData.signatureDate && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Enregistré le {format(new Date(selectedPointData.signatureDate), 'dd/MM/yyyy à HH:mm', { locale: fr })}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
