@@ -284,6 +284,7 @@ export const autoDispatchService = {
 
   /**
    * Trouver la meilleure tournée pour un point donné
+   * Utilise un algorithme round-robin avec ajustement géographique
    */
   async findBestTournee(
     point: PendingPoint,
@@ -293,37 +294,24 @@ export const autoDispatchService = {
   ): Promise<(TourneeCandidate & { reason?: string }) | null> {
     if (candidates.length === 0) return null;
 
-    // Calculer les stats globales pour l'équilibrage
-    const totalPoints = candidates.reduce((sum, c) => sum + c.currentPoints, 0);
-    const avgPoints = totalPoints / candidates.length;
+    // STRATÉGIE SIMPLE: Toujours prendre la tournée avec le moins de points
+    // En cas d'égalité, utiliser la proximité géographique comme critère secondaire
+
     const minPoints = Math.min(...candidates.map(c => c.currentPoints));
-    const maxPoints = Math.max(...candidates.map(c => c.currentPoints));
 
-    // Scorer chaque tournée
-    const scoredCandidates: Array<{
-      candidate: TourneeCandidate;
-      score: number;
-      reason: string;
-    }> = [];
+    // Filtrer les tournées qui ont le nombre minimum de points
+    const leastLoadedCandidates = candidates.filter(c => c.currentPoints === minPoints);
 
-    for (const candidate of candidates) {
-      let score = 100; // Score de base
-      let reasons: string[] = [];
+    // Si une seule tournée a le minimum, la retourner
+    if (leastLoadedCandidates.length === 1) {
+      return { ...leastLoadedCandidates[0]!, reason: 'Équilibrage de charge' };
+    }
 
-      // 1. Score d'équilibrage de charge (PRIORITAIRE - 0-60 points)
-      // Favoriser fortement les tournées avec moins de points
-      const pointDiff = candidate.currentPoints - minPoints;
-      const loadPenalty = pointDiff * 20; // -20 points par point de différence avec le min
-      score -= loadPenalty;
+    // Si plusieurs tournées ont le même nombre de points, choisir la plus proche géographiquement
+    let bestCandidate = leastLoadedCandidates[0]!;
+    let bestDistance = Infinity;
 
-      if (candidate.currentPoints === minPoints) {
-        score += 40; // Bonus pour la tournée la moins chargée
-        reasons.push('Moins chargée');
-      } else if (candidate.currentPoints > avgPoints) {
-        score -= 30; // Pénalité supplémentaire si au-dessus de la moyenne
-      }
-
-      // 2. Score de proximité géographique (0-25 points) - Réduit pour favoriser l'équilibrage
+    for (const candidate of leastLoadedCandidates) {
       if (candidate.centroid) {
         const distance = this.haversineDistance(
           coords.lat,
@@ -332,57 +320,18 @@ export const autoDispatchService = {
           candidate.centroid.lng
         );
 
-        // Moins de 5km = max points, plus de 50km = 0 points
-        const proximityScore = Math.max(0, 25 - (distance / 50) * 25);
-        score += proximityScore;
-
-        if (distance < 10) {
-          reasons.push(`Proche (${distance.toFixed(1)}km)`);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestCandidate = candidate;
         }
       }
-
-      // 3. Score de compatibilité horaire (0-15 points)
-      if (point.creneauDebut && candidate.heureFinEstimee) {
-        const creneauDebut = this.parseTime(point.creneauDebut);
-        if (creneauDebut) {
-          const creneauHour = creneauDebut.getHours();
-          const finEstimeeHour = candidate.heureFinEstimee.getHours();
-
-          // Si le créneau est après l'heure de fin estimée actuelle, c'est compatible
-          if (creneauHour >= finEstimeeHour) {
-            score += 15;
-            reasons.push('Horaire compatible');
-          } else if (creneauHour < finEstimeeHour - 2) {
-            score -= 10; // Pénalité si le créneau est bien avant la fin actuelle
-          }
-        }
-      }
-
-      // 4. Pénalité forte si trop de points (éviter les tournées surchargées)
-      if (candidate.currentPoints > 8) {
-        score -= (candidate.currentPoints - 8) * 15;
-      }
-
-      scoredCandidates.push({
-        candidate,
-        score,
-        reason: reasons.join(', ') || 'Affectation optimale',
-      });
     }
 
-    // Trier par score décroissant
-    scoredCandidates.sort((a, b) => b.score - a.score);
+    const reason = bestDistance < Infinity
+      ? `Équilibrage + proximité (${bestDistance.toFixed(1)}km)`
+      : 'Équilibrage de charge';
 
-    const best = scoredCandidates[0];
-    if (best) {
-      return { ...best.candidate, reason: best.reason };
-    }
-
-    // Si aucun bon candidat, prendre le moins chargé
-    const leastLoaded = candidates.reduce((min, c) =>
-      c.currentPoints < min.currentPoints ? c : min
-    );
-    return { ...leastLoaded, reason: 'Tournée la moins chargée' };
+    return { ...bestCandidate, reason };
   },
 
   /**

@@ -763,9 +763,12 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
             >
               <PencilIcon className="h-4 w-4" />
             </button>
-            {onDelete && (tournee.statut === 'brouillon' || tournee.statut === 'planifiee') && (
+            {onDelete && tournee.statut !== 'en_cours' && tournee.statut !== 'terminee' && (
               <button
-                onClick={onDelete}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
                 className="p-1 rounded hover:bg-red-500/80 transition-colors"
                 title="Supprimer la tournée"
               >
