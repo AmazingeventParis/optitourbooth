@@ -1821,37 +1821,10 @@ export default function DailyPlanningPage() {
       let pendingPoint = activeData.pendingPoint as ImportParsedPoint;
       const pendingIndex = activeData.index as number;
 
-      // Si le client n'existe pas, le créer automatiquement
-      if (!pendingPoint.clientFound || !pendingPoint.clientId) {
-        if (!pendingPoint.clientName?.trim()) {
-          toastError('Erreur', 'Le nom du client est requis');
-          return;
-        }
-
-        try {
-          const newClient = await clientsService.create({
-            nom: pendingPoint.clientName.trim(),
-            adresse: pendingPoint.adresse?.trim() || 'Adresse à définir',
-            telephone: pendingPoint.contactTelephone || undefined,
-          });
-
-          // Mettre à jour le pendingPoint avec le nouveau client
-          pendingPoint = {
-            ...pendingPoint,
-            clientId: newClient.id,
-            clientFound: true,
-          };
-
-          // Mettre à jour aussi dans la liste des pending points
-          setPendingPoints(current =>
-            current.map((p, i) => i === pendingIndex ? pendingPoint : p)
-          );
-
-          toastSuccess(`Client "${newClient.nom}" créé`);
-        } catch (err) {
-          toastError('Erreur', `Impossible de créer le client: ${(err as Error).message}`);
-          return;
-        }
+      // Vérifier que le client existe (devrait toujours être le cas maintenant)
+      if (!pendingPoint.clientId) {
+        toastError('Erreur', 'Ce point n\'a pas de client associé');
+        return;
       }
 
       // Déterminer la tournée cible
@@ -2457,38 +2430,65 @@ export default function DailyPlanningPage() {
   };
 
   // Ajouter un nouveau point pending manuellement
-  const handleAddPending = () => {
+  const [isAddingPending, setIsAddingPending] = useState(false);
+
+  const handleAddPending = async () => {
     if (!addPendingFormData.clientName?.trim()) {
       toastError('Le nom du client est requis');
       return;
     }
 
-    const newPoint: ImportParsedPoint = {
-      clientName: addPendingFormData.clientName.trim(),
-      clientId: addPendingFormData.clientId,
-      societe: addPendingFormData.societe || '',
-      adresse: addPendingFormData.adresse || '',
-      produitName: addPendingSelectedProduits.map(p => p.nom).join(', '),
-      produitId: addPendingSelectedProduits[0]?.id,
-      produitsIds: addPendingSelectedProduits.length > 0 ? addPendingSelectedProduits : undefined,
-      type: addPendingFormData.type || 'livraison',
-      creneauDebut: addPendingFormData.creneauDebut || '',
-      creneauFin: addPendingFormData.creneauFin || '',
-      contactNom: addPendingFormData.contactNom || '',
-      contactTelephone: addPendingFormData.contactTelephone || '',
-      notes: addPendingFormData.notes || '',
-      clientFound: !!addPendingFormData.clientId,
-      produitFound: addPendingSelectedProduits.length > 0,
-      errors: [],
-    };
+    setIsAddingPending(true);
 
-    setPendingPoints([...pendingPoints, newPoint]);
-    setIsAddPendingModalOpen(false);
-    setAddPendingFormData({ type: 'livraison' });
-    setAddPendingSelectedProduits([]);
-    setClientSuggestions([]);
-    setShowClientSuggestions(false);
-    toastSuccess('Point ajouté');
+    try {
+      let clientId = addPendingFormData.clientId;
+      let clientFound = !!clientId;
+
+      // Si pas de client existant sélectionné, créer le client
+      if (!clientId) {
+        const newClient = await clientsService.create({
+          nom: addPendingFormData.clientName.trim(),
+          adresse: addPendingFormData.adresse?.trim() || 'Adresse à définir',
+          telephone: addPendingFormData.contactTelephone || undefined,
+          contactNom: addPendingFormData.contactNom || undefined,
+          contactTelephone: addPendingFormData.contactTelephone || undefined,
+        });
+        clientId = newClient.id;
+        clientFound = true;
+        toastSuccess(`Client "${newClient.nom}" créé`);
+      }
+
+      const newPoint: ImportParsedPoint = {
+        clientName: addPendingFormData.clientName.trim(),
+        clientId,
+        societe: addPendingFormData.societe || '',
+        adresse: addPendingFormData.adresse || '',
+        produitName: addPendingSelectedProduits.map(p => p.nom).join(', '),
+        produitId: addPendingSelectedProduits[0]?.id,
+        produitsIds: addPendingSelectedProduits.length > 0 ? addPendingSelectedProduits : undefined,
+        type: addPendingFormData.type || 'livraison',
+        creneauDebut: addPendingFormData.creneauDebut || '',
+        creneauFin: addPendingFormData.creneauFin || '',
+        contactNom: addPendingFormData.contactNom || '',
+        contactTelephone: addPendingFormData.contactTelephone || '',
+        notes: addPendingFormData.notes || '',
+        clientFound,
+        produitFound: addPendingSelectedProduits.length > 0,
+        errors: [],
+      };
+
+      setPendingPoints([...pendingPoints, newPoint]);
+      setIsAddPendingModalOpen(false);
+      setAddPendingFormData({ type: 'livraison' });
+      setAddPendingSelectedProduits([]);
+      setClientSuggestions([]);
+      setShowClientSuggestions(false);
+      toastSuccess('Point ajouté');
+    } catch (err) {
+      toastError('Erreur', `Impossible de créer le client: ${(err as Error).message}`);
+    } finally {
+      setIsAddingPending(false);
+    }
   };
 
   // Ouvrir le dialog de validation
@@ -3590,10 +3590,10 @@ export default function DailyPlanningPage() {
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <Button variant="secondary" onClick={() => setIsAddPendingModalOpen(false)}>
+            <Button variant="secondary" onClick={() => setIsAddPendingModalOpen(false)} disabled={isAddingPending}>
               Annuler
             </Button>
-            <Button onClick={handleAddPending}>
+            <Button onClick={handleAddPending} isLoading={isAddingPending}>
               Ajouter
             </Button>
           </div>
