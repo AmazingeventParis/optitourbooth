@@ -98,8 +98,9 @@ export default function ImportExcelModal({
             <p className="font-medium">Colonnes attendues :</p>
             <ul className="list-disc list-inside mt-1 text-gray-500">
               <li><strong>CLIENT</strong> - Nom du client (requis)</li>
+              <li><strong>ADRESSE</strong> - Adresse de livraison</li>
               <li><strong>PRODUIT</strong> - Nom du produit</li>
-              <li><strong>TYPE</strong> - Livraison, Ramassage ou Livraison + Ramassage</li>
+              <li><strong>TYPE</strong> - Livraison ou Récupération</li>
               <li><strong>DEBUT CRENEAU</strong> - Heure de début (ex: 09:00)</li>
               <li><strong>FIN CRENEAU</strong> - Heure de fin (ex: 12:00)</li>
               <li><strong>CONTACT</strong> - Nom du contact sur place</li>

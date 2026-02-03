@@ -33,6 +33,7 @@ import { socketService, ChauffeurPosition } from '@/services/socket.service';
 import { useSocketStore, isPositionStale } from '@/store/socketStore';
 import { useAuthStore } from '@/store/authStore';
 import { Button, Badge, Modal, Input, Select, TimeSelect } from '@/components/ui';
+import WheelTimePicker from '@/components/ui/WheelTimePicker';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import MultiTourneeMap, { PendingPointWithCoords } from '@/components/map/MultiTourneeMap';
 import { useToast } from '@/hooks/useToast';
@@ -2399,6 +2400,7 @@ export default function DailyPlanningPage() {
     const newPoint: ImportParsedPoint = {
       clientName: addPendingFormData.clientName.trim(),
       societe: addPendingFormData.societe || '',
+      adresse: addPendingFormData.adresse || '',
       produitName: addPendingSelectedProduits.map(p => p.nom).join(', '),
       produitId: addPendingSelectedProduits[0]?.id,
       produitsIds: addPendingSelectedProduits.length > 0 ? addPendingSelectedProduits : undefined,
@@ -3366,29 +3368,57 @@ export default function DailyPlanningPage() {
             onChange={(e) => setAddPendingFormData({ ...addPendingFormData, societe: e.target.value })}
           />
 
-          <Select
-            label="Type"
-            value={addPendingFormData.type || 'livraison'}
-            onChange={(e) => setAddPendingFormData({ ...addPendingFormData, type: e.target.value })}
-            options={[
-              { value: 'livraison', label: 'Livraison' },
-              { value: 'ramassage', label: 'Ramassage' },
-              { value: 'livraison_ramassage', label: 'Livraison + Ramassage' },
-            ]}
+          <Input
+            label="Adresse"
+            value={addPendingFormData.adresse || ''}
+            onChange={(e) => setAddPendingFormData({ ...addPendingFormData, adresse: e.target.value })}
+            placeholder="123 rue Example, 75001 Paris"
           />
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Type
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAddPendingFormData({ ...addPendingFormData, type: 'livraison' })}
+                className={clsx(
+                  'flex-1 py-2 px-4 rounded-lg font-medium transition-all',
+                  addPendingFormData.type === 'livraison' || !addPendingFormData.type
+                    ? 'bg-green-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                )}
+              >
+                Livraison
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddPendingFormData({ ...addPendingFormData, type: 'ramassage' })}
+                className={clsx(
+                  'flex-1 py-2 px-4 rounded-lg font-medium transition-all',
+                  addPendingFormData.type === 'ramassage'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                )}
+              >
+                Récupération
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
-            <Input
+            <WheelTimePicker
               label="Créneau début"
               value={addPendingFormData.creneauDebut || ''}
-              onChange={(e) => setAddPendingFormData({ ...addPendingFormData, creneauDebut: e.target.value })}
-              placeholder="09:00"
+              onChange={(val) => setAddPendingFormData({ ...addPendingFormData, creneauDebut: val })}
+              placeholder="--:--"
             />
-            <Input
+            <WheelTimePicker
               label="Créneau fin"
               value={addPendingFormData.creneauFin || ''}
-              onChange={(e) => setAddPendingFormData({ ...addPendingFormData, creneauFin: e.target.value })}
-              placeholder="11:00"
+              onChange={(val) => setAddPendingFormData({ ...addPendingFormData, creneauFin: val })}
+              placeholder="--:--"
             />
           </div>
 

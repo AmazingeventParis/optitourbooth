@@ -81,6 +81,7 @@ interface OptimizeResult {
 export interface ImportParsedPoint {
   clientName: string;
   societe?: string;
+  adresse?: string;
   produitName?: string;
   produitCouleur?: string;
   type: string;

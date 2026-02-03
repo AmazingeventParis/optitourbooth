@@ -5,6 +5,7 @@ import { PointType } from '@prisma/client';
 interface ImportedRow {
   CLIENT: string;
   SOCIETE?: string;
+  ADRESSE?: string;
   PRODUIT?: string;
   TYPE: string;
   'DEBUT CRENEAU'?: string;
@@ -17,6 +18,7 @@ interface ImportedRow {
 interface ParsedPoint {
   clientName: string;
   societe?: string;
+  adresse?: string;
   produitName?: string;
   produitCouleur?: string;
   type: PointType;
@@ -132,6 +134,7 @@ export const importService = {
       const parsed: ParsedPoint = {
         clientName,
         societe: row.SOCIETE ? String(row.SOCIETE).trim() : undefined,
+        adresse: row.ADRESSE ? String(row.ADRESSE).trim() : undefined,
         produitName,
         type: normalizeType(row.TYPE || 'livraison'),
         creneauDebut: normalizeTime(row['DEBUT CRENEAU']),
