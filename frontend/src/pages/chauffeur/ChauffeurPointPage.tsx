@@ -88,6 +88,8 @@ export default function ChauffeurPointPage() {
       });
       success('Point terminé');
       setIsCompleteDialogOpen(false);
+      // Refresh tournee data before navigating
+      await refreshTournee();
       navigate('/chauffeur/tournee');
     } catch (err) {
       showError('Erreur', (err as Error).message);
@@ -109,6 +111,8 @@ export default function ChauffeurPointPage() {
 
       success('Incident signalé');
       setIsIncidentModalOpen(false);
+      // Refresh tournee data before navigating
+      await refreshTournee();
       navigate('/chauffeur/tournee');
     } catch (err) {
       showError('Erreur', (err as Error).message);
