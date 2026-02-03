@@ -2917,6 +2917,15 @@ export default function DailyPlanningPage() {
                               <div className="col-span-2">
                                 <div className="text-[10px] text-gray-400">Adresse</div>
                                 <div className="text-xs text-gray-600">{point.adresse}</div>
+                                <a
+                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(point.adresse)}&layer=c`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 hover:underline mt-1"
+                                >
+                                  <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+                                  Voir dans Street View
+                                </a>
                               </div>
                             )}
                             {point.notes && (
