@@ -2450,10 +2450,6 @@ export default function DailyPlanningPage() {
                 <ChevronRightIcon className="h-4 w-4" />
               </Button>
             </div>
-            <Button size="sm" onClick={openCreateModal}>
-              <PlusIcon className="h-4 w-4 mr-1" />
-              Tournée
-            </Button>
           </div>
         </div>
       </div>
@@ -2932,6 +2928,10 @@ export default function DailyPlanningPage() {
                   <TruckIcon className="h-5 w-5" />
                   Tournées ({tournees.length})
                 </h2>
+                <Button size="sm" onClick={openCreateModal}>
+                  <PlusIcon className="h-4 w-4 mr-1" />
+                  Nouvelle tournée
+                </Button>
               </div>
 
               {tournees.length === 0 ? (
