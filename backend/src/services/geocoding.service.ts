@@ -23,11 +23,16 @@ export const geocodingService = {
    */
   async geocodeAddress(
     adresse: string,
-    codePostal: string,
-    ville: string,
+    codePostal?: string,
+    ville?: string,
     pays = 'France'
   ): Promise<GeocodingResult | null> {
-    const fullAddress = `${adresse}, ${codePostal} ${ville}, ${pays}`;
+    // Construire l'adresse complète en fonction des champs disponibles
+    const addressParts = [adresse];
+    if (codePostal) addressParts.push(codePostal);
+    if (ville) addressParts.push(ville);
+    addressParts.push(pays);
+    const fullAddress = addressParts.join(', ');
     const cacheKey = fullAddress.toLowerCase();
 
     // Vérifier le cache
@@ -131,8 +136,8 @@ export const geocodingService = {
     addresses: Array<{
       id: string;
       adresse: string;
-      codePostal: string;
-      ville: string;
+      codePostal?: string | null;
+      ville?: string | null;
       pays?: string;
     }>
   ): Promise<Map<string, GeocodingResult | null>> {
@@ -141,8 +146,8 @@ export const geocodingService = {
     for (const addr of addresses) {
       const result = await this.geocodeAddress(
         addr.adresse,
-        addr.codePostal,
-        addr.ville,
+        addr.codePostal || undefined,
+        addr.ville || undefined,
         addr.pays
       );
       results.set(addr.id, result);

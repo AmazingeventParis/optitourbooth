@@ -93,8 +93,8 @@ model Client {
   // Adresse
   adresse            String
   complementAdresse  String?  @map("complement_adresse")
-  codePostal         String   @map("code_postal")
-  ville              String
+  codePostal         String?  @map("code_postal")
+  ville              String?
   pays               String   @default("France")
 
   // Coordonnées géographiques

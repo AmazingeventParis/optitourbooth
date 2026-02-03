@@ -101,8 +101,8 @@ export const clientController = {
     if (!clientData.latitude || !clientData.longitude) {
       const geocoded = await geocodingService.geocodeAddress(
         clientData.adresse,
-        clientData.codePostal,
-        clientData.ville,
+        clientData.codePostal || undefined,
+        clientData.ville || undefined,
         clientData.pays
       );
 
@@ -112,8 +112,9 @@ export const clientController = {
       }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const client = await prisma.client.create({
-      data: clientData,
+      data: clientData as any,
     });
 
     apiResponse.created(res, client, 'Client créé');
@@ -145,8 +146,8 @@ export const clientController = {
 
     if (addressChanged && !updateData.latitude && !updateData.longitude) {
       const newAdresse = updateData.adresse || existingClient.adresse;
-      const newCodePostal = updateData.codePostal || existingClient.codePostal;
-      const newVille = updateData.ville || existingClient.ville;
+      const newCodePostal = updateData.codePostal ?? existingClient.codePostal ?? undefined;
+      const newVille = updateData.ville ?? existingClient.ville ?? undefined;
       const newPays = updateData.pays || existingClient.pays;
 
       const geocoded = await geocodingService.geocodeAddress(
@@ -234,8 +235,8 @@ export const clientController = {
 
     const geocoded = await geocodingService.geocodeAddress(
       client.adresse,
-      client.codePostal,
-      client.ville,
+      client.codePostal || undefined,
+      client.ville || undefined,
       client.pays
     );
 
@@ -302,6 +303,7 @@ export const clientController = {
       orderBy: { ville: 'asc' },
     });
 
-    apiResponse.success(res, villes.map((v) => v.ville));
+    // Filtrer les villes nulles ou vides
+    apiResponse.success(res, villes.map((v) => v.ville).filter((v): v is string => Boolean(v)));
   },
 };
