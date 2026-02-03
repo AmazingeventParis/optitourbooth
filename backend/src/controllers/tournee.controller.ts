@@ -4,6 +4,8 @@ import { apiResponse, parsePagination } from '../utils/index.js';
 import { optimizationService } from '../services/optimization.service.js';
 import { geocodingService } from '../services/geocoding.service.js';
 import { autoDispatchService } from '../services/autodispatch.service.js';
+import { vroomService } from '../services/vroom.service.js';
+import { config } from '../config/index.js';
 import {
   CreateTourneeInput,
   UpdateTourneeInput,
@@ -1731,6 +1733,37 @@ export const tourneeController = {
     });
 
     apiResponse.success(res, incident, 'Incident créé');
+  },
+
+  /**
+   * GET /api/tournees/optimization-status
+   * Vérifier le statut du service d'optimisation (VROOM ou OSRM)
+   */
+  async getOptimizationStatus(req: Request, res: Response): Promise<void> {
+    const vroomEnabled = config.vroom?.enabled || !!config.openRouteService?.apiKey;
+
+    if (vroomEnabled) {
+      const healthCheck = await vroomService.healthCheck();
+      apiResponse.success(res, {
+        engine: healthCheck.available ? healthCheck.service : 'OSRM (fallback)',
+        vroomAvailable: healthCheck.available,
+        vroomService: healthCheck.service,
+        features: healthCheck.available
+          ? ['time_windows', 'service_times', 'multi_vehicle', 'priorities']
+          : ['distance_optimization'],
+        message: healthCheck.available
+          ? 'VROOM disponible - optimisation avec créneaux horaires'
+          : 'VROOM indisponible - fallback sur OSRM (distance uniquement)',
+      });
+    } else {
+      apiResponse.success(res, {
+        engine: 'OSRM',
+        vroomAvailable: false,
+        vroomService: 'Non configuré',
+        features: ['distance_optimization'],
+        message: 'OSRM uniquement - configurez VROOM_ENABLED=true ou ORS_API_KEY pour les créneaux horaires',
+      });
+    }
   },
 
   /**

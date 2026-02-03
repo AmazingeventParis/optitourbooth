@@ -63,7 +63,13 @@ const photoUpload = multer({
 
 const router = Router();
 
-// Toutes les routes nécessitent une authentification
+// Statut du service d'optimisation (public - pas de données sensibles)
+router.get(
+  '/optimization-status',
+  asyncHandler(tourneeController.getOptimizationStatus)
+);
+
+// Toutes les autres routes nécessitent une authentification
 router.use(authenticate);
 
 // ========== TOURNEES ==========

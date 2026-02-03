@@ -1,5 +1,7 @@
 import { prisma } from '../config/database.js';
 import { osrmService } from './osrm.service.js';
+import { vroomService, PointToOptimize } from './vroom.service.js';
+import { config } from '../config/index.js';
 
 interface PointWithCoords {
   id: string;
@@ -301,11 +303,13 @@ export const optimizationService = {
 
   /**
    * Optimiser l'ordre des points d'une tournée
+   * Utilise VROOM si disponible (avec support des créneaux horaires)
+   * Sinon fallback sur OSRM (optimisation distance uniquement)
    */
   async optimizeTourneeOrder(
     tourneeId: string,
     options: OptimizationOptions = {}
-  ): Promise<{ success: boolean; message: string; newOrder?: string[] }> {
+  ): Promise<{ success: boolean; message: string; newOrder?: string[]; unassignedPoints?: string[] }> {
     const { respecterCreneaux = true, optimiserOrdre = true } = options;
 
     const tournee = await prisma.tournee.findUnique({
@@ -341,6 +345,173 @@ export const optimizationService = {
     if (pointsWithCoords.length < 2) {
       return { success: false, message: 'Pas assez de points géocodés pour optimiser' };
     }
+
+    // Vérifier si VROOM est disponible et activé
+    const useVroom = config.vroom?.enabled || config.openRouteService?.apiKey;
+
+    if (useVroom) {
+      // Utiliser VROOM pour une optimisation avec contraintes
+      return this.optimizeWithVroom(tournee, pointsWithCoords, options);
+    } else {
+      // Fallback sur OSRM (optimisation distance uniquement)
+      return this.optimizeWithOsrm(tournee, pointsWithCoords, options);
+    }
+  },
+
+  /**
+   * Optimisation avec VROOM (supporte créneaux horaires et durées de service)
+   */
+  async optimizeWithVroom(
+    tournee: {
+      id: string;
+      heureDepart: Date | null;
+      depotLatitude: number | null;
+      depotLongitude: number | null;
+      points: Array<{
+        id: string;
+        ordre: number;
+        dureePrevue: number;
+        creneauDebut: Date | null;
+        creneauFin: Date | null;
+        client: { latitude: number | null; longitude: number | null };
+      }>;
+    },
+    pointsWithCoords: Array<{
+      id: string;
+      ordre: number;
+      dureePrevue: number;
+      creneauDebut: Date | null;
+      creneauFin: Date | null;
+      client: { latitude: number | null; longitude: number | null };
+    }>,
+    options: OptimizationOptions
+  ): Promise<{ success: boolean; message: string; newOrder?: string[]; unassignedPoints?: string[] }> {
+    const { optimiserOrdre = true } = options;
+
+    console.log('[OPTIMIZATION] Utilisation de VROOM pour optimisation avec contraintes');
+
+    // Préparer les points pour VROOM
+    const vroomPoints: PointToOptimize[] = pointsWithCoords.map((point, index) => ({
+      id: point.id,
+      index,
+      latitude: point.client.latitude!,
+      longitude: point.client.longitude!,
+      dureePrevue: point.dureePrevue,
+      creneauDebut: point.creneauDebut,
+      creneauFin: point.creneauFin,
+    }));
+
+    // Map pour retrouver l'ID du point par son index
+    const indexToPointId = new Map<number, string>();
+    pointsWithCoords.forEach((point, index) => {
+      indexToPointId.set(index, point.id);
+    });
+
+    // Préparer le dépôt
+    const depot = tournee.depotLatitude && tournee.depotLongitude
+      ? { latitude: tournee.depotLatitude, longitude: tournee.depotLongitude }
+      : null;
+
+    // Heure de départ (défaut: 8h00)
+    const heureDepart = tournee.heureDepart || new Date();
+    if (!tournee.heureDepart) {
+      heureDepart.setHours(8, 0, 0, 0);
+    }
+
+    // Appeler VROOM
+    const result = await vroomService.optimizeTournee(vroomPoints, {
+      depot,
+      heureDepart,
+    });
+
+    if (!result.success) {
+      console.warn('[OPTIMIZATION] VROOM a échoué, fallback sur OSRM:', result.message);
+      // Fallback sur OSRM
+      return this.optimizeWithOsrm(
+        tournee as Parameters<typeof this.optimizeWithOsrm>[0],
+        pointsWithCoords as Parameters<typeof this.optimizeWithOsrm>[1],
+        options
+      );
+    }
+
+    // Reconstruire l'ordre des points
+    const newOrder: string[] = [];
+    for (const job of result.orderedJobs) {
+      const pointId = indexToPointId.get(job.originalIndex);
+      if (pointId) {
+        newOrder.push(pointId);
+      }
+    }
+
+    // Points non assignables (créneaux impossibles)
+    const unassignedPoints: string[] = [];
+    for (const jobIndex of result.unassignedJobs) {
+      const pointId = indexToPointId.get(jobIndex);
+      if (pointId) {
+        unassignedPoints.push(pointId);
+        // Ajouter les points non assignés à la fin
+        newOrder.push(pointId);
+      }
+    }
+
+    // Ajouter les points sans coordonnées à la fin
+    const pointsWithoutCoords = tournee.points.filter(
+      (p) => !p.client.latitude || !p.client.longitude
+    );
+    for (const point of pointsWithoutCoords) {
+      newOrder.push(point.id);
+    }
+
+    // Mettre à jour l'ordre en base
+    if (optimiserOrdre && newOrder.length > 0) {
+      await prisma.$transaction(
+        newOrder.map((pointId, idx) =>
+          prisma.point.update({
+            where: { id: pointId },
+            data: { ordre: idx },
+          })
+        )
+      );
+
+      // Recalculer les stats de la tournée
+      await this.updateTourneeStats(tournee.id);
+    }
+
+    let message = 'Tournée optimisée avec VROOM (créneaux horaires respectés)';
+    if (unassignedPoints.length > 0) {
+      message += ` - ${unassignedPoints.length} point(s) avec créneaux impossibles`;
+    }
+
+    return {
+      success: true,
+      message,
+      newOrder,
+      unassignedPoints: unassignedPoints.length > 0 ? unassignedPoints : undefined,
+    };
+  },
+
+  /**
+   * Optimisation avec OSRM (optimisation distance uniquement, sans créneaux)
+   */
+  async optimizeWithOsrm(
+    tournee: {
+      id: string;
+      depotLatitude: number | null;
+      depotLongitude: number | null;
+      points: Array<{
+        id: string;
+        client: { latitude: number | null; longitude: number | null };
+      }>;
+    },
+    pointsWithCoords: Array<{
+      id: string;
+      client: { latitude: number | null; longitude: number | null };
+    }>,
+    options: OptimizationOptions
+  ): Promise<{ success: boolean; message: string; newOrder?: string[] }> {
+    const { optimiserOrdre = true } = options;
+
+    console.log('[OPTIMIZATION] Utilisation de OSRM (optimisation distance uniquement)');
 
     // Construire les coordonnées pour OSRM
     const coordinates: { latitude: number; longitude: number }[] = [];
@@ -379,7 +550,6 @@ export const optimizationService = {
 
     // Reconstruire l'ordre des points
     const newOrder: string[] = [];
-    let ordre = 0;
 
     for (const index of optimized.orderedIndices) {
       // Ignorer le dépôt (index 0 si hasDepot)
@@ -399,12 +569,6 @@ export const optimizationService = {
       newOrder.push(point.id);
     }
 
-    // Si on respecte les créneaux, réordonner en tenant compte des contraintes
-    if (respecterCreneaux) {
-      // TODO: Implémenter un algorithme plus sophistiqué
-      // Pour l'instant, on garde l'ordre OSRM
-    }
-
     // Mettre à jour l'ordre en base
     if (optimiserOrdre) {
       await prisma.$transaction(
@@ -416,13 +580,13 @@ export const optimizationService = {
         )
       );
 
-      // Recalculer les stats de la tournée (incluant les heures d'arrivée estimées)
-      await this.updateTourneeStats(tourneeId);
+      // Recalculer les stats de la tournée
+      await this.updateTourneeStats(tournee.id);
     }
 
     return {
       success: true,
-      message: 'Tournée optimisée avec succès',
+      message: 'Tournée optimisée avec OSRM (distance uniquement, créneaux non pris en compte)',
       newOrder,
     };
   },

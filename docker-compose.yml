@@ -55,6 +55,32 @@ services:
   #   networks:
   #     - optitour_network
 
+  # VROOM pour l'optimisation de tournées avec contraintes (time windows, service times)
+  # Utilise le serveur OSRM public par défaut, ou configurez OSRM local pour de meilleures performances
+  vroom:
+    image: vroomvrp/vroom-docker:v1.14.0
+    container_name: optitour_vroom
+    restart: unless-stopped
+    ports:
+      - "${VROOM_PORT:-3001}:3000"
+    environment:
+      # Utiliser OSRM public par défaut (remplacer par votre instance OSRM en prod)
+      - VROOM_ROUTER=osrm
+      # URL du serveur OSRM (public ou local)
+      - OSRM_URL=https://router.project-osrm.org
+      # Timeout pour les requêtes (en ms)
+      - VROOM_MAX_COMPUTING=300000
+      # Nombre max de jobs par requête
+      - VROOM_MAX_JOBS=1000
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - optitour_network
+
 volumes:
   postgres_data:
     name: optitour_postgres_data

@@ -32,6 +32,16 @@ export const config = {
   tomtom: {
     apiKey: process.env.TOMTOM_API_KEY || '',
   },
+  // VROOM - Optimisation de tournées avec contraintes (time windows, service times)
+  // Option 1: VROOM local via Docker: docker run -p 3000:3000 vroomvrp/vroom-express
+  // Option 2: OpenRouteService API (gratuit avec clé API)
+  vroom: {
+    baseUrl: process.env.VROOM_URL || '', // Ex: http://localhost:3000
+    enabled: process.env.VROOM_ENABLED === 'true',
+  },
+  openRouteService: {
+    apiKey: process.env.ORS_API_KEY || '', // Clé API gratuite sur openrouteservice.org
+  },
 
   // Upload
   upload: {
@@ -41,6 +51,6 @@ export const config = {
 
   // CORS
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim()),
   },
 } as const;
