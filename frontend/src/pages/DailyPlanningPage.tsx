@@ -1489,8 +1489,10 @@ export default function DailyPlanningPage() {
     setLoading(true);
     try {
       const tourneesResult = await tourneesService.list({ date: selectedDate, limit: 50 });
+      // Filter out cancelled tournees
+      const activeTournees = tourneesResult.data.filter(t => t.statut !== 'annulee');
       const tourneesWithPoints = await Promise.all(
-        tourneesResult.data.map(t => tourneesService.getById(t.id))
+        activeTournees.map(t => tourneesService.getById(t.id))
       );
       setTournees(tourneesWithPoints);
     } catch (error) {
@@ -2896,7 +2898,7 @@ export default function DailyPlanningPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {tournees.map((tournee, index) => (
+                  {tournees.filter(t => t.statut !== 'annulee').map((tournee, index) => (
                     <TourneeTimeline
                       key={tournee.id}
                       tournee={tournee}
