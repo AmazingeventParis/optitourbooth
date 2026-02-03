@@ -7,7 +7,7 @@ import { tourneesService } from '@/services/tournees.service';
 import { useAuthStore } from '@/store/authStore';
 import { useChauffeurStore } from '@/store/chauffeurStore';
 import { useToast } from '@/hooks/useToast';
-import { Point } from '@/types';
+import { Point, PointProduit, Produit } from '@/types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { formatTime, formatTimeRange } from '@/utils/format';
@@ -46,6 +46,15 @@ const getPointStatutConfig = (statut: string) => {
 
 const getTypeLabel = (type: string) => {
   return TYPE_LABELS[type] || type;
+};
+
+// Couleur par défaut si aucun produit
+const DEFAULT_PRODUCT_COLOR = '#6366F1'; // Indigo
+
+const getProductColor = (point: Point): string => {
+  const produits = point.produits as PointProduit[] | undefined;
+  const firstProduct = produits?.[0]?.produit as Produit | undefined;
+  return firstProduct?.couleur || DEFAULT_PRODUCT_COLOR;
 };
 
 export default function ChauffeurTourneePage() {
@@ -265,16 +274,14 @@ export default function ChauffeurTourneePage() {
                   <div className="flex gap-3">
                     {/* Number Badge */}
                     <div
-                      className={clsx(
-                        'flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white',
-                        point.statut === 'termine'
-                          ? 'bg-green-500'
-                          : point.statut === 'en_cours'
-                          ? 'bg-yellow-500'
+                      className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white"
+                      style={{
+                        backgroundColor: point.statut === 'termine'
+                          ? '#22C55E' // green-500
                           : point.statut === 'incident'
-                          ? 'bg-red-500'
-                          : 'bg-primary-600'
-                      )}
+                          ? '#EF4444' // red-500
+                          : getProductColor(point)
+                      }}
                     >
                       {point.statut === 'termine' ? (
                         <CheckIcon className="h-5 w-5" />
