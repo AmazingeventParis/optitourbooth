@@ -3442,15 +3442,15 @@ export default function DailyPlanningPage() {
             {/* Liste des produits sélectionnés */}
             {addPendingSelectedProduits.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2">
-                {addPendingSelectedProduits.map((p) => (
+                {addPendingSelectedProduits.map((p, index) => (
                   <span
-                    key={p.id}
+                    key={`${p.id}-${index}`}
                     className="inline-flex items-center gap-1 px-2 py-1 bg-primary-100 text-primary-800 text-sm rounded-full"
                   >
                     {p.nom}
                     <button
                       type="button"
-                      onClick={() => setAddPendingSelectedProduits(addPendingSelectedProduits.filter(sp => sp.id !== p.id))}
+                      onClick={() => setAddPendingSelectedProduits(addPendingSelectedProduits.filter((_, i) => i !== index))}
                       className="hover:text-primary-600"
                     >
                       <XMarkIcon className="h-4 w-4" />
@@ -3466,17 +3466,15 @@ export default function DailyPlanningPage() {
                 value=""
                 onChange={(e) => {
                   const selectedProduit = produits.find(p => p.id === e.target.value);
-                  if (selectedProduit && !addPendingSelectedProduits.find(p => p.id === selectedProduit.id)) {
+                  if (selectedProduit) {
                     setAddPendingSelectedProduits([...addPendingSelectedProduits, { id: selectedProduit.id, nom: selectedProduit.nom }]);
                   }
                 }}
               >
-                <option value="">-- Sélectionner un produit --</option>
-                {produits
-                  .filter(p => !addPendingSelectedProduits.find(sp => sp.id === p.id))
-                  .map(p => (
-                    <option key={p.id} value={p.id}>{p.nom}</option>
-                  ))}
+                <option value="">-- Ajouter un produit --</option>
+                {produits.map(p => (
+                  <option key={p.id} value={p.id}>{p.nom}</option>
+                ))}
               </select>
             </div>
           </div>

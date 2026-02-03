@@ -15,6 +15,7 @@ export default function WheelTimePicker({ value, onChange, label, placeholder }:
   const [isOpen, setIsOpen] = useState(false);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [selectedMinute, setSelectedMinute] = useState<number | null>(null);
+  const [step, setStep] = useState<'hour' | 'minute'>('hour');
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Parse initial value
@@ -24,11 +25,20 @@ export default function WheelTimePicker({ value, onChange, label, placeholder }:
       if (match) {
         setSelectedHour(parseInt(match[1], 10));
         const min = parseInt(match[2], 10);
-        // Round to nearest 10
         setSelectedMinute(Math.round(min / 10) * 10);
       }
+    } else {
+      setSelectedHour(null);
+      setSelectedMinute(null);
     }
   }, [value]);
+
+  // Reset step when opening
+  useEffect(() => {
+    if (isOpen) {
+      setStep(selectedHour !== null ? 'minute' : 'hour');
+    }
+  }, [isOpen, selectedHour]);
 
   // Close on click outside
   useEffect(() => {
@@ -43,6 +53,7 @@ export default function WheelTimePicker({ value, onChange, label, placeholder }:
 
   const handleHourClick = (hour: number) => {
     setSelectedHour(hour);
+    setStep('minute');
     if (selectedMinute !== null) {
       const timeStr = `${String(hour).padStart(2, '0')}:${String(selectedMinute).padStart(2, '0')}`;
       onChange(timeStr);
@@ -55,6 +66,8 @@ export default function WheelTimePicker({ value, onChange, label, placeholder }:
       const timeStr = `${String(selectedHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
       onChange(timeStr);
       setIsOpen(false);
+    } else {
+      setStep('hour');
     }
   };
 
@@ -80,83 +93,101 @@ export default function WheelTimePicker({ value, onChange, label, placeholder }:
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 bg-white rounded-xl shadow-xl border p-4" style={{ width: '280px' }}>
-          <div className="text-center mb-3 text-sm font-medium text-gray-700">
-            {selectedHour !== null && selectedMinute !== null
-              ? `${String(selectedHour).padStart(2, '0')}:${String(selectedMinute).padStart(2, '0')}`
-              : 'Sélectionnez l\'heure'}
+        <div className="absolute z-50 mt-1 bg-white rounded-xl shadow-xl border p-4 left-0" style={{ width: '280px' }}>
+          {/* Header with current selection */}
+          <div className="text-center mb-3">
+            <div className="text-2xl font-bold text-gray-800">
+              <button
+                type="button"
+                onClick={() => setStep('hour')}
+                className={clsx(
+                  'px-2 py-1 rounded transition-colors',
+                  step === 'hour' ? 'bg-primary-100 text-primary-700' : 'hover:bg-gray-100'
+                )}
+              >
+                {selectedHour !== null ? String(selectedHour).padStart(2, '0') : '--'}
+              </button>
+              <span className="text-gray-400">:</span>
+              <button
+                type="button"
+                onClick={() => setStep('minute')}
+                className={clsx(
+                  'px-2 py-1 rounded transition-colors',
+                  step === 'minute' ? 'bg-orange-100 text-orange-700' : 'hover:bg-gray-100'
+                )}
+              >
+                {selectedMinute !== null ? String(selectedMinute).padStart(2, '0') : '--'}
+              </button>
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {step === 'hour' ? 'Sélectionnez l\'heure' : 'Sélectionnez les minutes'}
+            </div>
           </div>
 
-          {/* Wheel container */}
-          <div className="relative" style={{ width: '248px', height: '248px', margin: '0 auto' }}>
-            {/* Outer wheel - Hours */}
-            <div className="absolute inset-0">
-              {HOURS.map((hour) => {
-                const angle = (hour / 24) * 360 - 90;
-                const radius = 110;
-                const x = Math.cos((angle * Math.PI) / 180) * radius + 124;
-                const y = Math.sin((angle * Math.PI) / 180) * radius + 124;
-
-                return (
-                  <button
-                    key={`hour-${hour}`}
-                    type="button"
-                    onClick={() => handleHourClick(hour)}
-                    className={clsx(
-                      'absolute w-8 h-8 -ml-4 -mt-4 rounded-full text-xs font-medium transition-all',
-                      'hover:bg-primary-100',
-                      selectedHour === hour
-                        ? 'bg-primary-500 text-white'
-                        : 'bg-gray-100 text-gray-700'
-                    )}
-                    style={{ left: `${x}px`, top: `${y}px` }}
-                  >
-                    {hour}
-                  </button>
-                );
-              })}
+          {/* Hours grid */}
+          {step === 'hour' && (
+            <div className="grid grid-cols-6 gap-1">
+              {HOURS.map((hour) => (
+                <button
+                  key={`hour-${hour}`}
+                  type="button"
+                  onClick={() => handleHourClick(hour)}
+                  className={clsx(
+                    'py-2 rounded-lg text-sm font-medium transition-all',
+                    selectedHour === hour
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-gray-50 text-gray-700 hover:bg-primary-100'
+                  )}
+                >
+                  {hour}
+                </button>
+              ))}
             </div>
+          )}
 
-            {/* Inner wheel - Minutes */}
-            <div className="absolute inset-0">
-              {MINUTES.map((minute) => {
-                const angle = (minute / 60) * 360 - 90;
-                const radius = 55;
-                const x = Math.cos((angle * Math.PI) / 180) * radius + 124;
-                const y = Math.sin((angle * Math.PI) / 180) * radius + 124;
-
-                return (
-                  <button
-                    key={`minute-${minute}`}
-                    type="button"
-                    onClick={() => handleMinuteClick(minute)}
-                    className={clsx(
-                      'absolute w-10 h-10 -ml-5 -mt-5 rounded-full text-sm font-medium transition-all',
-                      'hover:bg-orange-100',
-                      selectedMinute === minute
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-orange-50 text-orange-700 border border-orange-200'
-                    )}
-                    style={{ left: `${x}px`, top: `${y}px` }}
-                  >
-                    {String(minute).padStart(2, '0')}
-                  </button>
-                );
-              })}
+          {/* Minutes grid */}
+          {step === 'minute' && (
+            <div className="grid grid-cols-3 gap-2">
+              {MINUTES.map((minute) => (
+                <button
+                  key={`minute-${minute}`}
+                  type="button"
+                  onClick={() => handleMinuteClick(minute)}
+                  className={clsx(
+                    'py-3 rounded-lg text-lg font-medium transition-all',
+                    selectedMinute === minute
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200'
+                  )}
+                >
+                  {String(minute).padStart(2, '0')}
+                </button>
+              ))}
             </div>
-
-            {/* Center */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-gray-300" />
-          </div>
+          )}
 
           {/* Legend */}
           <div className="mt-3 flex justify-center gap-4 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setStep('hour')}
+              className={clsx(
+                'flex items-center gap-1 px-2 py-1 rounded',
+                step === 'hour' && 'bg-gray-100'
+              )}
+            >
               <span className="w-3 h-3 rounded-full bg-primary-500" /> Heures
-            </span>
-            <span className="flex items-center gap-1">
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep('minute')}
+              className={clsx(
+                'flex items-center gap-1 px-2 py-1 rounded',
+                step === 'minute' && 'bg-gray-100'
+              )}
+            >
               <span className="w-3 h-3 rounded-full bg-orange-500" /> Minutes
-            </span>
+            </button>
           </div>
         </div>
       )}
