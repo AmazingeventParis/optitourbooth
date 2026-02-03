@@ -1350,6 +1350,12 @@ export default function DailyPlanningPage() {
   const [editingPendingIndex, setEditingPendingIndex] = useState<number | null>(null);
   const [editPendingFormData, setEditPendingFormData] = useState<Partial<ImportParsedPoint>>({});
 
+  // Modal ajout point pending manuel
+  const [isAddPendingModalOpen, setIsAddPendingModalOpen] = useState(false);
+  const [addPendingFormData, setAddPendingFormData] = useState<Partial<ImportParsedPoint>>({
+    type: 'livraison',
+  });
+
   // Dialog validation tournée
   const [isValidateDialogOpen, setIsValidateDialogOpen] = useState(false);
   const [tourneeToValidate, setTourneeToValidate] = useState<string | null>(null);
@@ -2350,6 +2356,34 @@ export default function DailyPlanningPage() {
     toastSuccess('Point modifié');
   };
 
+  // Ajouter un nouveau point pending manuellement
+  const handleAddPending = () => {
+    if (!addPendingFormData.clientName?.trim()) {
+      toastError('Le nom du client est requis');
+      return;
+    }
+
+    const newPoint: ImportParsedPoint = {
+      clientName: addPendingFormData.clientName.trim(),
+      societe: addPendingFormData.societe || '',
+      produitName: addPendingFormData.produitName || '',
+      type: addPendingFormData.type || 'livraison',
+      creneauDebut: addPendingFormData.creneauDebut || '',
+      creneauFin: addPendingFormData.creneauFin || '',
+      contactNom: addPendingFormData.contactNom || '',
+      contactTelephone: addPendingFormData.contactTelephone || '',
+      notes: addPendingFormData.notes || '',
+      clientFound: false,
+      produitFound: false,
+      errors: [],
+    };
+
+    setPendingPoints([...pendingPoints, newPoint]);
+    setIsAddPendingModalOpen(false);
+    setAddPendingFormData({ type: 'livraison' });
+    toastSuccess('Point ajouté');
+  };
+
   // Ouvrir le dialog de validation
   const openValidateDialog = (tourneeId: string) => {
     setTourneeToValidate(tourneeId);
@@ -2469,6 +2503,19 @@ export default function DailyPlanningPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsAddPendingModalOpen(true);
+                    }}
+                    className="text-white hover:bg-white/20 text-xs flex items-center gap-1"
+                    title="Ajouter un point manuellement"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    <span>Ajouter</span>
+                  </Button>
                   {pendingPoints.length > 0 && (
                     <Button
                       variant="ghost"
@@ -3257,6 +3304,96 @@ export default function DailyPlanningPage() {
             </Button>
             <Button onClick={handleSaveEditPending}>
               Enregistrer
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal ajout point pending */}
+      <Modal
+        isOpen={isAddPendingModalOpen}
+        onClose={() => setIsAddPendingModalOpen(false)}
+        title="Ajouter un point à dispatcher"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Nom du client"
+            value={addPendingFormData.clientName || ''}
+            onChange={(e) => setAddPendingFormData({ ...addPendingFormData, clientName: e.target.value })}
+            required
+          />
+
+          <Input
+            label="Société"
+            value={addPendingFormData.societe || ''}
+            onChange={(e) => setAddPendingFormData({ ...addPendingFormData, societe: e.target.value })}
+          />
+
+          <Select
+            label="Type"
+            value={addPendingFormData.type || 'livraison'}
+            onChange={(e) => setAddPendingFormData({ ...addPendingFormData, type: e.target.value })}
+            options={[
+              { value: 'livraison', label: 'Livraison' },
+              { value: 'ramassage', label: 'Ramassage' },
+              { value: 'livraison_ramassage', label: 'Livraison + Ramassage' },
+            ]}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Créneau début"
+              value={addPendingFormData.creneauDebut || ''}
+              onChange={(e) => setAddPendingFormData({ ...addPendingFormData, creneauDebut: e.target.value })}
+              placeholder="09:00"
+            />
+            <Input
+              label="Créneau fin"
+              value={addPendingFormData.creneauFin || ''}
+              onChange={(e) => setAddPendingFormData({ ...addPendingFormData, creneauFin: e.target.value })}
+              placeholder="11:00"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Nom du contact"
+              value={addPendingFormData.contactNom || ''}
+              onChange={(e) => setAddPendingFormData({ ...addPendingFormData, contactNom: e.target.value })}
+            />
+            <Input
+              label="Téléphone du contact"
+              value={addPendingFormData.contactTelephone || ''}
+              onChange={(e) => setAddPendingFormData({ ...addPendingFormData, contactTelephone: e.target.value })}
+            />
+          </div>
+
+          <Input
+            label="Produit"
+            value={addPendingFormData.produitName || ''}
+            onChange={(e) => setAddPendingFormData({ ...addPendingFormData, produitName: e.target.value })}
+          />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes
+            </label>
+            <textarea
+              value={addPendingFormData.notes || ''}
+              onChange={(e) => setAddPendingFormData({ ...addPendingFormData, notes: e.target.value })}
+              rows={2}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Notes..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="secondary" onClick={() => setIsAddPendingModalOpen(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleAddPending}>
+              Ajouter
             </Button>
           </div>
         </div>
