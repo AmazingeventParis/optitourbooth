@@ -57,6 +57,7 @@ import {
   CheckIcon,
   XMarkIcon,
   BoltIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
 // Couleurs hex pour la légende de la carte
@@ -671,6 +672,7 @@ interface TourneeTimelineProps {
   tournee: Tournee;
   colorIndex: number;
   onEdit: () => void;
+  onDelete?: () => void;
   onValidate?: () => void;
   selectedPointId?: string | null;
   onSelectPoint?: (pointId: string | null) => void;
@@ -680,7 +682,7 @@ interface TourneeTimelineProps {
   isTargeted?: boolean;
 }
 
-const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onEdit, onValidate, selectedPointId, onSelectPoint, selectedDepotId, onSelectDepot, isDragging, isTargeted }: TourneeTimelineProps) {
+const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onEdit, onDelete, onValidate, selectedPointId, onSelectPoint, selectedDepotId, onSelectDepot, isDragging, isTargeted }: TourneeTimelineProps) {
   const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
   const chauffeurColor = tournee.chauffeur?.couleur || TOURNEE_HEX_COLORS[colorIndex % TOURNEE_HEX_COLORS.length];
   const points = (tournee.points || []).sort((a, b) => a.ordre - b.ordre);
@@ -761,6 +763,15 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
             >
               <PencilIcon className="h-4 w-4" />
             </button>
+            {onDelete && (tournee.statut === 'brouillon' || tournee.statut === 'planifiee') && (
+              <button
+                onClick={onDelete}
+                className="p-1 rounded hover:bg-red-500/80 transition-colors"
+                title="Supprimer la tournée"
+              >
+                <TrashIcon className="h-4 w-4" />
+              </button>
+            )}
             {tournee.statut === 'brouillon' && onValidate && (
               <button
                 onClick={onValidate}
@@ -1368,6 +1379,11 @@ export default function DailyPlanningPage() {
   const [isValidateDialogOpen, setIsValidateDialogOpen] = useState(false);
   const [tourneeToValidate, setTourneeToValidate] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
+
+  // Dialog suppression tournée
+  const [isDeleteTourneeDialogOpen, setIsDeleteTourneeDialogOpen] = useState(false);
+  const [tourneeToDelete, setTourneeToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -2591,6 +2607,31 @@ export default function DailyPlanningPage() {
     }
   };
 
+  // Ouvrir le dialog de suppression
+  const openDeleteTourneeDialog = (tourneeId: string) => {
+    setTourneeToDelete(tourneeId);
+    setIsDeleteTourneeDialogOpen(true);
+  };
+
+  // Supprimer une tournée
+  const confirmDeleteTournee = async () => {
+    if (!tourneeToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await tourneesService.delete(tourneeToDelete);
+      setTournees(current => current.filter(t => t.id !== tourneeToDelete));
+      toastSuccess('Tournée supprimée');
+      setIsDeleteTourneeDialogOpen(false);
+      setTourneeToDelete(null);
+      notifyMapPopup();
+    } catch (error) {
+      toastError('Erreur', (error as Error).message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const chauffeurOptions = useMemo(() => [
     { value: '', label: 'Sélectionner un chauffeur' },
     ...chauffeurs.map((c) => ({
@@ -3151,6 +3192,7 @@ export default function DailyPlanningPage() {
                       tournee={tournee}
                       colorIndex={index}
                       onEdit={() => navigate(`/tournees/${tournee.id}`)}
+                      onDelete={() => openDeleteTourneeDialog(tournee.id)}
                       onValidate={() => openValidateDialog(tournee.id)}
                       selectedPointId={selectedPointId}
                       onSelectPoint={(id) => {
@@ -3711,6 +3753,21 @@ export default function DailyPlanningPage() {
         confirmText="Valider"
         variant="warning"
         isLoading={isValidating}
+      />
+
+      {/* Dialog suppression tournée */}
+      <ConfirmDialog
+        isOpen={isDeleteTourneeDialogOpen}
+        onClose={() => {
+          setIsDeleteTourneeDialogOpen(false);
+          setTourneeToDelete(null);
+        }}
+        onConfirm={confirmDeleteTournee}
+        title="Supprimer la tournée"
+        message="Cette action est irréversible. Tous les points de cette tournée seront également supprimés. Confirmez-vous la suppression ?"
+        confirmText="Supprimer"
+        variant="danger"
+        isLoading={isDeleting}
       />
 
     </div>
