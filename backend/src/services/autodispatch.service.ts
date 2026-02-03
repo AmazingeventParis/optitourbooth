@@ -229,9 +229,19 @@ export const autoDispatchService = {
           });
         }
 
-        // Mettre à jour le compteur de points pour ce candidat
+        // Mettre à jour les stats du candidat pour les prochaines itérations
         bestTournee.currentPoints++;
         bestTournee.totalDurationMin += dureePrevue;
+
+        // Recalculer le centroïde avec le nouveau point
+        if (bestTournee.centroid) {
+          const oldCount = bestTournee.currentPoints - 1;
+          const newLat = (bestTournee.centroid.lat * oldCount + clientCoords.lat) / bestTournee.currentPoints;
+          const newLng = (bestTournee.centroid.lng * oldCount + clientCoords.lng) / bestTournee.currentPoints;
+          bestTournee.centroid = { lat: newLat, lng: newLng };
+        } else {
+          bestTournee.centroid = { lat: clientCoords.lat, lng: clientCoords.lng };
+        }
 
         result.dispatched.push({
           pointIndex: i,
@@ -283,6 +293,12 @@ export const autoDispatchService = {
   ): Promise<(TourneeCandidate & { reason?: string }) | null> {
     if (candidates.length === 0) return null;
 
+    // Calculer les stats globales pour l'équilibrage
+    const totalPoints = candidates.reduce((sum, c) => sum + c.currentPoints, 0);
+    const avgPoints = totalPoints / candidates.length;
+    const minPoints = Math.min(...candidates.map(c => c.currentPoints));
+    const maxPoints = Math.max(...candidates.map(c => c.currentPoints));
+
     // Scorer chaque tournée
     const scoredCandidates: Array<{
       candidate: TourneeCandidate;
@@ -294,7 +310,20 @@ export const autoDispatchService = {
       let score = 100; // Score de base
       let reasons: string[] = [];
 
-      // 1. Score de proximité géographique (0-40 points)
+      // 1. Score d'équilibrage de charge (PRIORITAIRE - 0-60 points)
+      // Favoriser fortement les tournées avec moins de points
+      const pointDiff = candidate.currentPoints - minPoints;
+      const loadPenalty = pointDiff * 20; // -20 points par point de différence avec le min
+      score -= loadPenalty;
+
+      if (candidate.currentPoints === minPoints) {
+        score += 40; // Bonus pour la tournée la moins chargée
+        reasons.push('Moins chargée');
+      } else if (candidate.currentPoints > avgPoints) {
+        score -= 30; // Pénalité supplémentaire si au-dessus de la moyenne
+      }
+
+      // 2. Score de proximité géographique (0-25 points) - Réduit pour favoriser l'équilibrage
       if (candidate.centroid) {
         const distance = this.haversineDistance(
           coords.lat,
@@ -304,7 +333,7 @@ export const autoDispatchService = {
         );
 
         // Moins de 5km = max points, plus de 50km = 0 points
-        const proximityScore = Math.max(0, 40 - (distance / 50) * 40);
+        const proximityScore = Math.max(0, 25 - (distance / 50) * 25);
         score += proximityScore;
 
         if (distance < 10) {
@@ -312,18 +341,7 @@ export const autoDispatchService = {
         }
       }
 
-      // 2. Score d'équilibrage de charge (0-30 points)
-      // Favoriser les tournées avec moins de points
-      const avgPoints = candidates.reduce((sum, c) => sum + c.currentPoints, 0) / candidates.length;
-      if (candidate.currentPoints < avgPoints) {
-        const loadScore = Math.min(30, (avgPoints - candidate.currentPoints) * 5);
-        score += loadScore;
-        reasons.push('Charge équilibrée');
-      } else if (candidate.currentPoints > avgPoints + 3) {
-        score -= 15; // Pénalité si tournée surchargée
-      }
-
-      // 3. Score de compatibilité horaire (0-30 points)
+      // 3. Score de compatibilité horaire (0-15 points)
       if (point.creneauDebut && candidate.heureFinEstimee) {
         const creneauDebut = this.parseTime(point.creneauDebut);
         if (creneauDebut) {
@@ -332,22 +350,17 @@ export const autoDispatchService = {
 
           // Si le créneau est après l'heure de fin estimée actuelle, c'est compatible
           if (creneauHour >= finEstimeeHour) {
-            score += 20;
+            score += 15;
             reasons.push('Horaire compatible');
           } else if (creneauHour < finEstimeeHour - 2) {
-            score -= 20; // Pénalité si le créneau est bien avant la fin actuelle
+            score -= 10; // Pénalité si le créneau est bien avant la fin actuelle
           }
         }
       }
 
-      // 4. Bonus si la tournée n'est pas vide (meilleur pour l'optimisation)
-      if (candidate.currentPoints > 0 && candidate.currentPoints < 10) {
-        score += 10;
-      }
-
-      // 5. Pénalité si trop de points (éviter les tournées surchargées)
-      if (candidate.currentPoints > 12) {
-        score -= (candidate.currentPoints - 12) * 5;
+      // 4. Pénalité forte si trop de points (éviter les tournées surchargées)
+      if (candidate.currentPoints > 8) {
+        score -= (candidate.currentPoints - 8) * 15;
       }
 
       scoredCandidates.push({
@@ -361,7 +374,7 @@ export const autoDispatchService = {
     scoredCandidates.sort((a, b) => b.score - a.score);
 
     const best = scoredCandidates[0];
-    if (best && best.score > 50) {
+    if (best) {
       return { ...best.candidate, reason: best.reason };
     }
 
