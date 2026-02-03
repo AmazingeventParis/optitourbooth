@@ -17,7 +17,6 @@ import {
   PencilSquareIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  PlayIcon,
   XMarkIcon,
   DocumentTextIcon,
 } from '@heroicons/react/24/outline';
@@ -56,10 +55,9 @@ export default function ChauffeurPointPage() {
   const [isIncidentModalOpen, setIsIncidentModalOpen] = useState(false);
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
 
-  // Signature
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  // Signature / Commentaire client
   const [signatureName, setSignatureName] = useState('');
+  const [clientComment, setClientComment] = useState('');
 
   // Incident
   const [incidentType, setIncidentType] = useState('');
@@ -96,23 +94,6 @@ export default function ChauffeurPointPage() {
       navigate('/chauffeur/tournee');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleStartPoint = async () => {
-    if (!tournee || !point) return;
-
-    setIsSaving(true);
-    try {
-      await tourneesService.updatePoint(tournee.id, point.id, {
-        statut: 'en_cours',
-      });
-      success('Point démarré');
-      fetchPoint();
-    } catch (err) {
-      showError('Erreur', (err as Error).message);
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -155,79 +136,22 @@ export default function ChauffeurPointPage() {
     }
   };
 
-  // Signature Canvas Functions
-  const initCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-  };
-
-  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
-    setIsDrawing(true);
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-  };
-
-  const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing) return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
-    ctx.lineTo(x, y);
-    ctx.stroke();
-  };
-
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
-
-  const clearSignature = () => {
-    initCanvas();
-  };
-
-  const handleSaveSignature = async () => {
-    if (!canvasRef.current || !signatureName || !tournee || !point) {
-      showError('Erreur', 'Veuillez signer et entrer un nom');
+  const handleSaveClientInfo = async () => {
+    if (!signatureName || !tournee || !point) {
+      showError('Erreur', 'Veuillez entrer le nom du signataire');
       return;
     }
 
     setIsSaving(true);
     try {
-      const signatureData = canvasRef.current.toDataURL();
-
       await tourneesService.updatePoint(tournee.id, point.id, {
-        signatureData,
+        signatureData: clientComment || undefined,
         signatureNom: signatureName,
       });
 
-      success('Signature enregistrée');
+      success('Informations enregistrées');
       setIsSignatureModalOpen(false);
+      fetchPoint();
     } catch (err) {
       showError('Erreur', (err as Error).message);
     } finally {
@@ -300,9 +224,7 @@ export default function ChauffeurPointPage() {
   }
 
   const typeConfig = getTypeConfig(point.type);
-  const canStart = point.statut === 'a_faire' && tournee.statut === 'en_cours';
-  const canComplete = point.statut === 'en_cours';
-  const isActive = canStart || canComplete;
+  const isActive = (point.statut === 'a_faire' || point.statut === 'en_cours') && tournee.statut === 'en_cours';
 
   return (
     <div className="p-4 space-y-4">
@@ -483,42 +405,31 @@ export default function ChauffeurPointPage() {
       {/* Action Buttons */}
       {isActive && (
         <div className="space-y-3">
-          {canStart && (
-            <Button className="w-full" onClick={handleStartPoint} isLoading={isSaving}>
-              <PlayIcon className="h-5 w-5 mr-2" />
-              Démarrer ce point
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => setIsSignatureModalOpen(true)}
+          >
+            <PencilSquareIcon className="h-5 w-5 mr-2" />
+            Signature client
+          </Button>
 
-          {canComplete && (
-            <>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setIsSignatureModalOpen(true)}
-              >
-                <PencilSquareIcon className="h-5 w-5 mr-2" />
-                Signature client
-              </Button>
+          <Button
+            className="w-full"
+            onClick={() => setIsCompleteDialogOpen(true)}
+          >
+            <CheckCircleIcon className="h-5 w-5 mr-2" />
+            Terminer ce point
+          </Button>
 
-              <Button
-                className="w-full"
-                onClick={() => setIsCompleteDialogOpen(true)}
-              >
-                <CheckCircleIcon className="h-5 w-5 mr-2" />
-                Terminer ce point
-              </Button>
-
-              <Button
-                variant="danger"
-                className="w-full"
-                onClick={() => setIsIncidentModalOpen(true)}
-              >
-                <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
-                Signaler un incident
-              </Button>
-            </>
-          )}
+          <Button
+            variant="danger"
+            className="w-full"
+            onClick={() => setIsIncidentModalOpen(true)}
+          >
+            <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
+            Signaler un incident
+          </Button>
         </div>
       )}
 
@@ -534,33 +445,20 @@ export default function ChauffeurPointPage() {
             value={signatureName}
             onChange={(e) => setSignatureName(e.target.value)}
             placeholder="Nom et prénom"
+            required
           />
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Signature
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Commentaire
             </label>
-            <canvas
-              ref={canvasRef}
-              width={300}
-              height={150}
-              className="border rounded-lg w-full touch-none"
-              onMouseDown={startDrawing}
-              onMouseMove={draw}
-              onMouseUp={stopDrawing}
-              onMouseLeave={stopDrawing}
-              onTouchStart={startDrawing}
-              onTouchMove={draw}
-              onTouchEnd={stopDrawing}
+            <textarea
+              value={clientComment}
+              onChange={(e) => setClientComment(e.target.value)}
+              rows={4}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Commentaire ou observations du client..."
             />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-2"
-              onClick={clearSignature}
-            >
-              Effacer
-            </Button>
           </div>
 
           <div className="flex gap-3">
@@ -571,7 +469,12 @@ export default function ChauffeurPointPage() {
             >
               Annuler
             </Button>
-            <Button className="flex-1" onClick={handleSaveSignature}>
+            <Button
+              className="flex-1"
+              onClick={handleSaveClientInfo}
+              isLoading={isSaving}
+              disabled={!signatureName}
+            >
               Enregistrer
             </Button>
           </div>
