@@ -46,11 +46,15 @@ export const useChauffeurStore = create<ChauffeurState>((set, get) => ({
         chauffeurId,
       });
 
-      // Filter out draft tournees
-      const validTournees = result.data.filter(t => t.statut !== 'brouillon');
+      // Filter: only show planifiee or en_cours tournees (not brouillon, annulee, or terminee)
+      const validTournees = result.data.filter(t =>
+        t.statut === 'planifiee' || t.statut === 'en_cours'
+      );
 
       if (validTournees.length > 0) {
-        const fullTournee = await tourneesService.getById(validTournees[0].id);
+        // Prioritize en_cours over planifiee
+        const activeTournee = validTournees.find(t => t.statut === 'en_cours') || validTournees[0];
+        const fullTournee = await tourneesService.getById(activeTournee.id);
         set({
           tournee: fullTournee,
           isLoading: false,
