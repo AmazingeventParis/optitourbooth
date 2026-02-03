@@ -1,13 +1,30 @@
 import { v2 as cloudinary } from 'cloudinary';
 
+// Vérifier que les credentials Cloudinary sont configurés
+const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+const apiKey = process.env.CLOUDINARY_API_KEY;
+const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+if (!cloudName || !apiKey || !apiSecret) {
+  console.warn('⚠️  CLOUDINARY credentials manquantes. Upload de photos désactivé.');
+  console.warn('   Variables requises: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET');
+}
+
 // Configuration Cloudinary
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: cloudName,
+  api_key: apiKey,
+  api_secret: apiSecret,
 });
 
 export { cloudinary };
+
+/**
+ * Vérifie si Cloudinary est configuré
+ */
+export function isCloudinaryConfigured(): boolean {
+  return !!(cloudName && apiKey && apiSecret);
+}
 
 /**
  * Upload une image vers Cloudinary
@@ -19,6 +36,11 @@ export async function uploadToCloudinary(
   fileBuffer: Buffer,
   folder: string = 'optitourbooth'
 ): Promise<{ url: string; publicId: string }> {
+  // Vérifier que Cloudinary est configuré
+  if (!isCloudinaryConfigured()) {
+    throw new Error('Cloudinary n\'est pas configuré. Vérifiez les variables d\'environnement CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET');
+  }
+
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
@@ -31,6 +53,7 @@ export async function uploadToCloudinary(
       },
       (error, result) => {
         if (error) {
+          console.error('Cloudinary upload error:', error);
           reject(error);
         } else if (result) {
           resolve({

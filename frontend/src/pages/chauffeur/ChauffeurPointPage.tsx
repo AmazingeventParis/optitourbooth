@@ -167,16 +167,28 @@ export default function ChauffeurPointPage() {
     setIsSaving(true);
     try {
       const result = await tourneesService.uploadPhotos(tournee.id, point.id, newFiles);
-      success(`${newFiles.length} photo(s) ajoutée(s)`);
 
-      // Add uploaded photos to local state (they have id, path, filename from server)
+      // Check if upload actually returned photos
       const newPhotos = result as Array<{ id: string; path: string; filename: string }>;
-      setUploadedPhotos(prev => [...prev, ...newPhotos]);
+
+      if (newPhotos && newPhotos.length > 0) {
+        success(`${newPhotos.length} photo(s) ajoutée(s)`);
+        setUploadedPhotos(prev => [...prev, ...newPhotos]);
+      } else {
+        // Upload failed - keep the previews as fallback
+        showError('Erreur', 'L\'upload a échoué. Vérifiez la configuration Cloudinary.');
+        // Keep previews visible since server didn't return photos
+        setUploadedPhotos(prev => [...prev, ...previews.map((p, i) => ({
+          id: `local-${Date.now()}-${i}`,
+          path: p,
+          filename: `photo-${i + 1}`,
+        }))]);
+      }
 
       // Clear uploading previews
       setUploadingPhotos([]);
     } catch (err) {
-      showError('Erreur', (err as Error).message);
+      showError('Erreur upload', (err as Error).message);
       setUploadingPhotos([]); // Clear previews on error
     } finally {
       setIsSaving(false);
