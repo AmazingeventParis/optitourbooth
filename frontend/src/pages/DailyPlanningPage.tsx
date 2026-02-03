@@ -55,6 +55,7 @@ import {
   ChevronUpIcon,
   ArrowTopRightOnSquareIcon,
   CheckIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 
 // Couleurs hex pour la légende de la carte
@@ -1357,6 +1358,7 @@ export default function DailyPlanningPage() {
   const [addPendingFormData, setAddPendingFormData] = useState<Partial<ImportParsedPoint>>({
     type: 'livraison',
   });
+  const [addPendingSelectedProduits, setAddPendingSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
 
   // Dialog validation tournée
   const [isValidateDialogOpen, setIsValidateDialogOpen] = useState(false);
@@ -1875,20 +1877,34 @@ export default function DailyPlanningPage() {
         dureePrevue: 30,
         createdAt: now,
         updatedAt: now,
-        produits: pendingPoint.produitId ? [{
-          id: `opt-pp-${Date.now()}`,
-          pointId: optimisticId,
-          produitId: pendingPoint.produitId,
-          produit: {
-            id: pendingPoint.produitId,
-            nom: pendingPoint.produitName || '',
-            couleur: pendingPoint.produitCouleur || undefined,
-            actif: true,
-            createdAt: now,
-            updatedAt: now,
-          } as Produit,
-          quantite: 1,
-        }] as PointProduit[] : [],
+        produits: pendingPoint.produitsIds && pendingPoint.produitsIds.length > 0
+          ? pendingPoint.produitsIds.map((p, idx) => ({
+              id: `opt-pp-${Date.now()}-${idx}`,
+              pointId: optimisticId,
+              produitId: p.id,
+              produit: {
+                id: p.id,
+                nom: p.nom,
+                actif: true,
+                createdAt: now,
+                updatedAt: now,
+              } as Produit,
+              quantite: 1,
+            })) as PointProduit[]
+          : pendingPoint.produitId ? [{
+              id: `opt-pp-${Date.now()}`,
+              pointId: optimisticId,
+              produitId: pendingPoint.produitId,
+              produit: {
+                id: pendingPoint.produitId,
+                nom: pendingPoint.produitName || '',
+                couleur: pendingPoint.produitCouleur || undefined,
+                actif: true,
+                createdAt: now,
+                updatedAt: now,
+              } as Produit,
+              quantite: 1,
+            }] as PointProduit[] : [],
       };
 
       // Insérer et réordonner
@@ -1936,7 +1952,9 @@ export default function DailyPlanningPage() {
         creneauDebut: pendingPoint.creneauDebut,
         creneauFin: pendingPoint.creneauFin,
         notesInternes: pendingPoint.notes,
-        produits: pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : undefined,
+        produits: pendingPoint.produitsIds && pendingPoint.produitsIds.length > 0
+          ? pendingPoint.produitsIds.map(p => ({ produitId: p.id, quantite: 1 }))
+          : pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : undefined,
       }).then((updatedTournee: Tournee) => {
         // L'API retourne directement la tournée complète avec ETAs OSRM
         setTournees(current => {
@@ -2381,8 +2399,9 @@ export default function DailyPlanningPage() {
     const newPoint: ImportParsedPoint = {
       clientName: addPendingFormData.clientName.trim(),
       societe: addPendingFormData.societe || '',
-      produitName: addPendingFormData.produitName || '',
-      produitId: addPendingFormData.produitId,
+      produitName: addPendingSelectedProduits.map(p => p.nom).join(', '),
+      produitId: addPendingSelectedProduits[0]?.id,
+      produitsIds: addPendingSelectedProduits.length > 0 ? addPendingSelectedProduits : undefined,
       type: addPendingFormData.type || 'livraison',
       creneauDebut: addPendingFormData.creneauDebut || '',
       creneauFin: addPendingFormData.creneauFin || '',
@@ -2390,13 +2409,14 @@ export default function DailyPlanningPage() {
       contactTelephone: addPendingFormData.contactTelephone || '',
       notes: addPendingFormData.notes || '',
       clientFound: false,
-      produitFound: !!addPendingFormData.produitId,
+      produitFound: addPendingSelectedProduits.length > 0,
       errors: [],
     };
 
     setPendingPoints([...pendingPoints, newPoint]);
     setIsAddPendingModalOpen(false);
     setAddPendingFormData({ type: 'livraison' });
+    setAddPendingSelectedProduits([]);
     toastSuccess('Point ajouté');
   };
 
@@ -3385,22 +3405,51 @@ export default function DailyPlanningPage() {
             />
           </div>
 
-          <Select
-            label="Produit"
-            value={addPendingFormData.produitId || ''}
-            onChange={(e) => {
-              const selectedProduit = produits.find(p => p.id === e.target.value);
-              setAddPendingFormData({
-                ...addPendingFormData,
-                produitId: e.target.value || undefined,
-                produitName: selectedProduit?.nom || '',
-              });
-            }}
-            options={[
-              { value: '', label: '-- Sélectionner un produit --' },
-              ...produits.map(p => ({ value: p.id, label: p.nom })),
-            ]}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Produits
+            </label>
+            {/* Liste des produits sélectionnés */}
+            {addPendingSelectedProduits.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {addPendingSelectedProduits.map((p) => (
+                  <span
+                    key={p.id}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-primary-100 text-primary-800 text-sm rounded-full"
+                  >
+                    {p.nom}
+                    <button
+                      type="button"
+                      onClick={() => setAddPendingSelectedProduits(addPendingSelectedProduits.filter(sp => sp.id !== p.id))}
+                      className="hover:text-primary-600"
+                    >
+                      <XMarkIcon className="h-4 w-4" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* Dropdown pour ajouter un produit */}
+            <div className="flex gap-2">
+              <select
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
+                value=""
+                onChange={(e) => {
+                  const selectedProduit = produits.find(p => p.id === e.target.value);
+                  if (selectedProduit && !addPendingSelectedProduits.find(p => p.id === selectedProduit.id)) {
+                    setAddPendingSelectedProduits([...addPendingSelectedProduits, { id: selectedProduit.id, nom: selectedProduit.nom }]);
+                  }
+                }}
+              >
+                <option value="">-- Sélectionner un produit --</option>
+                {produits
+                  .filter(p => !addPendingSelectedProduits.find(sp => sp.id === p.id))
+                  .map(p => (
+                    <option key={p.id} value={p.id}>{p.nom}</option>
+                  ))}
+              </select>
+            </div>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -91,6 +91,7 @@ export interface ImportParsedPoint {
   notes?: string;
   clientId?: string;
   produitId?: string;
+  produitsIds?: { id: string; nom: string }[];
   clientFound: boolean;
   produitFound: boolean;
   errors: string[];
