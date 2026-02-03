@@ -1,13 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Badge, Button } from '@/components/ui';
-import { tourneesService } from '@/services/tournees.service';
 import { useAuthStore } from '@/store/authStore';
-import { useToast } from '@/hooks/useToast';
-import { Tournee } from '@/types';
+import { useChauffeurStore } from '@/store/chauffeurStore';
+import { formatTime } from '@/utils/format';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { formatTime } from '@/utils/format';
 import {
   MapPinIcon,
   ClockIcon,
@@ -20,39 +18,13 @@ import {
 export default function ChauffeurDashboard() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { error: showError } = useToast();
-
-  const [tournee, setTournee] = useState<Tournee | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { tournee, isLoading, fetchTournee } = useChauffeurStore();
 
   useEffect(() => {
-    fetchTodayTournee();
-  }, []);
-
-  const fetchTodayTournee = async () => {
-    setIsLoading(true);
-    try {
-      const today = format(new Date(), 'yyyy-MM-dd');
-      const result = await tourneesService.list({
-        date: today,
-        chauffeurId: user?.id,
-      });
-
-      // Filtrer les tournées en brouillon (non validées)
-      const validTournees = result.data.filter(t => t.statut !== 'brouillon');
-      if (validTournees.length > 0) {
-        // Get full details
-        const fullTournee = await tourneesService.getById(validTournees[0].id);
-        setTournee(fullTournee);
-      } else {
-        setTournee(null);
-      }
-    } catch (err) {
-      showError('Erreur', (err as Error).message);
-    } finally {
-      setIsLoading(false);
+    if (user?.id) {
+      fetchTournee(user.id);
     }
-  };
+  }, [user?.id, fetchTournee]);
 
   const getStatutConfig = (statut: string) => {
     const configs: Record<string, { variant: 'info' | 'warning' | 'success' | 'danger'; label: string; icon: React.ElementType }> = {

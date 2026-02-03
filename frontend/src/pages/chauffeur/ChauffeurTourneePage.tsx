@@ -5,8 +5,9 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { RouteMap } from '@/components/map';
 import { tourneesService } from '@/services/tournees.service';
 import { useAuthStore } from '@/store/authStore';
+import { useChauffeurStore } from '@/store/chauffeurStore';
 import { useToast } from '@/hooks/useToast';
-import { Tournee, Point } from '@/types';
+import { Point } from '@/types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { formatTime, formatTimeRange } from '@/utils/format';
@@ -50,43 +51,20 @@ const getTypeLabel = (type: string) => {
 export default function ChauffeurTourneePage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { tournee, isLoading, fetchTournee, refreshTournee } = useChauffeurStore();
   const { success, error: showError } = useToast();
 
-  const [tournee, setTournee] = useState<Tournee | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedPointId, setSelectedPointId] = useState<string | undefined>();
   const [isStartDialogOpen, setIsStartDialogOpen] = useState(false);
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const fetchTournee = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const today = format(new Date(), 'yyyy-MM-dd');
-      const result = await tourneesService.list({
-        date: today,
-        chauffeurId: user?.id,
-      });
-
-      // Filtrer les tournées en brouillon (non validées)
-      const validTournees = result.data.filter(t => t.statut !== 'brouillon');
-      if (validTournees.length > 0) {
-        const fullTournee = await tourneesService.getById(validTournees[0].id);
-        setTournee(fullTournee);
-      } else {
-        setTournee(null);
-      }
-    } catch (err) {
-      showError('Erreur', (err as Error).message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.id, showError]);
-
   useEffect(() => {
-    fetchTournee();
-  }, [fetchTournee]);
+    if (user?.id) {
+      fetchTournee(user.id);
+    }
+  }, [user?.id, fetchTournee]);
 
   const handleStartTournee = async () => {
     if (!tournee) return;
@@ -96,7 +74,7 @@ export default function ChauffeurTourneePage() {
       await tourneesService.start(tournee.id);
       success('Tournée démarrée');
       setIsStartDialogOpen(false);
-      fetchTournee();
+      refreshTournee();
     } catch (err) {
       showError('Erreur', (err as Error).message);
     } finally {
@@ -112,7 +90,7 @@ export default function ChauffeurTourneePage() {
       await tourneesService.finish(tournee.id);
       success('Tournée terminée');
       setIsFinishDialogOpen(false);
-      fetchTournee();
+      refreshTournee();
     } catch (err) {
       showError('Erreur', (err as Error).message);
     } finally {

@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Badge, Button, Modal, Input, Select } from '@/components/ui';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { tourneesService } from '@/services/tournees.service';
+import { useAuthStore } from '@/store/authStore';
+import { useChauffeurStore } from '@/store/chauffeurStore';
 import { useToast } from '@/hooks/useToast';
-import { Point, Tournee } from '@/types';
-import { format } from 'date-fns';
 import { formatTimeRange } from '@/utils/format';
 import {
   ArrowLeftIcon,
@@ -43,11 +43,10 @@ const incidentTypes = [
 export default function ChauffeurPointPage() {
   const { pointId } = useParams<{ pointId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const { tournee, isLoading, fetchTournee, refreshTournee } = useChauffeurStore();
   const { success, error: showError } = useToast();
 
-  const [tournee, setTournee] = useState<Tournee | null>(null);
-  const [point, setPoint] = useState<Point | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   // Modals
@@ -67,35 +66,17 @@ export default function ChauffeurPointPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photos, setPhotos] = useState<string[]>([]);
 
+  // Get point from store
+  const point = useMemo(() => {
+    if (!tournee?.points || !pointId) return null;
+    return tournee.points.find((p) => p.id === pointId) || null;
+  }, [tournee?.points, pointId]);
+
   useEffect(() => {
-    fetchPoint();
-  }, [pointId]);
-
-  const fetchPoint = async () => {
-    if (!pointId) return;
-
-    setIsLoading(true);
-    try {
-      // We need to find the tournee that contains this point
-      const today = format(new Date(), 'yyyy-MM-dd');
-      const result = await tourneesService.list({ date: today });
-
-      for (const t of result.data) {
-        const fullTournee = await tourneesService.getById(t.id);
-        const foundPoint = fullTournee.points?.find((p) => p.id === pointId);
-        if (foundPoint) {
-          setTournee(fullTournee);
-          setPoint(foundPoint);
-          break;
-        }
-      }
-    } catch (err) {
-      showError('Erreur', (err as Error).message);
-      navigate('/chauffeur/tournee');
-    } finally {
-      setIsLoading(false);
+    if (user?.id) {
+      fetchTournee(user.id);
     }
-  };
+  }, [user?.id, fetchTournee]);
 
   const handleCompletePoint = async () => {
     if (!tournee || !point) return;
@@ -151,7 +132,7 @@ export default function ChauffeurPointPage() {
 
       success('Informations enregistrées');
       setIsSignatureModalOpen(false);
-      fetchPoint();
+      refreshTournee();
     } catch (err) {
       showError('Erreur', (err as Error).message);
     } finally {
