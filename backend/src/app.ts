@@ -28,8 +28,9 @@ const httpServer = createServer(app);
 // Helmet pour la sécurité des headers HTTP
 app.use(
   helmet({
-    contentSecurityPolicy: config.isProd,
-    crossOriginEmbedderPolicy: config.isProd,
+    contentSecurityPolicy: false, // Désactivé pour permettre le chargement des images
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' }, // Permettre le chargement cross-origin des images
   })
 );
 

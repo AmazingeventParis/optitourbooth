@@ -1,22 +1,32 @@
 /**
  * Formate une heure au format français "09h10"
  * Accepte: "08:00", "08:00:00", "1970-01-01T08:00:00.000Z", Date
+ *
+ * Pour les heures de créneaux (stockées comme Time dans la DB), on utilise UTC
+ * Pour les timestamps réels (heureArriveeReelle, etc.), on utilise l'heure locale
  */
-export function formatTime(time: string | Date | null | undefined): string {
+export function formatTime(time: string | Date | null | undefined, useLocalTime: boolean = false): string {
   if (!time) return '';
 
   let hours: number;
   let minutes: number;
 
   if (time instanceof Date) {
-    hours = time.getHours();
-    minutes = time.getMinutes();
+    hours = useLocalTime ? time.getHours() : time.getUTCHours();
+    minutes = useLocalTime ? time.getMinutes() : time.getUTCMinutes();
   } else if (typeof time === 'string') {
     // Format ISO: "1970-01-01T08:00:00.000Z" ou "2026-01-26T08:00:00.000Z"
     if (time.includes('T')) {
       const date = new Date(time);
-      hours = date.getUTCHours();
-      minutes = date.getUTCMinutes();
+      // Si c'est une date complète (pas juste 1970-01-01), utiliser l'heure locale
+      const isRealTimestamp = !time.startsWith('1970-01-01');
+      if (isRealTimestamp || useLocalTime) {
+        hours = date.getHours();
+        minutes = date.getMinutes();
+      } else {
+        hours = date.getUTCHours();
+        minutes = date.getUTCMinutes();
+      }
     }
     // Format "08:00:00" ou "08:00"
     else if (time.includes(':')) {
