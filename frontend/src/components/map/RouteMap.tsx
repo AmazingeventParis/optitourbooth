@@ -1,8 +1,7 @@
 import { useEffect, useRef, useMemo, memo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Point, Client } from '@/types';
-import { getTimeStatus, TimeStatus } from '@/components/tournee/SortablePointCard';
+import { Point, Client, PointProduit, Produit } from '@/types';
 
 // Fix for default marker icons in Leaflet with bundlers
 delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
@@ -21,21 +20,16 @@ interface RouteMapProps {
   className?: string;
 }
 
-// Couleurs basées sur le statut horaire (ETA vs créneau)
-const TIME_STATUS_COLORS: Record<TimeStatus, string> = {
-  early: '#3B82F6',    // Bleu - en avance
-  ontime: '#10B981',   // Vert - à l'heure
-  late: '#EF4444',     // Rouge - en retard
-  unknown: '#6366F1',  // Indigo - pas d'info
-};
+// Couleur par défaut si aucun produit
+const DEFAULT_PRODUCT_COLOR = '#6366F1'; // Indigo
 
+/**
+ * Récupère la couleur du premier produit du point
+ */
 const getMarkerColor = (point: Point): string => {
-  const timeStatus = getTimeStatus(
-    point.heureArriveeEstimee as string | null,
-    point.creneauDebut as string | null,
-    point.creneauFin as string | null
-  );
-  return TIME_STATUS_COLORS[timeStatus];
+  const produits = point.produits as PointProduit[] | undefined;
+  const firstProduct = produits?.[0]?.produit as Produit | undefined;
+  return firstProduct?.couleur || DEFAULT_PRODUCT_COLOR;
 };
 
 // Cache pour les icônes - évite de recréer les mêmes icônes

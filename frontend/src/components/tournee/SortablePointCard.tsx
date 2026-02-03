@@ -1,7 +1,7 @@
 import { memo, useMemo, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Point, Client } from '@/types';
+import { Point, Client, PointProduit, Produit } from '@/types';
 import { Badge, Button } from '@/components/ui';
 import {
   Bars3Icon,
@@ -122,6 +122,18 @@ const STATUT_CONFIGS = {
   annule: { variant: 'default' as const, label: 'Annulé' },
 } as const;
 
+// Couleur par défaut si aucun produit
+const DEFAULT_PRODUCT_COLOR = '#6366F1'; // Indigo
+
+/**
+ * Récupère la couleur du premier produit du point
+ */
+const getProductColor = (point: Point): string => {
+  const produits = point.produits as PointProduit[] | undefined;
+  const firstProduct = produits?.[0]?.produit as Produit | undefined;
+  return firstProduct?.couleur || DEFAULT_PRODUCT_COLOR;
+};
+
 interface SortablePointCardProps {
   point: Point;
   index: number;
@@ -176,6 +188,9 @@ const SortablePointCard = memo(function SortablePointCard({
   );
   const timeStatusConfig = TIME_STATUS_CONFIGS[timeStatus];
 
+  // Couleur du produit pour la pastille
+  const productColor = useMemo(() => getProductColor(point), [point.produits]);
+
   // Mémoisation des handlers pour éviter les re-renders enfants
   const handleEditClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -214,10 +229,10 @@ const SortablePointCard = memo(function SortablePointCard({
               <Bars3Icon className="h-5 w-5 text-gray-400" />
             </div>
           )}
-          <div className={clsx(
-            'flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm text-white',
-            timeStatusConfig.badgeBg
-          )}>
+          <div
+            className="flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm text-white"
+            style={{ backgroundColor: productColor }}
+          >
             {index + 1}
           </div>
         </div>
