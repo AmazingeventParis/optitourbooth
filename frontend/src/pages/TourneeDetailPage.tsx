@@ -31,7 +31,6 @@ import { formatTime } from '@/utils/format';
 import {
   ArrowLeftIcon,
   PlusIcon,
-  BoltIcon,
   PlayIcon,
   CheckIcon,
   XMarkIcon,
@@ -147,7 +146,6 @@ export default function TourneeDetailPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [produits, setProduits] = useState<Produit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isOptimizing, setIsOptimizing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Selected point for map highlight
@@ -241,23 +239,6 @@ export default function TourneeDetailPage() {
         showError('Erreur', (err as Error).message);
         fetchTournee(); // Revert on error
       }
-    }
-  };
-
-  const handleOptimize = async () => {
-    if (!id) return;
-    setIsOptimizing(true);
-    try {
-      const result = await tourneesService.optimize(id);
-      setTournee(result.tournee);
-      setPoints(result.tournee.points || []);
-      success(
-        `Tournée optimisée ! ${result.improvements.distanceSaved.toFixed(1)} km économisés`
-      );
-    } catch (err) {
-      showError('Erreur', (err as Error).message);
-    } finally {
-      setIsOptimizing(false);
     }
   };
 
@@ -554,10 +535,6 @@ export default function TourneeDetailPage() {
               >
                 <TrashIcon className="h-5 w-5 text-red-500" />
               </Button>
-              <Button variant="secondary" onClick={handleOptimize} isLoading={isOptimizing}>
-                <BoltIcon className="h-5 w-5 mr-2" />
-                Optimiser
-              </Button>
               <Button onClick={() => openStatusDialog('validate')}>
                 <CheckIcon className="h-5 w-5 mr-2" />
                 Valider
@@ -572,10 +549,6 @@ export default function TourneeDetailPage() {
                 title="Supprimer la tournée"
               >
                 <TrashIcon className="h-5 w-5 text-red-500" />
-              </Button>
-              <Button variant="secondary" onClick={handleOptimize} isLoading={isOptimizing}>
-                <BoltIcon className="h-5 w-5 mr-2" />
-                Optimiser
               </Button>
               <Button onClick={() => openStatusDialog('start')}>
                 <PlayIcon className="h-5 w-5 mr-2" />

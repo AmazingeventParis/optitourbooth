@@ -3,6 +3,7 @@ import { prisma } from '../config/database.js';
 import { apiResponse, parsePagination } from '../utils/index.js';
 import { optimizationService } from '../services/optimization.service.js';
 import { geocodingService } from '../services/geocoding.service.js';
+import { autoDispatchService } from '../services/autodispatch.service.js';
 import {
   CreateTourneeInput,
   UpdateTourneeInput,
@@ -1730,5 +1731,61 @@ export const tourneeController = {
     });
 
     apiResponse.success(res, incident, 'Incident créé');
+  },
+
+  /**
+   * POST /api/tournees/auto-dispatch
+   * Dispatcher automatiquement les points en attente vers les tournées
+   */
+  async autoDispatch(req: Request, res: Response): Promise<void> {
+    const { date, pendingPoints } = req.body as {
+      date: string;
+      pendingPoints: Array<{
+        clientId: string;
+        clientName: string;
+        type: 'livraison' | 'ramassage' | 'livraison_ramassage';
+        creneauDebut?: string;
+        creneauFin?: string;
+        produitIds?: string[];
+        latitude?: number;
+        longitude?: number;
+        notes?: string;
+        contactNom?: string;
+        contactTelephone?: string;
+      }>;
+    };
+
+    if (!date || !pendingPoints || !Array.isArray(pendingPoints)) {
+      apiResponse.badRequest(res, 'Date et points requis');
+      return;
+    }
+
+    if (pendingPoints.length === 0) {
+      apiResponse.badRequest(res, 'Aucun point à dispatcher');
+      return;
+    }
+
+    const result = await autoDispatchService.dispatchPendingPoints(date, pendingPoints);
+
+    // Récupérer les tournées mises à jour
+    const updatedTourneeIds = [...new Set(result.dispatched.map((d) => d.assignedTourneeId))];
+    const updatedTournees = await prisma.tournee.findMany({
+      where: { id: { in: updatedTourneeIds } },
+      include: {
+        chauffeur: { select: { id: true, nom: true, prenom: true, couleur: true } },
+        points: {
+          orderBy: { ordre: 'asc' },
+          include: {
+            client: true,
+            produits: { include: { produit: true } },
+          },
+        },
+      },
+    });
+
+    apiResponse.success(res, {
+      ...result,
+      updatedTournees,
+    }, `${result.totalDispatched} point(s) dispatchés`);
   },
 };

@@ -156,6 +156,13 @@ router.get(
   asyncHandler(tourneeController.getRoute)
 );
 
+// Auto-dispatch des points en attente vers les tournées (admin)
+router.post(
+  '/auto-dispatch',
+  requireAdmin,
+  asyncHandler(tourneeController.autoDispatch)
+);
+
 // Prévisualiser l'import d'un fichier Excel sans tournée (admin)
 router.post(
   '/import/preview',

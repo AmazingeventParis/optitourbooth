@@ -56,6 +56,7 @@ import {
   ArrowTopRightOnSquareIcon,
   CheckIcon,
   XMarkIcon,
+  BoltIcon,
 } from '@heroicons/react/24/outline';
 
 // Couleurs hex pour la légende de la carte
@@ -2432,6 +2433,78 @@ export default function DailyPlanningPage() {
   // Ajouter un nouveau point pending manuellement
   const [isAddingPending, setIsAddingPending] = useState(false);
 
+  // Auto-dispatch des points pending
+  const [isAutoDispatching, setIsAutoDispatching] = useState(false);
+
+  const handleAutoDispatch = async () => {
+    if (validPendingPoints.length === 0) {
+      toastError('Aucun point valide à dispatcher');
+      return;
+    }
+
+    if (tournees.filter(t => t.statut === 'brouillon' || t.statut === 'planifiee').length === 0) {
+      toastError('Aucune tournée disponible pour cette date');
+      return;
+    }
+
+    setIsAutoDispatching(true);
+
+    try {
+      // Préparer les données des points pending pour l'API
+      const pointsToDispatch = validPendingPoints.map((point) => ({
+        clientId: point.clientId!,
+        clientName: point.clientName,
+        type: (point.type || 'livraison') as 'livraison' | 'ramassage' | 'livraison_ramassage',
+        creneauDebut: point.creneauDebut || undefined,
+        creneauFin: point.creneauFin || undefined,
+        produitIds: point.produitsIds?.map(p => p.id) || (point.produitId ? [point.produitId] : undefined),
+        notes: point.notes || undefined,
+        contactNom: point.contactNom || undefined,
+        contactTelephone: point.contactTelephone || undefined,
+      }));
+
+      const result = await tourneesService.autoDispatch(selectedDate, pointsToDispatch);
+
+      // Mettre à jour les tournées avec les nouvelles données
+      if (result.updatedTournees && result.updatedTournees.length > 0) {
+        setTournees((prevTournees) => {
+          const updatedMap = new Map(result.updatedTournees.map(t => [t.id, t]));
+          return prevTournees.map(t => updatedMap.get(t.id) || t);
+        });
+        notifyMapPopup();
+      }
+
+      // Retirer les points dispatchés de la liste pending
+      if (result.totalDispatched > 0) {
+        const dispatchedIndices = new Set(result.dispatched.map(d => d.pointIndex));
+        setPendingPoints((prev) =>
+          prev.filter((_, index) => {
+            // Trouver l'index dans validPendingPoints
+            const validIndex = validPendingPoints.findIndex(vp => vp === prev[index]);
+            return validIndex === -1 || !dispatchedIndices.has(validIndex);
+          })
+        );
+      }
+
+      // Afficher le résultat
+      if (result.totalDispatched > 0) {
+        toastSuccess(`${result.totalDispatched} point(s) réparti(s) automatiquement`);
+      }
+
+      if (result.totalFailed > 0) {
+        const failedNames = result.failed.slice(0, 3).map(f => f.clientName).join(', ');
+        toastError(
+          `${result.totalFailed} point(s) non dispatchés`,
+          failedNames + (result.failed.length > 3 ? '...' : '')
+        );
+      }
+    } catch (err) {
+      toastError('Erreur', (err as Error).message);
+    } finally {
+      setIsAutoDispatching(false);
+    }
+  };
+
   const handleAddPending = async () => {
     if (!addPendingFormData.clientName?.trim()) {
       toastError('Le nom du client est requis');
@@ -2630,6 +2703,22 @@ export default function DailyPlanningPage() {
                       className="text-white hover:bg-white/20 text-xs"
                     >
                       Vider
+                    </Button>
+                  )}
+                  {validPendingPoints.length > 0 && tournees.filter(t => t.statut === 'brouillon' || t.statut === 'planifiee').length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAutoDispatch();
+                      }}
+                      isLoading={isAutoDispatching}
+                      className="text-white hover:bg-white/20 text-xs flex items-center gap-1 bg-white/10"
+                      title="Répartir automatiquement les points dans les tournées"
+                    >
+                      <BoltIcon className="h-4 w-4" />
+                      <span>Optimiser</span>
                     </Button>
                   )}
                   {showPending ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}

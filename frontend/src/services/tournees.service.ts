@@ -280,4 +280,56 @@ export const tourneesService = {
     );
     return response.data.data;
   },
+
+  // Auto-dispatch des points en attente
+  async autoDispatch(date: string, pendingPoints: Array<{
+    clientId: string;
+    clientName: string;
+    type: string;
+    creneauDebut?: string;
+    creneauFin?: string;
+    produitIds?: string[];
+    latitude?: number;
+    longitude?: number;
+    notes?: string;
+    contactNom?: string;
+    contactTelephone?: string;
+  }>): Promise<{
+    success: boolean;
+    totalDispatched: number;
+    totalFailed: number;
+    dispatched: Array<{
+      pointIndex: number;
+      clientName: string;
+      assignedTourneeId: string;
+      chauffeurNom: string;
+      reason: string;
+    }>;
+    failed: Array<{
+      pointIndex: number;
+      clientName: string;
+      reason: string;
+    }>;
+    updatedTournees: Tournee[];
+  }> {
+    const response = await api.post<ApiResponse<{
+      success: boolean;
+      totalDispatched: number;
+      totalFailed: number;
+      dispatched: Array<{
+        pointIndex: number;
+        clientName: string;
+        assignedTourneeId: string;
+        chauffeurNom: string;
+        reason: string;
+      }>;
+      failed: Array<{
+        pointIndex: number;
+        clientName: string;
+        reason: string;
+      }>;
+      updatedTournees: Tournee[];
+    }>>('/tournees/auto-dispatch', { date, pendingPoints });
+    return response.data.data;
+  },
 };
