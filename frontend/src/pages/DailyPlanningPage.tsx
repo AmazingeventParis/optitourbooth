@@ -28,6 +28,7 @@ import { Tournee, Point, Client, PointProduit, Produit, User, PointType, Chauffe
 import { tourneesService, ImportParsedPoint } from '@/services/tournees.service';
 import { clientsService } from '@/services/clients.service';
 import { usersService } from '@/services/users.service';
+import { produitsService } from '@/services/produits.service';
 import { socketService, ChauffeurPosition } from '@/services/socket.service';
 import { useSocketStore, isPositionStale } from '@/store/socketStore';
 import { useAuthStore } from '@/store/authStore';
@@ -1297,6 +1298,7 @@ export default function DailyPlanningPage() {
   });
   const [tournees, setTournees] = useState<Tournee[]>([]);
   const [chauffeurs, setChauffeurs] = useState<User[]>([]);
+  const [produits, setProduits] = useState<Produit[]>([]);
   const [loading, setLoading] = useState(true);
   const [activePoint, setActivePoint] = useState<Point | null>(null);
   const [activePendingPoint, setActivePendingPoint] = useState<{ point: ImportParsedPoint; index: number } | null>(null);
@@ -1488,6 +1490,19 @@ export default function DailyPlanningPage() {
       }
     };
     loadChauffeurs();
+  }, []);
+
+  // Charger les produits
+  useEffect(() => {
+    const loadProduits = async () => {
+      try {
+        const result = await produitsService.listActifs();
+        setProduits(result);
+      } catch (error) {
+        console.error('Erreur chargement produits:', error);
+      }
+    };
+    loadProduits();
   }, []);
 
   // Charger les tournées
@@ -2367,6 +2382,7 @@ export default function DailyPlanningPage() {
       clientName: addPendingFormData.clientName.trim(),
       societe: addPendingFormData.societe || '',
       produitName: addPendingFormData.produitName || '',
+      produitId: addPendingFormData.produitId,
       type: addPendingFormData.type || 'livraison',
       creneauDebut: addPendingFormData.creneauDebut || '',
       creneauFin: addPendingFormData.creneauFin || '',
@@ -2374,7 +2390,7 @@ export default function DailyPlanningPage() {
       contactTelephone: addPendingFormData.contactTelephone || '',
       notes: addPendingFormData.notes || '',
       clientFound: false,
-      produitFound: false,
+      produitFound: !!addPendingFormData.produitId,
       errors: [],
     };
 
@@ -3369,10 +3385,21 @@ export default function DailyPlanningPage() {
             />
           </div>
 
-          <Input
+          <Select
             label="Produit"
-            value={addPendingFormData.produitName || ''}
-            onChange={(e) => setAddPendingFormData({ ...addPendingFormData, produitName: e.target.value })}
+            value={addPendingFormData.produitId || ''}
+            onChange={(e) => {
+              const selectedProduit = produits.find(p => p.id === e.target.value);
+              setAddPendingFormData({
+                ...addPendingFormData,
+                produitId: e.target.value || undefined,
+                produitName: selectedProduit?.nom || '',
+              });
+            }}
+            options={[
+              { value: '', label: '-- Sélectionner un produit --' },
+              ...produits.map(p => ({ value: p.id, label: p.nom })),
+            ]}
           />
 
           <div>
