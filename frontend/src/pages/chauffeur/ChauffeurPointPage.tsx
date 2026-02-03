@@ -64,6 +64,7 @@ export default function ChauffeurPointPage() {
   // Photos
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhotos, setUploadingPhotos] = useState<string[]>([]); // Local previews during upload
+  const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ id: string; path: string; filename: string }>>([]); // Successfully uploaded photos
 
   // Get point from store
   const point = useMemo(() => {
@@ -165,13 +166,14 @@ export default function ChauffeurPointPage() {
     // Upload to server
     setIsSaving(true);
     try {
-      await tourneesService.uploadPhotos(tournee.id, point.id, newFiles);
+      const result = await tourneesService.uploadPhotos(tournee.id, point.id, newFiles);
       success(`${newFiles.length} photo(s) ajoutée(s)`);
 
-      // Refresh tournee to get updated photos from server
-      await refreshTournee();
+      // Add uploaded photos to local state (they have id, path, filename from server)
+      const newPhotos = result as Array<{ id: string; path: string; filename: string }>;
+      setUploadedPhotos(prev => [...prev, ...newPhotos]);
 
-      // Clear local previews (photos now come from server)
+      // Clear uploading previews
       setUploadingPhotos([]);
     } catch (err) {
       showError('Erreur', (err as Error).message);
@@ -349,7 +351,7 @@ export default function ChauffeurPointPage() {
       {/* Photos Section */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">Photos ({(point.photos?.length || 0) + uploadingPhotos.length})</h3>
+          <h3 className="font-semibold">Photos ({(point.photos?.length || 0) + uploadedPhotos.length + uploadingPhotos.length})</h3>
           {isActive && (
             <>
               <Button
@@ -374,10 +376,20 @@ export default function ChauffeurPointPage() {
           )}
         </div>
 
-        {(point.photos && point.photos.length > 0) || uploadingPhotos.length > 0 ? (
+        {(point.photos && point.photos.length > 0) || uploadedPhotos.length > 0 || uploadingPhotos.length > 0 ? (
           <div className="grid grid-cols-3 gap-2">
-            {/* Photos from server */}
+            {/* Photos from server (existing before this session) */}
             {point.photos?.map((photo) => (
+              <div key={photo.id} className="relative aspect-square">
+                <img
+                  src={photo.path}
+                  alt={photo.filename}
+                  className="w-full h-full object-cover rounded"
+                />
+              </div>
+            ))}
+            {/* Photos uploaded in this session */}
+            {uploadedPhotos.map((photo) => (
               <div key={photo.id} className="relative aspect-square">
                 <img
                   src={photo.path}
