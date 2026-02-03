@@ -1827,15 +1827,11 @@ export default function DailyPlanningPage() {
           toastError('Erreur', 'Le nom du client est requis');
           return;
         }
-        if (!pendingPoint.adresse?.trim()) {
-          toastError('Erreur', 'L\'adresse est requise pour créer un nouveau client');
-          return;
-        }
 
         try {
           const newClient = await clientsService.create({
             nom: pendingPoint.clientName.trim(),
-            adresse: pendingPoint.adresse.trim(),
+            adresse: pendingPoint.adresse?.trim() || 'Adresse à définir',
             telephone: pendingPoint.contactTelephone || undefined,
           });
 
