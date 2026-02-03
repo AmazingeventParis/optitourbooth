@@ -5,6 +5,8 @@ interface TourneesFilters {
   page?: number;
   limit?: number;
   date?: string;
+  dateDebut?: string;
+  dateFin?: string;
   chauffeurId?: string;
   statut?: string;
 }
@@ -108,6 +110,8 @@ export const tourneesService = {
     if (filters.page) params.append('page', filters.page.toString());
     if (filters.limit) params.append('limit', filters.limit.toString());
     if (filters.date) params.append('date', filters.date);
+    if (filters.dateDebut) params.append('dateDebut', filters.dateDebut);
+    if (filters.dateFin) params.append('dateFin', filters.dateFin);
     if (filters.chauffeurId) params.append('chauffeurId', filters.chauffeurId);
     if (filters.statut) params.append('statut', filters.statut);
 

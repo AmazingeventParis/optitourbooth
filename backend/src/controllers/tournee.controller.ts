@@ -1604,7 +1604,7 @@ export const tourneeController = {
 
   /**
    * POST /api/tournees/:id/points/:pointId/photos
-   * Ajouter des photos à un point
+   * Ajouter des photos à un point (upload vers Cloudinary)
    */
   async addPhotos(req: Request, res: Response): Promise<void> {
     const tourneeId = req.params.id as string;
@@ -1632,22 +1632,41 @@ export const tourneeController = {
       return;
     }
 
-    // Créer les entrées photo en base
-    const photos = await prisma.$transaction(
-      files.map((file) =>
-        prisma.photo.create({
+    // Upload vers Cloudinary et créer les entrées en base
+    const { uploadToCloudinary } = await import('../config/cloudinary.js');
+
+    const photos = [];
+    for (const file of files) {
+      try {
+        // Upload vers Cloudinary
+        const { url, publicId } = await uploadToCloudinary(
+          file.buffer,
+          `optitourbooth/points/${pointId}`
+        );
+
+        // Créer l'entrée en base avec l'URL Cloudinary
+        const photo = await prisma.photo.create({
           data: {
             pointId,
-            filename: file.filename,
-            path: file.path,
+            filename: publicId, // Stocker le publicId pour pouvoir supprimer plus tard
+            path: url, // L'URL Cloudinary
             mimetype: file.mimetype,
             size: file.size,
             type: 'preuve',
             takenAt: new Date(),
           },
-        })
-      )
-    );
+        });
+        photos.push(photo);
+      } catch (uploadError) {
+        console.error('Erreur upload Cloudinary:', uploadError);
+        // Continuer avec les autres fichiers
+      }
+    }
+
+    if (photos.length === 0) {
+      apiResponse.badRequest(res, 'Erreur lors de l\'upload des photos');
+      return;
+    }
 
     apiResponse.success(res, photos, `${photos.length} photo(s) ajoutée(s)`);
   },

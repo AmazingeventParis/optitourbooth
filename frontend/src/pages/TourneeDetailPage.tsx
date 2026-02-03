@@ -724,10 +724,6 @@ export default function TourneeDetailPage() {
         const hasDriverData = selectedPointData.statut === 'termine' || selectedPointData.statut === 'incident' ||
           selectedPointData.photos?.length || selectedPointData.signatureData || selectedPointData.incidents?.length;
 
-        // Construct the API base URL for photos
-        const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
-        const uploadsBaseUrl = apiBaseUrl.replace('/api', '') + '/uploads';
-
         return (
           <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
@@ -792,13 +788,13 @@ export default function TourneeDetailPage() {
                       {selectedPointData.photos.map((photo) => (
                         <a
                           key={photo.id}
-                          href={`${uploadsBaseUrl}/${photo.filename}`}
+                          href={photo.path}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="block aspect-square rounded-lg overflow-hidden border border-gray-200 hover:border-primary-500 transition-colors"
                         >
                           <img
-                            src={`${uploadsBaseUrl}/${photo.filename}`}
+                            src={photo.path}
                             alt={`Photo ${photo.type}`}
                             className="w-full h-full object-cover"
                           />

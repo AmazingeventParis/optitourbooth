@@ -9,7 +9,7 @@ import { format } from 'date-fns';
 import {
   HomeIcon,
   MapIcon,
-  UserCircleIcon,
+  CalendarDaysIcon,
   ArrowRightOnRectangleIcon,
   SignalIcon,
   SignalSlashIcon,
@@ -101,7 +101,7 @@ export default function ChauffeurLayout() {
   const navItems = [
     { name: 'Accueil', href: '/chauffeur', icon: HomeIcon },
     { name: 'Tournée', href: '/chauffeur/tournee', icon: MapIcon },
-    { name: 'Profil', href: '/chauffeur/profil', icon: UserCircleIcon },
+    { name: 'Agenda', href: '/chauffeur/agenda', icon: CalendarDaysIcon },
   ];
 
   // Format GPS accuracy for display

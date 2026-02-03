@@ -45,17 +45,9 @@ const upload = multer({
   },
 });
 
-// Configuration multer pour l'upload de photos
+// Configuration multer pour l'upload de photos (stockage mémoire pour Cloudinary)
 const photoUpload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      cb(null, uploadsDir);
-    },
-    filename: (_req, file, cb) => {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      cb(null, uniqueSuffix + path.extname(file.originalname));
-    },
-  }),
+  storage: multer.memoryStorage(), // Stockage en mémoire pour upload vers Cloudinary
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB max per photo
   },

@@ -36,8 +36,8 @@ const ChauffeurTourneePage = lazy(() =>
 const ChauffeurPointPage = lazy(() =>
   import('@/pages/chauffeur/ChauffeurPointPage')
 );
-const ChauffeurProfilPage = lazy(() =>
-  import('@/pages/chauffeur/ChauffeurProfilPage')
+const ChauffeurAgendaPage = lazy(() =>
+  import('@/pages/chauffeur/ChauffeurAgendaPage')
 );
 
 // ============================================
@@ -176,7 +176,7 @@ function App() {
         <Route index element={<LazyPage><ChauffeurDashboard /></LazyPage>} />
         <Route path="tournee" element={<LazyPage><ChauffeurTourneePage /></LazyPage>} />
         <Route path="tournee/point/:pointId" element={<LazyPage><ChauffeurPointPage /></LazyPage>} />
-        <Route path="profil" element={<LazyPage><ChauffeurProfilPage /></LazyPage>} />
+        <Route path="agenda" element={<LazyPage><ChauffeurAgendaPage /></LazyPage>} />
       </Route>
 
       {/* Route 404 */}
