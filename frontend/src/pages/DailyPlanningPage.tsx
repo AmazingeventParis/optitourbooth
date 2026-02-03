@@ -51,7 +51,6 @@ import {
   PlusIcon,
   DocumentArrowUpIcon,
   InboxStackIcon,
-  ExclamationCircleIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   ArrowTopRightOnSquareIcon,
@@ -235,8 +234,8 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
       ref={setNodeRef}
       style={{
         ...style,
-        backgroundColor: productColor && point.clientFound && !isSelected ? lightenColor(productColor, 0.85) : undefined,
-        borderColor: productColor && point.clientFound ? productColor : undefined,
+        backgroundColor: productColor && !isSelected ? lightenColor(productColor, 0.85) : undefined,
+        borderColor: productColor || undefined,
       }}
       {...attributes}
       {...listeners}
@@ -244,10 +243,10 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
       className={clsx(
         'px-2.5 py-1.5 rounded-lg border cursor-grab active:cursor-grabbing flex-shrink-0 w-[170px]',
         'hover:shadow-md transition-all duration-150',
-        !productColor && point.clientFound && !isSelected && 'bg-white',
+        !productColor && !isSelected && 'bg-white',
         isDragging && 'opacity-50 ring-2 ring-orange-500 ring-offset-2',
         isOverlay && 'shadow-2xl ring-2 ring-orange-500 border-orange-500',
-        !point.clientFound && 'border-red-300 bg-red-50',
+        !point.clientFound && point.adresse && 'border-blue-300 bg-blue-50',
         isSelected && 'ring-2 ring-amber-400 border-amber-400 bg-amber-50'
       )}
     >
@@ -255,7 +254,7 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
       <div className="flex items-center gap-1.5">
         <div className={clsx(
           'w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0',
-          point.clientFound ? 'bg-orange-500' : 'bg-red-500'
+          'bg-orange-500'
         )}>
           {index + 1}
         </div>
@@ -268,8 +267,8 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
         )}>
           <typeConfig.icon className="h-3.5 w-3.5" />
         </div>
-        {!point.clientFound && (
-          <ExclamationCircleIcon className="h-4 w-4 text-red-500 flex-shrink-0" />
+        {!point.clientFound && point.adresse && (
+          <PlusIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
         )}
       </div>
       {/* Ligne 2: produit + créneau */}
@@ -1360,6 +1359,9 @@ export default function DailyPlanningPage() {
     type: 'livraison',
   });
   const [addPendingSelectedProduits, setAddPendingSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
+  const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const clientSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Dialog validation tournée
   const [isValidateDialogOpen, setIsValidateDialogOpen] = useState(false);
@@ -1798,7 +1800,7 @@ export default function DailyPlanningPage() {
   useEffect(() => { tourneesRef.current = tournees; }, [tournees]);
   useEffect(() => { pendingPointsRef.current = pendingPoints; }, [pendingPoints]);
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     // Reset immédiat des états de drag
     setActivePoint(null);
     setActivePendingPoint(null);
@@ -1816,12 +1818,44 @@ export default function DailyPlanningPage() {
 
     // ========== CAS 1: Point pending vers tournée ==========
     if (activeData.type === 'pending') {
-      const pendingPoint = activeData.pendingPoint as ImportParsedPoint;
+      let pendingPoint = activeData.pendingPoint as ImportParsedPoint;
       const pendingIndex = activeData.index as number;
 
+      // Si le client n'existe pas, le créer automatiquement
       if (!pendingPoint.clientFound || !pendingPoint.clientId) {
-        toastError('Erreur', 'Ce client n\'existe pas dans la base de données');
-        return;
+        if (!pendingPoint.clientName?.trim()) {
+          toastError('Erreur', 'Le nom du client est requis');
+          return;
+        }
+        if (!pendingPoint.adresse?.trim()) {
+          toastError('Erreur', 'L\'adresse est requise pour créer un nouveau client');
+          return;
+        }
+
+        try {
+          const newClient = await clientsService.create({
+            nom: pendingPoint.clientName.trim(),
+            adresse: pendingPoint.adresse.trim(),
+            telephone: pendingPoint.contactTelephone || undefined,
+          });
+
+          // Mettre à jour le pendingPoint avec le nouveau client
+          pendingPoint = {
+            ...pendingPoint,
+            clientId: newClient.id,
+            clientFound: true,
+          };
+
+          // Mettre à jour aussi dans la liste des pending points
+          setPendingPoints(current =>
+            current.map((p, i) => i === pendingIndex ? pendingPoint : p)
+          );
+
+          toastSuccess(`Client "${newClient.nom}" créé`);
+        } catch (err) {
+          toastError('Erreur', `Impossible de créer le client: ${(err as Error).message}`);
+          return;
+        }
       }
 
       // Déterminer la tournée cible
@@ -1948,7 +1982,7 @@ export default function DailyPlanningPage() {
 
       // Appel API en arrière-plan - l'API retourne maintenant la tournée complète
       tourneesService.addPoint(targetTourneeId, {
-        clientId: pendingPoint.clientId,
+        clientId: pendingPoint.clientId!,
         type: (pendingPoint.type as 'livraison' | 'ramassage' | 'livraison_ramassage') || 'livraison',
         creneauDebut: pendingPoint.creneauDebut,
         creneauFin: pendingPoint.creneauFin,
@@ -2390,6 +2424,42 @@ export default function DailyPlanningPage() {
     toastSuccess('Point modifié');
   };
 
+  // Recherche de clients pour autocomplétion
+  const handleClientSearch = (searchTerm: string) => {
+    if (clientSearchTimeoutRef.current) {
+      clearTimeout(clientSearchTimeoutRef.current);
+    }
+
+    if (searchTerm.length < 2) {
+      setClientSuggestions([]);
+      setShowClientSuggestions(false);
+      return;
+    }
+
+    clientSearchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await clientsService.search(searchTerm);
+        setClientSuggestions(results.slice(0, 8));
+        setShowClientSuggestions(true);
+      } catch (err) {
+        console.error('Erreur recherche clients:', err);
+      }
+    }, 300);
+  };
+
+  // Sélectionner un client depuis les suggestions
+  const handleSelectClient = (client: Client) => {
+    setAddPendingFormData({
+      ...addPendingFormData,
+      clientName: client.nom,
+      clientId: client.id,
+      adresse: client.adresse || '',
+      societe: client.societe || addPendingFormData.societe,
+    });
+    setShowClientSuggestions(false);
+    setClientSuggestions([]);
+  };
+
   // Ajouter un nouveau point pending manuellement
   const handleAddPending = () => {
     if (!addPendingFormData.clientName?.trim()) {
@@ -2399,6 +2469,7 @@ export default function DailyPlanningPage() {
 
     const newPoint: ImportParsedPoint = {
       clientName: addPendingFormData.clientName.trim(),
+      clientId: addPendingFormData.clientId,
       societe: addPendingFormData.societe || '',
       adresse: addPendingFormData.adresse || '',
       produitName: addPendingSelectedProduits.map(p => p.nom).join(', '),
@@ -2410,7 +2481,7 @@ export default function DailyPlanningPage() {
       contactNom: addPendingFormData.contactNom || '',
       contactTelephone: addPendingFormData.contactTelephone || '',
       notes: addPendingFormData.notes || '',
-      clientFound: false,
+      clientFound: !!addPendingFormData.clientId,
       produitFound: addPendingSelectedProduits.length > 0,
       errors: [],
     };
@@ -2419,6 +2490,8 @@ export default function DailyPlanningPage() {
     setIsAddPendingModalOpen(false);
     setAddPendingFormData({ type: 'livraison' });
     setAddPendingSelectedProduits([]);
+    setClientSuggestions([]);
+    setShowClientSuggestions(false);
     toastSuccess('Point ajouté');
   };
 
@@ -2811,9 +2884,9 @@ export default function DailyPlanningPage() {
                               <div className="font-medium">{point.clientName}</div>
                               {point.societe && <div className="text-xs text-gray-500">{point.societe}</div>}
                             </div>
-                            {!point.clientFound && (
-                              <div className="col-span-2 text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
-                                Client non trouvé dans la base
+                            {!point.clientFound && point.adresse && (
+                              <div className="col-span-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                Nouveau client - sera créé automatiquement
                               </div>
                             )}
                             <div>
@@ -2842,23 +2915,18 @@ export default function DailyPlanningPage() {
                               <div className="col-span-2">
                                 <div className="text-[10px] text-gray-400">Produit</div>
                                 <div className="text-xs">{point.produitName}</div>
-                                {!point.produitFound && (
-                                  <div className="text-[10px] text-orange-600">Produit non trouvé</div>
-                                )}
+                              </div>
+                            )}
+                            {point.adresse && (
+                              <div className="col-span-2">
+                                <div className="text-[10px] text-gray-400">Adresse</div>
+                                <div className="text-xs text-gray-600">{point.adresse}</div>
                               </div>
                             )}
                             {point.notes && (
                               <div className="col-span-2">
                                 <div className="text-[10px] text-gray-400">Notes</div>
                                 <div className="text-xs text-gray-600">{point.notes}</div>
-                              </div>
-                            )}
-                            {point.errors && point.errors.length > 0 && (
-                              <div className="col-span-2">
-                                <div className="text-[10px] text-red-500">Erreurs</div>
-                                <div className="text-xs text-red-600">
-                                  {point.errors.join(', ')}
-                                </div>
                               </div>
                             )}
                           </div>
@@ -3355,12 +3423,45 @@ export default function DailyPlanningPage() {
         size="lg"
       >
         <div className="space-y-4">
-          <Input
-            label="Nom du client"
-            value={addPendingFormData.clientName || ''}
-            onChange={(e) => setAddPendingFormData({ ...addPendingFormData, clientName: e.target.value })}
-            required
-          />
+          <div className="relative">
+            <Input
+              label="Nom du client"
+              value={addPendingFormData.clientName || ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                setAddPendingFormData({ ...addPendingFormData, clientName: value, clientId: undefined });
+                handleClientSearch(value);
+              }}
+              onFocus={() => {
+                if (clientSuggestions.length > 0) setShowClientSuggestions(true);
+              }}
+              required
+              autoComplete="off"
+            />
+            {showClientSuggestions && clientSuggestions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {clientSuggestions.map((client) => (
+                  <button
+                    key={client.id}
+                    type="button"
+                    onClick={() => handleSelectClient(client)}
+                    className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                  >
+                    <div className="font-medium text-sm">{client.nom}</div>
+                    {client.adresse && (
+                      <div className="text-xs text-gray-500 truncate">{client.adresse}</div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            {addPendingFormData.clientId && (
+              <div className="mt-1 text-xs text-green-600">Client existant sélectionné</div>
+            )}
+            {addPendingFormData.clientName && !addPendingFormData.clientId && addPendingFormData.clientName.length >= 2 && (
+              <div className="mt-1 text-xs text-blue-600">Nouveau client - sera créé automatiquement</div>
+            )}
+          </div>
 
           <Input
             label="Société"

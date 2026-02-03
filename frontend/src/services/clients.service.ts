@@ -7,8 +7,8 @@ interface CreateClientData {
   telephone?: string;
   adresse: string;
   complementAdresse?: string;
-  codePostal: string;
-  ville: string;
+  codePostal?: string;
+  ville?: string;
   pays?: string;
   instructionsAcces?: string;
   contactNom?: string;
