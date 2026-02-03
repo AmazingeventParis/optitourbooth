@@ -141,9 +141,14 @@ export default function ChauffeurPointPage() {
 
   const handlePhotoCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || !tournee || !point) return;
+    if (!files || files.length === 0 || !tournee || !point) return;
 
     const newFiles = Array.from(files);
+
+    // Reset file input immediately so it can be used again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
 
     // Show local preview during upload
     const previews: string[] = [];
