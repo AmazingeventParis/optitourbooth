@@ -8,7 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useChauffeurStore } from '@/store/chauffeurStore';
 import { useToast } from '@/hooks/useToast';
 import { Point, PointProduit, Produit, Tournee } from '@/types';
-import { format } from 'date-fns';
+import { format, isAfter, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { formatTime, formatTimeRange } from '@/utils/format';
 import {
@@ -247,10 +247,22 @@ export default function ChauffeurTourneePage() {
 
           {/* Status Actions */}
           {tournee.statut === 'planifiee' && (
-            <Button size="sm" onClick={() => setIsStartDialogOpen(true)}>
-              <PlayIcon className="h-4 w-4 mr-1" />
-              Démarrer
-            </Button>
+            (() => {
+              const tourneeDate = startOfDay(new Date(tournee.date));
+              const today = startOfDay(new Date());
+              const isFuture = isAfter(tourneeDate, today);
+
+              return isFuture ? (
+                <span className="text-xs text-gray-500 bg-gray-100 px-3 py-2 rounded-lg">
+                  Disponible le {format(tourneeDate, 'd MMM', { locale: fr })}
+                </span>
+              ) : (
+                <Button size="sm" onClick={() => setIsStartDialogOpen(true)}>
+                  <PlayIcon className="h-4 w-4 mr-1" />
+                  Démarrer
+                </Button>
+              );
+            })()
           )}
           {tournee.statut === 'en_cours' && allDone && (
             <Button size="sm" onClick={() => setIsFinishDialogOpen(true)}>
