@@ -185,14 +185,14 @@ export const autoDispatchService = {
       const dureePrevue = this.calculatePointDuration(point, produitMap);
 
       // Trouver la meilleure tournée pour ce point
-      const bestTournee = await this.findBestTournee(
+      const bestResult = await this.findBestTournee(
         point,
         { lat: clientCoords.lat, lng: clientCoords.lng },
         dureePrevue,
         tourneeCandidates
       );
 
-      if (!bestTournee) {
+      if (!bestResult) {
         result.failed.push({
           pointIndex: i,
           clientName: point.clientName,
@@ -201,6 +201,8 @@ export const autoDispatchService = {
         result.totalFailed++;
         continue;
       }
+
+      const { candidate: bestTournee, reason } = bestResult;
 
       // Créer le point dans la tournée
       try {
@@ -230,6 +232,7 @@ export const autoDispatchService = {
         }
 
         // Mettre à jour les stats du candidat pour les prochaines itérations
+        // IMPORTANT: On modifie l'objet ORIGINAL dans le tableau tourneeCandidates
         bestTournee.currentPoints++;
         bestTournee.totalDurationMin += dureePrevue;
 
@@ -248,7 +251,7 @@ export const autoDispatchService = {
           clientName: point.clientName,
           assignedTourneeId: bestTournee.tourneeId,
           chauffeurNom: bestTournee.chauffeurNom,
-          reason: bestTournee.reason || 'Optimisation géographique',
+          reason,
         });
         result.totalDispatched++;
       } catch (error) {
@@ -284,46 +287,71 @@ export const autoDispatchService = {
 
   /**
    * Trouver la meilleure tournée pour un point donné
-   * Utilise un algorithme round-robin avec ajustement géographique
+   * Utilise un algorithme d'équilibrage de charge strict
+   * IMPORTANT: Retourne l'objet ORIGINAL du tableau candidates pour que les mises à jour
+   * de currentPoints soient persistées entre les itérations
    */
   async findBestTournee(
-    point: PendingPoint,
+    _point: PendingPoint,
     coords: { lat: number; lng: number },
-    dureePrevue: number,
+    _dureePrevue: number,
     candidates: TourneeCandidate[]
-  ): Promise<(TourneeCandidate & { reason?: string }) | null> {
+  ): Promise<{ candidate: TourneeCandidate; reason: string } | null> {
     if (candidates.length === 0) return null;
 
-    // STRATÉGIE SIMPLE: Toujours prendre la tournée avec le moins de points
-    // En cas d'égalité, utiliser la proximité géographique comme critère secondaire
+    // STRATÉGIE: Équilibrage de charge strict
+    // 1. Trouver le minimum de points
+    // 2. Prendre TOUTES les tournées avec ce minimum
+    // 3. Si plusieurs, choisir par proximité géographique
+    // 4. Si égalité de distance, alterner (round-robin par index)
 
     const minPoints = Math.min(...candidates.map(c => c.currentPoints));
 
     // Filtrer les tournées qui ont le nombre minimum de points
     const leastLoadedCandidates = candidates.filter(c => c.currentPoints === minPoints);
 
+    console.log(`[AUTO-DISPATCH] minPoints=${minPoints}, candidates avec min:`,
+      leastLoadedCandidates.map(c => `${c.chauffeurNom}(${c.currentPoints}pts)`));
+
     // Si une seule tournée a le minimum, la retourner
     if (leastLoadedCandidates.length === 1) {
-      return { ...leastLoadedCandidates[0]!, reason: 'Équilibrage de charge' };
+      const candidate = leastLoadedCandidates[0]!;
+      console.log(`[AUTO-DISPATCH] Une seule tournée avec min -> ${candidate.chauffeurNom}`);
+      return { candidate, reason: 'Équilibrage de charge' };
     }
 
-    // Si plusieurs tournées ont le même nombre de points, choisir la plus proche géographiquement
+    // Si plusieurs tournées ont le même nombre de points, choisir par proximité
+    // En cas d'égalité de distance, on prend celui avec le moins de points TOTAL
+    // ou en dernier recours, on alterne via l'index dans le tableau original
     let bestCandidate = leastLoadedCandidates[0]!;
     let bestDistance = Infinity;
+    let bestIndex = candidates.indexOf(bestCandidate);
 
     for (const candidate of leastLoadedCandidates) {
+      const candidateIndex = candidates.indexOf(candidate);
+      let distance = Infinity;
+
       if (candidate.centroid) {
-        const distance = this.haversineDistance(
+        distance = this.haversineDistance(
           coords.lat,
           coords.lng,
           candidate.centroid.lat,
           candidate.centroid.lng
         );
+      }
 
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestCandidate = candidate;
-        }
+      // Prendre si distance strictement meilleure
+      // OU si distance égale mais moins de points totaux (durée plus courte)
+      // OU si tout est égal, prendre l'index le plus bas pour garantir l'alternance
+      const shouldReplace =
+        distance < bestDistance ||
+        (distance === bestDistance && candidate.totalDurationMin < bestCandidate.totalDurationMin) ||
+        (distance === bestDistance && candidate.totalDurationMin === bestCandidate.totalDurationMin && candidateIndex < bestIndex);
+
+      if (shouldReplace) {
+        bestDistance = distance;
+        bestCandidate = candidate;
+        bestIndex = candidateIndex;
       }
     }
 
@@ -331,7 +359,9 @@ export const autoDispatchService = {
       ? `Équilibrage + proximité (${bestDistance.toFixed(1)}km)`
       : 'Équilibrage de charge';
 
-    return { ...bestCandidate, reason };
+    console.log(`[AUTO-DISPATCH] Choix final -> ${bestCandidate.chauffeurNom} (${reason})`);
+
+    return { candidate: bestCandidate, reason };
   },
 
   /**
