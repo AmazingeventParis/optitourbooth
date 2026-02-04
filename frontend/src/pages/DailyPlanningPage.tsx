@@ -1544,15 +1544,9 @@ export default function DailyPlanningPage() {
   useEffect(() => {
     const loadVehicules = async () => {
       try {
-        const response = await fetch('/api/vehicules/actifs', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          },
-        });
-        if (response.ok) {
-          const result = await response.json();
-          setVehicules(result.data || []);
-        }
+        const { default: api } = await import('@/services/api');
+        const response = await api.get('/vehicules/actifs');
+        setVehicules(response.data.data || []);
       } catch (error) {
         console.error('Erreur chargement véhicules:', error);
       }
