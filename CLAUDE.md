@@ -158,10 +158,42 @@ Mise à jour ordre des points + heures d'arrivée estimées
 
 ---
 
+---
+
+#### 6. Intégration TomTom pour le trafic prédictif
+**Demande** : Prendre en compte le trafic (embouteillages, heures de pointe) dans le calcul des temps de trajet.
+
+**Solution** : Intégration de l'API TomTom (gratuit jusqu'à 2500 req/jour)
+- Trafic prédictif basé sur le jour de la semaine
+- Trafic prédictif basé sur l'heure de passage
+- Calcul des temps de trajet réalistes
+- Fallback sur OSRM si TomTom non configuré
+
+**Fichiers créés/modifiés** :
+- `backend/src/services/tomtom.service.ts` (nouveau)
+- `backend/src/services/optimization.service.ts`
+
+**Configuration** :
+```env
+TOMTOM_API_KEY=your_api_key_here
+```
+
+---
+
+#### 7. Suppression de la barre de header
+**Demande** : Supprimer la barre en haut (recherche, cloche, menu utilisateur) et déplacer la déconnexion dans la sidebar.
+
+**Fichiers modifiés** :
+- `frontend/src/components/layout/Layout.tsx`
+- `frontend/src/components/layout/Sidebar.tsx`
+
+---
+
 ### Notes techniques
 
 - **VROOM** : Utilise OpenRouteService API (gratuit, 500 req/jour)
+- **TomTom** : Trafic prédictif (gratuit, 2500 req/jour)
 - **Géocodage** : Nominatim (OpenStreetMap) - 1 req/seconde max
-- **Routing** : OSRM public (router.project-osrm.org)
+- **Routing** : OSRM public ou TomTom avec trafic
 - **Base de données** : PostgreSQL sur Neon
 - **Déploiement** : Render (backend) + Vercel/Netlify (frontend)
