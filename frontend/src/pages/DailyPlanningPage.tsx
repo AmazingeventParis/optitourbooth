@@ -732,12 +732,24 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
 
       message += `\n*${index + 1}. ${client?.nom || 'Client'}*\n`;
 
-      // Adresse
-      let adresse = client?.adresse || '';
+      // Adresse avec lien Google Maps
+      let adresseText = client?.adresse || '';
       if (client?.codePostal || client?.ville) {
-        adresse += `, ${client.codePostal || ''} ${client.ville || ''}`.trim();
+        adresseText += `, ${client.codePostal || ''} ${client.ville || ''}`.trim();
       }
-      message += `Adresse : ${adresse || '-'}\n`;
+
+      // Créer le lien Maps (coordonnées si disponibles, sinon adresse)
+      let mapsLink = '';
+      if (client?.latitude && client?.longitude) {
+        mapsLink = `https://maps.google.com/?q=${client.latitude},${client.longitude}`;
+      } else if (adresseText) {
+        mapsLink = `https://maps.google.com/?q=${encodeURIComponent(adresseText)}`;
+      }
+
+      message += `Adresse : ${adresseText || '-'}\n`;
+      if (mapsLink) {
+        message += `GPS : ${mapsLink}\n`;
+      }
 
       // Téléphone
       const telephone = client?.telephone || client?.contactTelephone || '-';
