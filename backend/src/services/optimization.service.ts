@@ -1,6 +1,7 @@
 import { prisma } from '../config/database.js';
 import { osrmService } from './osrm.service.js';
 import { vroomService, PointToOptimize } from './vroom.service.js';
+import { tomtomService } from './tomtom.service.js';
 import { config } from '../config/index.js';
 
 interface PointWithCoords {
@@ -183,6 +184,8 @@ export const optimizationService = {
 
   /**
    * Calculer les heures d'arrivée estimées pour chaque point
+   * Utilise TomTom si configuré (avec trafic prédictif basé sur jour/heure)
+   * Sinon fallback sur OSRM (sans trafic)
    */
   async calculateEstimatedArrivals(
     tourneeId: string,
@@ -209,9 +212,150 @@ export const optimizationService = {
     const points = tournee.points;
     const startTime = heureDepart || tournee.heureDepart;
 
+    // Utiliser TomTom si configuré pour avoir le trafic prédictif
+    if (tomtomService.isConfigured() && startTime) {
+      console.log('[OPTIMIZATION] Using TomTom for traffic-aware arrival times');
+      return this.calculateEstimatedArrivalsWithTomTom(tournee, points, startTime);
+    }
+
+    // Fallback sur OSRM (sans trafic)
+    console.log('[OPTIMIZATION] Using OSRM for arrival times (no traffic data)');
+    return this.calculateEstimatedArrivalsWithOsrm(tournee, points, startTime);
+  },
+
+  /**
+   * Calculer les heures d'arrivée avec TomTom (trafic prédictif)
+   */
+  async calculateEstimatedArrivalsWithTomTom(
+    tournee: { depotLatitude: number | null; depotLongitude: number | null; date: Date },
+    points: Array<{
+      id: string;
+      ordre: number;
+      dureePrevue: number;
+      creneauDebut: Date | null;
+      client: { latitude: number | null; longitude: number | null };
+    }>,
+    startTime: Date
+  ): Promise<OptimizedPoint[]> {
+    const result: OptimizedPoint[] = [];
+
+    // Construire la liste des points avec coordonnées
+    const routePoints: Array<{ latitude: number; longitude: number; serviceDuration: number; pointId: string; ordre: number; creneauDebut: Date | null }> = [];
+
+    // Ajouter le dépôt si disponible
+    if (tournee.depotLatitude && tournee.depotLongitude) {
+      routePoints.push({
+        latitude: tournee.depotLatitude,
+        longitude: tournee.depotLongitude,
+        serviceDuration: 0,
+        pointId: 'depot',
+        ordre: -1,
+        creneauDebut: null,
+      });
+    }
+
+    // Ajouter les points
+    for (const point of points) {
+      if (point.client.latitude && point.client.longitude) {
+        routePoints.push({
+          latitude: point.client.latitude,
+          longitude: point.client.longitude,
+          serviceDuration: point.dureePrevue,
+          pointId: point.id,
+          ordre: point.ordre,
+          creneauDebut: point.creneauDebut,
+        });
+      }
+    }
+
+    if (routePoints.length < 2) {
+      return result;
+    }
+
+    // Calculer les temps de trajet point par point avec TomTom
+    // en tenant compte du trafic prévu à chaque heure de départ
+    let currentTime = new Date(startTime);
+    const hasDepot = tournee.depotLatitude && tournee.depotLongitude;
+    const startIndex = hasDepot ? 1 : 0;
+
+    for (let i = startIndex; i < routePoints.length; i++) {
+      const currentPoint = routePoints[i]!;
+      const prevPoint = routePoints[i - 1] || routePoints[0]!;
+
+      let distanceFromPrevious = 0;
+      let durationFromPrevious = 0;
+      let trafficDelay = 0;
+
+      // Calculer le trajet depuis le point précédent avec TomTom
+      const travelResult = await tomtomService.calculateTravelTime(
+        { latitude: prevPoint.latitude, longitude: prevPoint.longitude },
+        { latitude: currentPoint.latitude, longitude: currentPoint.longitude },
+        currentTime
+      );
+
+      if (travelResult) {
+        distanceFromPrevious = travelResult.distance;
+        durationFromPrevious = travelResult.duration;
+        trafficDelay = travelResult.trafficDelay;
+
+        if (trafficDelay > 60) {
+          console.log(`[TOMTOM] Traffic delay for point ${currentPoint.pointId}: +${Math.round(trafficDelay / 60)} min`);
+        }
+      }
+
+      // Calculer l'heure d'arrivée
+      const arrivalTime = new Date(currentTime.getTime() + durationFromPrevious * 1000);
+      let heureArriveeEstimee = new Date(arrivalTime);
+
+      // Gérer les créneaux horaires
+      let serviceStartTime = new Date(arrivalTime);
+
+      if (currentPoint.creneauDebut) {
+        const creneauDebut = new Date(currentPoint.creneauDebut);
+        const creneauHours = creneauDebut.getHours();
+        const creneauMinutes = creneauDebut.getMinutes();
+
+        const creneauOnSameDay = new Date(arrivalTime);
+        creneauOnSameDay.setHours(creneauHours, creneauMinutes, 0, 0);
+
+        if (arrivalTime < creneauOnSameDay) {
+          serviceStartTime = creneauOnSameDay;
+        }
+      }
+
+      // Départ vers le prochain point = début du service + durée prévue
+      currentTime = new Date(serviceStartTime.getTime() + currentPoint.serviceDuration * 60 * 1000);
+
+      if (currentPoint.pointId !== 'depot') {
+        result.push({
+          id: currentPoint.pointId,
+          ordre: currentPoint.ordre,
+          heureArriveeEstimee,
+          distanceFromPrevious,
+          durationFromPrevious,
+        });
+      }
+    }
+
+    return result;
+  },
+
+  /**
+   * Calculer les heures d'arrivée avec OSRM (sans trafic)
+   */
+  async calculateEstimatedArrivalsWithOsrm(
+    tournee: { depotLatitude: number | null; depotLongitude: number | null },
+    points: Array<{
+      id: string;
+      ordre: number;
+      dureePrevue: number;
+      creneauDebut: Date | null;
+      client: { latitude: number | null; longitude: number | null };
+    }>,
+    startTime: Date | null
+  ): Promise<OptimizedPoint[]> {
     // Construire les coordonnées
     const coordinates: { latitude: number; longitude: number }[] = [];
-    const pointsWithCoords: (typeof points[0] | null)[] = [];
 
     // Dépôt
     if (tournee.depotLatitude && tournee.depotLongitude) {
@@ -219,7 +363,6 @@ export const optimizationService = {
         latitude: tournee.depotLatitude,
         longitude: tournee.depotLongitude,
       });
-      pointsWithCoords.push(null); // Le dépôt n'est pas un point
     }
 
     // Points
@@ -229,7 +372,6 @@ export const optimizationService = {
           latitude: point.client.latitude,
           longitude: point.client.longitude,
         });
-        pointsWithCoords.push(point);
       }
     }
 
@@ -258,32 +400,24 @@ export const optimizationService = {
       let heureArriveeEstimee: Date | null = null;
 
       if (currentTime && point) {
-        // Heure d'arrivée = heure de départ du point précédent + temps de trajet
         currentTime = new Date(currentTime.getTime() + durationFromPrevious * 1000);
         heureArriveeEstimee = new Date(currentTime);
 
-        // LOGIQUE MÉTIER: Si on arrive en avance par rapport au créneau,
-        // on attend le début du créneau avant de commencer le service.
-        // Le départ vers le point suivant = max(heureArrivée, creneauDebut) + duréeService
         let serviceStartTime = new Date(currentTime);
 
         if (point.creneauDebut) {
           const creneauDebut = new Date(point.creneauDebut);
-          // Extraire l'heure du créneau en HEURE LOCALE (cohérent avec le stockage via setHours)
           const creneauHours = creneauDebut.getHours();
           const creneauMinutes = creneauDebut.getMinutes();
 
-          // Créer une date avec l'heure du créneau sur le même jour que currentTime
           const creneauOnSameDay = new Date(currentTime);
           creneauOnSameDay.setHours(creneauHours, creneauMinutes, 0, 0);
 
-          // Si on arrive avant le début du créneau, on attend
           if (currentTime < creneauOnSameDay) {
             serviceStartTime = creneauOnSameDay;
           }
         }
 
-        // Le départ vers le prochain point = début du service + durée prévue
         currentTime = new Date(serviceStartTime.getTime() + point.dureePrevue * 60 * 1000);
       }
 
