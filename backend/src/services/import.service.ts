@@ -148,12 +148,14 @@ export const importService = {
         errors: [],
       };
 
-      // Rechercher le client par nom (recherche flexible)
+      // Rechercher le client par nom OU par société (recherche flexible)
       let client = await prisma.client.findFirst({
         where: {
           OR: [
             { nom: { contains: clientName, mode: 'insensitive' } },
             { nom: { equals: clientName, mode: 'insensitive' } },
+            { societe: { contains: clientName, mode: 'insensitive' } },
+            { societe: { equals: clientName, mode: 'insensitive' } },
           ],
           actif: true,
         },
@@ -183,6 +185,7 @@ export const importService = {
             client = await prisma.client.create({
               data: {
                 nom: clientName,
+                societe: parsed.societe,
                 adresse: parsed.adresse,
                 latitude,
                 longitude,

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const createClientSchema = z.object({
   nom: z.string().min(1, 'Nom requis').max(255),
+  societe: z.string().max(255).optional().nullable(),
   email: z
     .string()
     .email('Email invalide')
@@ -23,6 +24,7 @@ export const createClientSchema = z.object({
 
 export const updateClientSchema = z.object({
   nom: z.string().min(1).max(255).optional(),
+  societe: z.string().max(255).optional().nullable(),
   email: z
     .string()
     .email('Email invalide')

@@ -27,7 +27,7 @@ export const clientController = {
       actif?: boolean;
       ville?: { contains: string; mode: 'insensitive' };
       codePostal?: string;
-      OR?: Array<{ nom?: { contains: string; mode: 'insensitive' }; adresse?: { contains: string; mode: 'insensitive' }; email?: { contains: string; mode: 'insensitive' } }>;
+      OR?: Array<{ nom?: { contains: string; mode: 'insensitive' }; societe?: { contains: string; mode: 'insensitive' }; adresse?: { contains: string; mode: 'insensitive' }; email?: { contains: string; mode: 'insensitive' } }>;
     } = {};
 
     if (actif !== undefined) {
@@ -45,6 +45,7 @@ export const clientController = {
     if (search) {
       where.OR = [
         { nom: { contains: search, mode: 'insensitive' } },
+        { societe: { contains: search, mode: 'insensitive' } },
         { adresse: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
       ];
@@ -273,12 +274,14 @@ export const clientController = {
         actif: true,
         OR: [
           { nom: { contains: q, mode: 'insensitive' } },
+          { societe: { contains: q, mode: 'insensitive' } },
           { ville: { contains: q, mode: 'insensitive' } },
         ],
       },
       select: {
         id: true,
         nom: true,
+        societe: true,
         adresse: true,
         codePostal: true,
         ville: true,

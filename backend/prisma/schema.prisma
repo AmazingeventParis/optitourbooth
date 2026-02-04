@@ -87,6 +87,7 @@ model User {
 model Client {
   id                 String   @id @default(uuid())
   nom                String
+  societe            String?  // Nom de la société/entreprise
   email              String?
   telephone          String?
 
@@ -121,6 +122,7 @@ model Client {
   @@index([ville])
   @@index([ville, actif]) // Recherche par ville + clients actifs
   @@index([actif, codePostal]) // Filtrage clients actifs par code postal
+  @@index([societe]) // Recherche par société
   @@map("clients")
 }
 
