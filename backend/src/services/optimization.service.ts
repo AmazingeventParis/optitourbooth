@@ -329,8 +329,9 @@ export const optimizationService = {
       return { success: false, message: 'Tournée non trouvée' };
     }
 
-    if (tournee.statut !== 'planifiee') {
-      return { success: false, message: 'Seules les tournées planifiées peuvent être optimisées' };
+    // Permettre l'optimisation des tournées en brouillon ou planifiées
+    if (!['brouillon', 'planifiee'].includes(tournee.statut)) {
+      return { success: false, message: 'Seules les tournées en brouillon ou planifiées peuvent être optimisées' };
     }
 
     if (tournee.points.length < 2) {

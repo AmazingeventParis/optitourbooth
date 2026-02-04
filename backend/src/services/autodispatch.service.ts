@@ -271,13 +271,18 @@ export const autoDispatchService = {
 
     for (const tourneeId of modifiedTourneeIds) {
       try {
-        // Optimiser l'ordre des points
-        await optimizationService.optimizeTourneeOrder(tourneeId, {
+        // Optimiser l'ordre des points avec VROOM (créneaux + temps de trajet)
+        console.log(`[AUTO-DISPATCH] Optimisation tournée ${tourneeId}...`);
+        const optimResult = await optimizationService.optimizeTourneeOrder(tourneeId, {
           respecterCreneaux: true,
           optimiserOrdre: true,
         });
+        console.log(`[AUTO-DISPATCH] Résultat optimisation: ${optimResult.success ? 'OK' : 'ÉCHEC'} - ${optimResult.message}`);
+        if (optimResult.unassignedPoints && optimResult.unassignedPoints.length > 0) {
+          console.log(`[AUTO-DISPATCH] Points non assignables: ${optimResult.unassignedPoints.join(', ')}`);
+        }
       } catch (error) {
-        console.error(`Erreur optimisation tournée ${tourneeId}:`, error);
+        console.error(`[AUTO-DISPATCH] Erreur optimisation tournée ${tourneeId}:`, error);
       }
     }
 
