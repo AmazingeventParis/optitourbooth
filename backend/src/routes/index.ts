@@ -8,6 +8,7 @@ import clientRoutes from './client.routes.js';
 import produitRoutes from './produit.routes.js';
 import tourneeRoutes from './tournee.routes.js';
 import gpsRoutes from './gps.routes.js';
+import vehiculeRoutes from './vehicule.routes.js';
 
 const router = Router();
 
@@ -85,6 +86,14 @@ router.get('/', (_req: Request, res: Response) => {
           reorder: 'PUT /api/tournees/:id/points/reorder',
         },
       },
+      vehicules: {
+        list: 'GET /api/vehicules',
+        actifs: 'GET /api/vehicules/actifs',
+        create: 'POST /api/vehicules',
+        get: 'GET /api/vehicules/:id',
+        update: 'PUT /api/vehicules/:id',
+        delete: 'DELETE /api/vehicules/:id',
+      },
     },
   });
 });
@@ -96,5 +105,6 @@ router.use('/clients', clientRoutes);
 router.use('/produits', produitRoutes);
 router.use('/tournees', tourneeRoutes);
 router.use('/gps', gpsRoutes);
+router.use('/vehicules', vehiculeRoutes);
 
 export default router;

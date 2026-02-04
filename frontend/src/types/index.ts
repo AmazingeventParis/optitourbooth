@@ -16,12 +16,26 @@ export interface User {
   telephone?: string;
   couleur?: string;
   actif: boolean;
-  // Véhicule
-  vehicule?: string;
-  immatriculation?: string;
-  consommationL100km?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Vehicule {
+  id: string;
+  nom: string;
+  marque?: string;
+  modele?: string;
+  immatriculation: string;
+  consommationL100km?: number;
+  capaciteKg?: number;
+  capaciteM3?: number;
+  actif: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: {
+    tournees: number;
+  };
 }
 
 export interface Client {
@@ -65,6 +79,8 @@ export interface Tournee {
   date: string;
   chauffeurId: string;
   chauffeur?: User;
+  vehiculeId?: string;
+  vehicule?: Vehicule;
   statut: TourneeStatut;
   heureDepart?: string;
   heureFinEstimee?: string;

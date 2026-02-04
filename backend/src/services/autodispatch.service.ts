@@ -76,7 +76,8 @@ export const autoDispatchService = {
         statut: { in: ['brouillon', 'planifiee'] },
       },
       include: {
-        chauffeur: { select: { id: true, nom: true, prenom: true, couleur: true, vehicule: true, immatriculation: true, consommationL100km: true } },
+        chauffeur: { select: { id: true, nom: true, prenom: true, couleur: true } },
+        vehicule: { select: { id: true, nom: true, marque: true, modele: true, immatriculation: true, consommationL100km: true } },
         points: {
           include: {
             client: { select: { latitude: true, longitude: true } },

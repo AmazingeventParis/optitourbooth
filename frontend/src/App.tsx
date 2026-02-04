@@ -16,6 +16,7 @@ import LoginPage from '@/pages/LoginPage';
 // ============================================
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
 const UsersPage = lazy(() => import('@/pages/UsersPage'));
+const VehiculesPage = lazy(() => import('@/pages/VehiculesPage'));
 const ClientsPage = lazy(() => import('@/pages/ClientsPage'));
 const ProduitsPage = lazy(() => import('@/pages/ProduitsPage'));
 const TourneesPage = lazy(() => import('@/pages/TourneesPage'));
@@ -155,6 +156,7 @@ function App() {
       >
         <Route index element={<LazyPage><DashboardPage /></LazyPage>} />
         <Route path="utilisateurs" element={<LazyPage><UsersPage /></LazyPage>} />
+        <Route path="vehicules" element={<LazyPage><VehiculesPage /></LazyPage>} />
         <Route path="clients" element={<LazyPage><ClientsPage /></LazyPage>} />
         <Route path="produits" element={<LazyPage><ProduitsPage /></LazyPage>} />
         <Route path="tournees" element={<LazyPage><TourneesPage /></LazyPage>} />

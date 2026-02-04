@@ -11,6 +11,7 @@ import {
   CalendarDaysIcon,
   ClockIcon,
   ArrowRightOnRectangleIcon,
+  TruckIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
 import clsx from 'clsx';
@@ -26,6 +27,7 @@ const navigation = [
   { name: 'Historique', href: '/historique', icon: ClockIcon },
   { name: 'Clients', href: '/clients', icon: UserGroupIcon },
   { name: 'Utilisateurs', href: '/utilisateurs', icon: UsersIcon },
+  { name: 'Véhicules', href: '/vehicules', icon: TruckIcon },
   { name: 'Produits', href: '/produits', icon: CubeIcon },
   { name: 'Rapports', href: '/rapports', icon: ChartBarIcon },
 ];

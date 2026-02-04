@@ -39,7 +39,14 @@ async function getFullTournee(tourneeId: string) {
           telephone: true,
           email: true,
           couleur: true,
-          vehicule: true,
+        },
+      },
+      vehicule: {
+        select: {
+          id: true,
+          nom: true,
+          marque: true,
+          modele: true,
           immatriculation: true,
           consommationL100km: true,
         },
@@ -163,7 +170,14 @@ export const tourneeController = {
               prenom: true,
               telephone: true,
               couleur: true,
-              vehicule: true,
+            },
+          },
+          vehicule: {
+            select: {
+              id: true,
+              nom: true,
+              marque: true,
+              modele: true,
               immatriculation: true,
               consommationL100km: true,
             },
@@ -216,7 +230,14 @@ export const tourneeController = {
               prenom: true,
               telephone: true,
               couleur: true,
-              vehicule: true,
+            },
+          },
+          vehicule: {
+            select: {
+              id: true,
+              nom: true,
+              marque: true,
+              modele: true,
               immatriculation: true,
               consommationL100km: true,
             },
@@ -280,7 +301,14 @@ export const tourneeController = {
             telephone: true,
             email: true,
             couleur: true,
-            vehicule: true,
+          },
+        },
+        vehicule: {
+          select: {
+            id: true,
+            nom: true,
+            marque: true,
+            modele: true,
             immatriculation: true,
             consommationL100km: true,
           },
@@ -412,6 +440,7 @@ export const tourneeController = {
     const createData: {
       date: Date;
       chauffeurId: string;
+      vehiculeId?: string;
       heureDepart?: Date;
       depotAdresse?: string;
       depotLatitude?: number;
@@ -421,6 +450,8 @@ export const tourneeController = {
       date: new Date(data.date),
       chauffeurId: data.chauffeurId,
     };
+
+    if (data.vehiculeId) createData.vehiculeId = data.vehiculeId;
 
     if (data.heureDepart) {
       // Convertir HH:MM en Date (avec la date de la tournée) en HEURE LOCALE
@@ -525,6 +556,7 @@ export const tourneeController = {
 
     if (data.date) updateData.date = new Date(data.date);
     if (data.chauffeurId) updateData.chauffeurId = data.chauffeurId;
+    if (data.vehiculeId !== undefined) updateData.vehiculeId = data.vehiculeId || null;
     if (data.statut) updateData.statut = data.statut;
     if (data.notes !== undefined) updateData.notes = data.notes;
     if (data.depotAdresse !== undefined) updateData.depotAdresse = data.depotAdresse;
@@ -1934,7 +1966,8 @@ export const tourneeController = {
     const updatedTournees = await prisma.tournee.findMany({
       where: { id: { in: updatedTourneeIds } },
       include: {
-        chauffeur: { select: { id: true, nom: true, prenom: true, couleur: true, vehicule: true, immatriculation: true, consommationL100km: true } },
+        chauffeur: { select: { id: true, nom: true, prenom: true, couleur: true } },
+        vehicule: { select: { id: true, nom: true, marque: true, modele: true, immatriculation: true, consommationL100km: true } },
         points: {
           orderBy: { ordre: 'asc' },
           include: {

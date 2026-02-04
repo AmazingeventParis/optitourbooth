@@ -24,7 +24,7 @@ import {
 } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Tournee, Point, Client, PointProduit, Produit, User, PointType, ChauffeurPositionWithInfo } from '@/types';
+import { Tournee, Point, Client, PointProduit, Produit, User, Vehicule, PointType, ChauffeurPositionWithInfo } from '@/types';
 import { tourneesService, ImportParsedPoint } from '@/services/tournees.service';
 import { clientsService } from '@/services/clients.service';
 import { usersService } from '@/services/users.service';
@@ -765,9 +765,9 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
               <span>{tournee.distanceTotaleKm.toFixed(1)} km</span>
             )}
             {/* Consommation carburant estimée */}
-            {tournee.distanceTotaleKm != null && tournee.chauffeur?.consommationL100km && (
-              <span title={`${tournee.chauffeur.vehicule || 'Véhicule'} - ${tournee.chauffeur.consommationL100km} L/100km`}>
-                ⛽ {((tournee.distanceTotaleKm * tournee.chauffeur.consommationL100km) / 100).toFixed(1)} L
+            {tournee.distanceTotaleKm != null && tournee.vehicule?.consommationL100km && (
+              <span title={`${tournee.vehicule.nom || 'Véhicule'} - ${tournee.vehicule.consommationL100km} L/100km`}>
+                ⛽ {((tournee.distanceTotaleKm * tournee.vehicule.consommationL100km) / 100).toFixed(1)} L
               </span>
             )}
           </span>
@@ -1335,6 +1335,7 @@ export default function DailyPlanningPage() {
   });
   const [tournees, setTournees] = useState<Tournee[]>([]);
   const [chauffeurs, setChauffeurs] = useState<User[]>([]);
+  const [vehicules, setVehicules] = useState<Vehicule[]>([]);
   const [produits, setProduits] = useState<Produit[]>([]);
   const [loading, setLoading] = useState(true);
   const [activePoint, setActivePoint] = useState<Point | null>(null);
@@ -1365,6 +1366,7 @@ export default function DailyPlanningPage() {
 
   const [formData, setFormData] = useState({
     chauffeurId: '',
+    vehiculeId: '',
     heureDepart: DEFAULT_HEURE_DEPART,
     depotAdresse: DEFAULT_DEPOT_ADRESSE,
     notes: '',
@@ -1536,6 +1538,26 @@ export default function DailyPlanningPage() {
       }
     };
     loadChauffeurs();
+  }, []);
+
+  // Charger les véhicules
+  useEffect(() => {
+    const loadVehicules = async () => {
+      try {
+        const response = await fetch('/api/vehicules/actifs', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          },
+        });
+        if (response.ok) {
+          const result = await response.json();
+          setVehicules(result.data || []);
+        }
+      } catch (error) {
+        console.error('Erreur chargement véhicules:', error);
+      }
+    };
+    loadVehicules();
   }, []);
 
   // Charger les produits
@@ -2274,6 +2296,7 @@ export default function DailyPlanningPage() {
   const openCreateModal = () => {
     setFormData({
       chauffeurId: '',
+      vehiculeId: '',
       heureDepart: DEFAULT_HEURE_DEPART,
       depotAdresse: DEFAULT_DEPOT_ADRESSE,
       notes: '',
@@ -2298,6 +2321,7 @@ export default function DailyPlanningPage() {
       const newTournee = await tourneesService.create({
         date: selectedDate,
         chauffeurId: formData.chauffeurId,
+        vehiculeId: formData.vehiculeId || undefined,
         heureDepart: formData.heureDepart,
         depotAdresse: formData.depotAdresse || undefined,
         notes: formData.notes || undefined,
@@ -3285,6 +3309,18 @@ export default function DailyPlanningPage() {
             options={chauffeurOptions}
             error={formErrors.chauffeurId}
             required
+          />
+          <Select
+            label="Véhicule"
+            value={formData.vehiculeId}
+            onChange={(e) => setFormData({ ...formData, vehiculeId: e.target.value })}
+            options={[
+              { value: '', label: 'Sélectionner un véhicule (optionnel)' },
+              ...vehicules.map((v) => ({
+                value: v.id,
+                label: `${v.nom}${v.immatriculation ? ` (${v.immatriculation})` : ''}`,
+              })),
+            ]}
           />
           <TimeSelect
             label="Heure de départ"

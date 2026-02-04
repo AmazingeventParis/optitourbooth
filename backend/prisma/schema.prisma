@@ -70,11 +70,6 @@ model User {
   couleur      String?  @default("#3B82F6") // Couleur pour identifier le chauffeur
   actif        Boolean  @default(true)
 
-  // Véhicule (pour les chauffeurs)
-  vehicule           String?  // Modèle du véhicule (ex: "Renault Master")
-  immatriculation    String?  // Plaque d'immatriculation
-  consommationL100km Float?   @map("consommation_l_100km") // Consommation en L/100km
-
   // Métadonnées
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -86,6 +81,33 @@ model User {
 
   @@index([role, actif]) // Requêtes fréquentes: chauffeurs actifs
   @@map("users")
+}
+
+/// Véhicules de la flotte
+model Vehicule {
+  id                 String   @id @default(uuid())
+  nom                String   // Nom/description du véhicule (ex: "Master Blanc")
+  marque             String?  // Marque (ex: "Renault")
+  modele             String?  // Modèle (ex: "Master L2H2")
+  immatriculation    String   @unique // Plaque d'immatriculation
+  consommationL100km Float?   @map("consommation_l_100km") // Consommation en L/100km
+
+  // Capacité
+  capaciteKg         Float?   @map("capacite_kg") // Capacité en kg
+  capaciteM3         Float?   @map("capacite_m3") // Volume en m³
+
+  // État
+  actif              Boolean  @default(true)
+  notes              String?  @db.Text
+
+  // Métadonnées
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  tournees           Tournee[]
+
+  @@map("vehicules")
 }
 
 /// Clients (lieux de livraison/ramassage)
@@ -184,6 +206,7 @@ model Tournee {
   id                String        @id @default(uuid())
   date              DateTime      @db.Date
   chauffeurId       String        @map("chauffeur_id")
+  vehiculeId        String?       @map("vehicule_id")
   statut            TourneeStatut @default(brouillon)
 
   // Horaires
@@ -210,10 +233,12 @@ model Tournee {
 
   // Relations
   chauffeur         User          @relation(fields: [chauffeurId], references: [id])
+  vehicule          Vehicule?     @relation(fields: [vehiculeId], references: [id])
   points            Point[]
 
   @@index([date])
   @@index([chauffeurId])
+  @@index([vehiculeId])
   @@index([statut])
   @@index([date, chauffeurId]) // Tournées d'un chauffeur par date
   @@index([date, statut]) // Tournées par date et statut

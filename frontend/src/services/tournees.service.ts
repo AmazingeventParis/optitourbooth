@@ -14,6 +14,7 @@ interface TourneesFilters {
 interface CreateTourneeData {
   date: string;
   chauffeurId: string;
+  vehiculeId?: string;
   heureDepart?: string;
   depotAdresse?: string;
   depotLatitude?: number;
@@ -24,6 +25,7 @@ interface CreateTourneeData {
 interface UpdateTourneeData {
   date?: string;
   chauffeurId?: string;
+  vehiculeId?: string | null;
   statut?: string;
   heureDepart?: string;
   heureFinEstimee?: string;

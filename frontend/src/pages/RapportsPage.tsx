@@ -185,9 +185,9 @@ export default function RapportsPage() {
       distanceTotale += t.distanceTotaleKm || 0;
       dureeTotale += t.dureeTotaleMin || 0;
 
-      // Calcul carburant si le chauffeur a une consommation définie
-      if (t.chauffeur?.consommationL100km && t.distanceTotaleKm) {
-        carburantEstime += (t.distanceTotaleKm * t.chauffeur.consommationL100km) / 100;
+      // Calcul carburant si le véhicule a une consommation définie
+      if (t.vehicule?.consommationL100km && t.distanceTotaleKm) {
+        carburantEstime += (t.distanceTotaleKm * t.vehicule.consommationL100km) / 100;
       }
 
       if (t.points) {
@@ -247,8 +247,8 @@ export default function RapportsPage() {
         nom: t.chauffeur.nom,
         prenom: t.chauffeur.prenom,
         couleur: t.chauffeur.couleur || COLORS.primary,
-        vehicule: t.chauffeur.vehicule,
-        consommationL100km: t.chauffeur.consommationL100km,
+        vehicule: t.vehicule?.nom,
+        consommationL100km: t.vehicule?.consommationL100km,
         tournees: 0,
         points: 0,
         distance: 0,
@@ -262,8 +262,8 @@ export default function RapportsPage() {
       existing.tournees++;
       existing.distance += t.distanceTotaleKm || 0;
 
-      if (t.chauffeur.consommationL100km && t.distanceTotaleKm) {
-        existing.carburant += (t.distanceTotaleKm * t.chauffeur.consommationL100km) / 100;
+      if (t.vehicule?.consommationL100km && t.distanceTotaleKm) {
+        existing.carburant += (t.distanceTotaleKm * t.vehicule.consommationL100km) / 100;
       }
 
       if (t.points) {
@@ -400,15 +400,15 @@ export default function RapportsPage() {
   const exportCSV = () => {
     const headers = ['Date', 'Chauffeur', 'Véhicule', 'Statut', 'Points', 'Distance (km)', 'Carburant (L)', 'Coût carburant (€)'];
     const rows = tournees.map((t) => {
-      const carburant = t.chauffeur?.consommationL100km && t.distanceTotaleKm
-        ? ((t.distanceTotaleKm * t.chauffeur.consommationL100km) / 100).toFixed(1)
+      const carburant = t.vehicule?.consommationL100km && t.distanceTotaleKm
+        ? ((t.distanceTotaleKm * t.vehicule.consommationL100km) / 100).toFixed(1)
         : '-';
       const cout = carburant !== '-' ? (parseFloat(carburant) * FUEL_PRICE_PER_LITER).toFixed(2) : '-';
 
       return [
         format(parseISO(t.date), 'dd/MM/yyyy'),
         t.chauffeur ? `${t.chauffeur.prenom} ${t.chauffeur.nom}` : '-',
-        t.chauffeur?.vehicule || '-',
+        t.vehicule?.nom || '-',
         t.statut,
         t.nombrePoints || 0,
         t.distanceTotaleKm?.toFixed(1) || 0,

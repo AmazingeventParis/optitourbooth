@@ -20,6 +20,7 @@ export const tourneeQuerySchema = z.object({
 export const createTourneeSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format date invalide (YYYY-MM-DD)'),
   chauffeurId: z.string().uuid(),
+  vehiculeId: z.string().uuid().optional(),
   heureDepart: z.string().regex(/^\d{2}:\d{2}$/, 'Format heure invalide (HH:MM)').optional(),
   depotAdresse: z.string().optional(),
   depotLatitude: z.number().min(-90).max(90).optional(),
@@ -30,6 +31,7 @@ export const createTourneeSchema = z.object({
 export const updateTourneeSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format date invalide (YYYY-MM-DD)').optional(),
   chauffeurId: z.string().uuid().optional(),
+  vehiculeId: z.string().uuid().optional().nullable(),
   statut: z.nativeEnum(TourneeStatut).optional(),
   heureDepart: z.string().regex(/^\d{2}:\d{2}$/, 'Format heure invalide (HH:MM)').optional().nullable(),
   heureFinEstimee: z.string().regex(/^\d{2}:\d{2}$/, 'Format heure invalide (HH:MM)').optional().nullable(),
