@@ -1014,6 +1014,123 @@ export const tourneeController = {
     });
   },
 
+  /**
+   * GET /api/tournees/:id/debug
+   * Diagnostic des temps de trajet pour une tournée
+   */
+  async debugRoute(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+
+    const tournee = await prisma.tournee.findUnique({
+      where: { id },
+      include: {
+        points: {
+          orderBy: { ordre: 'asc' },
+          include: {
+            client: {
+              select: { id: true, nom: true, latitude: true, longitude: true, adresse: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!tournee) {
+      apiResponse.notFound(res, 'Tournée non trouvée');
+      return;
+    }
+
+    const debug: {
+      tourneeId: string;
+      depot: { adresse: string | null; latitude: number | null; longitude: number | null };
+      heureDepart: Date | null;
+      points: Array<{
+        ordre: number;
+        clientNom: string;
+        clientAdresse: string | null;
+        latitude: number | null;
+        longitude: number | null;
+        dureePrevue: number;
+        creneauDebut: Date | null;
+        creneauFin: Date | null;
+      }>;
+      osrmTest: {
+        success: boolean;
+        error?: string;
+        distance?: number;
+        duration?: number;
+        legs?: Array<{ distance: number; duration: number }>;
+      } | null;
+      tomtomConfigured: boolean;
+    } = {
+      tourneeId: id,
+      depot: {
+        adresse: tournee.depotAdresse,
+        latitude: tournee.depotLatitude,
+        longitude: tournee.depotLongitude,
+      },
+      heureDepart: tournee.heureDepart,
+      points: tournee.points.map(p => ({
+        ordre: p.ordre,
+        clientNom: p.client.nom,
+        clientAdresse: p.client.adresse,
+        latitude: p.client.latitude,
+        longitude: p.client.longitude,
+        dureePrevue: p.dureePrevue,
+        creneauDebut: p.creneauDebut,
+        creneauFin: p.creneauFin,
+      })),
+      osrmTest: null,
+      tomtomConfigured: !!config.tomtom?.apiKey,
+    };
+
+    // Tester OSRM avec les coordonnées réelles
+    const coordinates: Array<{ latitude: number; longitude: number }> = [];
+
+    if (tournee.depotLatitude && tournee.depotLongitude) {
+      coordinates.push({ latitude: tournee.depotLatitude, longitude: tournee.depotLongitude });
+    }
+
+    for (const point of tournee.points) {
+      if (point.client.latitude && point.client.longitude) {
+        coordinates.push({ latitude: point.client.latitude, longitude: point.client.longitude });
+      }
+    }
+
+    if (coordinates.length >= 2) {
+      try {
+        const { osrmService } = await import('../services/osrm.service.js');
+        const route = await osrmService.getRoute(coordinates, { skipCache: true });
+
+        if (route) {
+          debug.osrmTest = {
+            success: true,
+            distance: route.distance,
+            duration: route.duration,
+            legs: route.legs,
+          };
+        } else {
+          debug.osrmTest = {
+            success: false,
+            error: 'OSRM returned null',
+          };
+        }
+      } catch (error) {
+        debug.osrmTest = {
+          success: false,
+          error: (error as Error).message,
+        };
+      }
+    } else {
+      debug.osrmTest = {
+        success: false,
+        error: `Not enough coordinates: ${coordinates.length} (need at least 2)`,
+      };
+    }
+
+    apiResponse.success(res, debug);
+  },
+
   // ========== POINTS ==========
 
   /**

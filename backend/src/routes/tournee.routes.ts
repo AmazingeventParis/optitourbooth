@@ -162,6 +162,14 @@ router.get(
   asyncHandler(tourneeController.getRoute)
 );
 
+// Debug des temps de trajet (admin)
+router.get(
+  '/:id/debug',
+  requireAdmin,
+  validate(tourneeIdSchema, 'params'),
+  asyncHandler(tourneeController.debugRoute)
+);
+
 // Auto-dispatch des points en attente vers les tournées (admin)
 router.post(
   '/auto-dispatch',
