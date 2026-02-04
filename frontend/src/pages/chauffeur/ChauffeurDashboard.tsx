@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Badge, Button } from '@/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { useChauffeurStore } from '@/store/chauffeurStore';
+import { tourneesService } from '@/services/tournees.service';
 import { formatTime } from '@/utils/format';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   MapPinIcon,
@@ -13,18 +14,99 @@ import {
   PlayIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline';
+
+interface WeeklyStats {
+  kmParcourus: number;
+  tempsRoute: number; // en minutes
+  pointsLivres: number;
+  tourneesTerminees: number;
+}
 
 export default function ChauffeurDashboard() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { tournee, isLoading, fetchTournee } = useChauffeurStore();
 
+  // Weekly stats state
+  const [weeklyStats, setWeeklyStats] = useState<WeeklyStats>({
+    kmParcourus: 0,
+    tempsRoute: 0,
+    pointsLivres: 0,
+    tourneesTerminees: 0,
+  });
+  const [isLoadingWeekly, setIsLoadingWeekly] = useState(true);
+
   useEffect(() => {
     if (user?.id) {
       fetchTournee(user.id);
     }
   }, [user?.id, fetchTournee]);
+
+  // Fetch weekly stats
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchWeeklyStats = async () => {
+      setIsLoadingWeekly(true);
+      try {
+        const today = new Date();
+        const weekStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday
+        const weekEnd = endOfWeek(today, { weekStartsOn: 1 }); // Sunday
+
+        const result = await tourneesService.list({
+          chauffeurId: user.id,
+          dateDebut: format(weekStart, 'yyyy-MM-dd'),
+          dateFin: format(weekEnd, 'yyyy-MM-dd'),
+          limit: 100,
+        });
+
+        // Calculate stats from completed tournees
+        let kmParcourus = 0;
+        let tempsRoute = 0;
+        let pointsLivres = 0;
+        let tourneesTerminees = 0;
+
+        for (const t of result.data) {
+          if (t.statut === 'terminee' || t.statut === 'en_cours') {
+            kmParcourus += t.distanceTotaleKm || 0;
+            tempsRoute += t.dureeTotaleMin || 0;
+
+            // Count completed points
+            if (t.points) {
+              pointsLivres += t.points.filter(p => p.statut === 'termine').length;
+            } else {
+              // If points not included, fetch the tournee details
+              try {
+                const fullTournee = await tourneesService.getById(t.id);
+                pointsLivres += fullTournee.points?.filter(p => p.statut === 'termine').length || 0;
+              } catch {
+                // Ignore errors, just count what we can
+              }
+            }
+
+            if (t.statut === 'terminee') {
+              tourneesTerminees++;
+            }
+          }
+        }
+
+        setWeeklyStats({
+          kmParcourus,
+          tempsRoute,
+          pointsLivres,
+          tourneesTerminees,
+        });
+      } catch (err) {
+        console.error('Error fetching weekly stats:', err);
+      } finally {
+        setIsLoadingWeekly(false);
+      }
+    };
+
+    fetchWeeklyStats();
+  }, [user?.id]);
 
   const getStatutConfig = (statut: string) => {
     const configs: Record<string, { variant: 'info' | 'warning' | 'success' | 'danger'; label: string; icon: React.ElementType }> = {
@@ -200,6 +282,51 @@ export default function ChauffeurDashboard() {
           </p>
         </Card>
       )}
+
+      {/* Weekly Stats */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <ChartBarIcon className="h-5 w-5 text-primary-600" />
+          <h2 className="font-semibold text-lg">Ma semaine</h2>
+        </div>
+
+        {isLoadingWeekly ? (
+          <div className="flex justify-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            {/* Km parcourus */}
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3 text-center">
+              <div className="text-2xl font-bold text-blue-700">
+                {weeklyStats.kmParcourus.toFixed(1)}
+              </div>
+              <div className="text-xs text-blue-600 font-medium">km parcourus</div>
+            </div>
+
+            {/* Temps sur la route */}
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-3 text-center">
+              <div className="text-2xl font-bold text-purple-700">
+                {Math.floor(weeklyStats.tempsRoute / 60)}h{String(weeklyStats.tempsRoute % 60).padStart(2, '0')}
+              </div>
+              <div className="text-xs text-purple-600 font-medium">sur la route</div>
+            </div>
+
+            {/* Points livrés */}
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-3 text-center">
+              <div className="text-2xl font-bold text-green-700">
+                {weeklyStats.pointsLivres}
+              </div>
+              <div className="text-xs text-green-600 font-medium">points livrés</div>
+            </div>
+          </div>
+        )}
+
+        {/* Week range indicator */}
+        <div className="mt-3 text-center text-xs text-gray-400">
+          Semaine du {format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'd MMM', { locale: fr })} au {format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'd MMM', { locale: fr })}
+        </div>
+      </Card>
     </div>
   );
 }
