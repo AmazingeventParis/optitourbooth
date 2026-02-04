@@ -182,16 +182,6 @@ export default function ClientsPage() {
     }
   };
 
-  const handleGeocode = async (client: Client) => {
-    try {
-      await clientsService.geocode(client.id);
-      success('Adresse géocodée');
-      fetchClients();
-    } catch (err) {
-      showError('Erreur', (err as Error).message);
-    }
-  };
-
   const columns: Column<Client>[] = [
     {
       key: 'nom',
