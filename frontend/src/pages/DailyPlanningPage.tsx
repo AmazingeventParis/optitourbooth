@@ -85,6 +85,26 @@ const TIME_STATUS_COLORS: Record<TimeStatus, string> = {
 const DEFAULT_DEPOT_ADRESSE = '3, sentier des marécages 93100 Montreuil';
 const DEFAULT_HEURE_DEPART = '07:00';
 
+// Helper pour grouper les produits avec leurs quantités (ex: "Vegas x2, Ring x3")
+function groupProductsWithQuantity(products: { id: string; nom: string }[]): { id: string; nom: string; quantite: number }[] {
+  const grouped = new Map<string, { id: string; nom: string; quantite: number }>();
+  for (const p of products) {
+    const existing = grouped.get(p.id);
+    if (existing) {
+      existing.quantite += 1;
+    } else {
+      grouped.set(p.id, { id: p.id, nom: p.nom, quantite: 1 });
+    }
+  }
+  return Array.from(grouped.values());
+}
+
+// Formatter les produits groupés en string (ex: "Vegas x2, Ring x3")
+function formatGroupedProducts(products: { id: string; nom: string }[]): string {
+  const grouped = groupProductsWithQuantity(products);
+  return grouped.map(p => p.quantite > 1 ? `${p.nom} x${p.quantite}` : p.nom).join(', ');
+}
+
 // Composant pour un point dans la timeline horizontale des tournées
 interface TimelinePointProps {
   point: Point;
@@ -769,7 +789,7 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
                   e.stopPropagation();
                   onDelete();
                 }}
-                className="p-1 rounded hover:bg-red-500/80 transition-colors"
+                className="p-1 rounded bg-red-500/50 hover:bg-red-500/80 transition-colors"
                 title="Supprimer la tournée"
               >
                 <TrashIcon className="h-4 w-4" />
@@ -2555,7 +2575,7 @@ export default function DailyPlanningPage() {
         clientId,
         societe: addPendingFormData.societe || '',
         adresse: addPendingFormData.adresse || '',
-        produitName: addPendingSelectedProduits.map(p => p.nom).join(', '),
+        produitName: formatGroupedProducts(addPendingSelectedProduits),
         produitId: addPendingSelectedProduits[0]?.id,
         produitsIds: addPendingSelectedProduits.length > 0 ? addPendingSelectedProduits : undefined,
         type: addPendingFormData.type || 'livraison',
@@ -3679,19 +3699,26 @@ export default function DailyPlanningPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Produits
             </label>
-            {/* Liste des produits sélectionnés */}
+            {/* Liste des produits sélectionnés (groupés avec quantités) */}
             {addPendingSelectedProduits.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2">
-                {addPendingSelectedProduits.map((p, index) => (
+                {groupProductsWithQuantity(addPendingSelectedProduits).map((p) => (
                   <span
-                    key={`${p.id}-${index}`}
+                    key={p.id}
                     className="inline-flex items-center gap-1 px-2 py-1 bg-primary-100 text-primary-800 text-sm rounded-full"
                   >
-                    {p.nom}
+                    {p.nom}{p.quantite > 1 && ` x${p.quantite}`}
                     <button
                       type="button"
-                      onClick={() => setAddPendingSelectedProduits(addPendingSelectedProduits.filter((_, i) => i !== index))}
+                      onClick={() => {
+                        // Retirer une occurrence de ce produit
+                        const idx = addPendingSelectedProduits.findIndex(prod => prod.id === p.id);
+                        if (idx !== -1) {
+                          setAddPendingSelectedProduits(addPendingSelectedProduits.filter((_, i) => i !== idx));
+                        }
+                      }}
                       className="hover:text-primary-600"
+                      title="Retirer un exemplaire"
                     >
                       <XMarkIcon className="h-4 w-4" />
                     </button>
