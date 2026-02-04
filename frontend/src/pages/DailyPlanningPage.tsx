@@ -714,15 +714,15 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
     const dateStr = format(new Date(tournee.date), 'EEEE d MMMM yyyy', { locale: fr });
 
     // En-tête du message
-    let message = `🚚 *TOURNÉE DU ${dateStr.toUpperCase()}*\n\n`;
-    message += `📋 Nombre de points : ${points.length}\n`;
-    if (tournee.distanceTotaleKm) message += `📍 Distance totale : ${tournee.distanceTotaleKm.toFixed(1)} km\n`;
-    message += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+    let message = `*TOURNEE DU ${dateStr.toUpperCase()}*\n\n`;
+    message += `> ${points.length} point(s)\n`;
+    if (tournee.distanceTotaleKm) message += `> ${tournee.distanceTotaleKm.toFixed(1)} km\n`;
+    message += `\n--------------------\n`;
 
     // Détails de chaque point
     points.forEach((point, index) => {
       const client = point.client;
-      const typeLogistique = point.type === 'livraison' ? 'Livraison' : point.type === 'ramassage' ? 'Récupération' : 'Livraison + Récupération';
+      const typeLogistique = point.type === 'livraison' ? 'LIVRAISON' : point.type === 'ramassage' ? 'RECUPERATION' : 'LIVRAISON + RECUPERATION';
 
       // Récupérer les noms des produits (types de bornes)
       const produits = point.produits?.map((pp: PointProduit) => {
@@ -735,32 +735,32 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
       // Adresse
       let adresse = client?.adresse || '';
       if (client?.codePostal || client?.ville) {
-        adresse += `\n${client.codePostal || ''} ${client.ville || ''}`.trim();
+        adresse += `, ${client.codePostal || ''} ${client.ville || ''}`.trim();
       }
-      message += `📍 ${adresse || '-'}\n`;
+      message += `Adresse : ${adresse || '-'}\n`;
 
       // Téléphone
       const telephone = client?.telephone || client?.contactTelephone || '-';
-      message += `📞 ${telephone}\n`;
+      message += `Tel : ${telephone}\n`;
 
       // Créneau horaire
       if (point.creneauDebut || point.creneauFin) {
-        message += `🕐 ${point.creneauDebut ? formatTime(point.creneauDebut) : '?'} - ${point.creneauFin ? formatTime(point.creneauFin) : '?'}\n`;
+        message += `Creneau : ${point.creneauDebut ? formatTime(point.creneauDebut) : '?'} - ${point.creneauFin ? formatTime(point.creneauFin) : '?'}\n`;
       }
 
       // Type de borne
-      message += `📦 Borne : ${produits}\n`;
+      message += `Borne : ${produits}\n`;
 
       // Type de logistique
-      message += `🔄 ${typeLogistique}\n`;
+      message += `Type : ${typeLogistique}\n`;
 
       // Notes
       if (point.notesInternes || point.notesClient) {
         const notes = point.notesInternes || point.notesClient;
-        message += `📝 ${notes}\n`;
+        message += `Notes : ${notes}\n`;
       }
 
-      message += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+      message += `\n--------------------\n`;
     });
 
     const encodedMessage = encodeURIComponent(message);
