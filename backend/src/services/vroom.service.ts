@@ -241,10 +241,18 @@ export const vroomService = {
     const heureFinSeconds = heureFin ? timeToSeconds(heureFin) : 86400; // Fin de journée par défaut
 
     // Véhicule (la tournée)
-    const vehicle: VroomVehicle = {
+    const baseUrl = this.getBaseUrl();
+    const isORS = baseUrl.includes('openrouteservice.org');
+
+    const vehicle: VroomVehicle & { profile?: string } = {
       id: 0,
       time_window: [heureDepartSeconds, heureFinSeconds],
     };
+
+    // OpenRouteService nécessite un profil de véhicule
+    if (isORS) {
+      vehicle.profile = 'driving-car';
+    }
 
     // Point de départ (dépôt)
     if (depot && depot.latitude && depot.longitude) {
