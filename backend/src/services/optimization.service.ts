@@ -225,6 +225,7 @@ export const optimizationService = {
 
   /**
    * Calculer les heures d'arrivée avec TomTom (trafic prédictif)
+   * Fallback sur OSRM si TomTom échoue
    */
   async calculateEstimatedArrivalsWithTomTom(
     tournee: { depotLatitude: number | null; depotLongitude: number | null; date: Date },
@@ -252,6 +253,9 @@ export const optimizationService = {
         ordre: -1,
         creneauDebut: null,
       });
+      console.log(`[OPTIMIZATION] Depot: ${tournee.depotLatitude}, ${tournee.depotLongitude}`);
+    } else {
+      console.log('[OPTIMIZATION] WARNING: No depot coordinates');
     }
 
     // Ajouter les points
@@ -265,10 +269,14 @@ export const optimizationService = {
           ordre: point.ordre,
           creneauDebut: point.creneauDebut,
         });
+        console.log(`[OPTIMIZATION] Point ${point.ordre}: ${point.client.latitude}, ${point.client.longitude}, service=${point.dureePrevue}min`);
+      } else {
+        console.log(`[OPTIMIZATION] WARNING: Point ${point.id} has no coordinates`);
       }
     }
 
     if (routePoints.length < 2) {
+      console.log('[OPTIMIZATION] Not enough points with coordinates');
       return result;
     }
 
@@ -278,15 +286,18 @@ export const optimizationService = {
     const hasDepot = tournee.depotLatitude && tournee.depotLongitude;
     const startIndex = hasDepot ? 1 : 0;
 
+    console.log(`[OPTIMIZATION] Starting calculation from ${startTime.toISOString()}, hasDepot=${hasDepot}`);
+
     for (let i = startIndex; i < routePoints.length; i++) {
       const currentPoint = routePoints[i]!;
       const prevPoint = routePoints[i - 1] || routePoints[0]!;
 
       let distanceFromPrevious = 0;
       let durationFromPrevious = 0;
-      let trafficDelay = 0;
 
       // Calculer le trajet depuis le point précédent avec TomTom
+      console.log(`[OPTIMIZATION] Calculating travel: ${prevPoint.pointId} -> ${currentPoint.pointId}`);
+
       const travelResult = await tomtomService.calculateTravelTime(
         { latitude: prevPoint.latitude, longitude: prevPoint.longitude },
         { latitude: currentPoint.latitude, longitude: currentPoint.longitude },
@@ -296,10 +307,29 @@ export const optimizationService = {
       if (travelResult) {
         distanceFromPrevious = travelResult.distance;
         durationFromPrevious = travelResult.duration;
-        trafficDelay = travelResult.trafficDelay;
+        console.log(`[OPTIMIZATION] TomTom result: ${Math.round(durationFromPrevious / 60)}min, ${Math.round(distanceFromPrevious / 1000)}km, traffic delay: ${Math.round(travelResult.trafficDelay / 60)}min`);
+      } else {
+        // Fallback: utiliser OSRM pour ce segment
+        console.log('[OPTIMIZATION] TomTom failed, trying OSRM fallback');
+        const osrmResult = await osrmService.getRoute([
+          { latitude: prevPoint.latitude, longitude: prevPoint.longitude },
+          { latitude: currentPoint.latitude, longitude: currentPoint.longitude },
+        ]);
 
-        if (trafficDelay > 60) {
-          console.log(`[TOMTOM] Traffic delay for point ${currentPoint.pointId}: +${Math.round(trafficDelay / 60)} min`);
+        if (osrmResult && osrmResult.legs && osrmResult.legs[0]) {
+          distanceFromPrevious = osrmResult.legs[0].distance;
+          durationFromPrevious = osrmResult.legs[0].duration;
+          console.log(`[OPTIMIZATION] OSRM result: ${Math.round(durationFromPrevious / 60)}min, ${Math.round(distanceFromPrevious / 1000)}km`);
+        } else {
+          // Dernier fallback: estimation basée sur la distance à vol d'oiseau
+          const distKm = this.haversineDistance(
+            prevPoint.latitude, prevPoint.longitude,
+            currentPoint.latitude, currentPoint.longitude
+          );
+          distanceFromPrevious = distKm * 1000;
+          // Estimation: 30 km/h en ville
+          durationFromPrevious = (distKm / 30) * 3600;
+          console.log(`[OPTIMIZATION] Haversine fallback: ${Math.round(durationFromPrevious / 60)}min, ${Math.round(distKm)}km (estimated at 30km/h)`);
         }
       }
 
@@ -907,5 +937,28 @@ export const optimizationService = {
         })
       )
     );
+  },
+
+  /**
+   * Calculer la distance Haversine entre deux points (en km)
+   * Utilisé comme fallback quand les services de routage échouent
+   */
+  haversineDistance(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number
+  ): number {
+    const R = 6371; // Rayon de la Terre en km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLng = (lng2 - lng1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   },
 };
