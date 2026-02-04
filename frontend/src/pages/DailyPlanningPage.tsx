@@ -58,6 +58,7 @@ import {
   XMarkIcon,
   BoltIcon,
   TrashIcon,
+  ShareIcon,
 } from '@heroicons/react/24/outline';
 
 // Couleurs hex pour la légende de la carte
@@ -708,6 +709,35 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
   const points = (tournee.points || []).sort((a, b) => a.ordre - b.ordre);
   const pointIds = points.map(p => p.id);
 
+  // Partage WhatsApp
+  const shareViaWhatsApp = () => {
+    const dateStr = format(new Date(tournee.date), 'EEEE d MMMM yyyy', { locale: fr });
+    const chauffeurName = tournee.chauffeur ? `${tournee.chauffeur.prenom} ${tournee.chauffeur.nom}` : 'Non assigné';
+    const vehicleInfo = tournee.vehicule ? `${tournee.vehicule.nom}${tournee.vehicule.immatriculation ? ` (${tournee.vehicule.immatriculation})` : ''}` : '';
+
+    let message = `🚚 *Tournée du ${dateStr}*\n`;
+    message += `👤 Chauffeur: ${chauffeurName}\n`;
+    if (vehicleInfo) message += `🚐 Véhicule: ${vehicleInfo}\n`;
+    if (tournee.heureDepart) message += `⏰ Départ: ${formatTime(tournee.heureDepart)}\n`;
+    if (tournee.distanceTotaleKm) message += `📍 Distance: ${tournee.distanceTotaleKm.toFixed(1)} km\n`;
+    message += `\n📋 *${points.length} point(s):*\n`;
+
+    points.forEach((point, index) => {
+      const client = point.client;
+      const typeEmoji = point.type === 'livraison' ? '📦' : point.type === 'ramassage' ? '📥' : '🔄';
+      message += `\n${index + 1}. ${typeEmoji} *${client?.nom || 'Client'}*\n`;
+      if (client?.adresse) message += `   ${client.adresse}`;
+      if (client?.codePostal || client?.ville) message += `, ${client.codePostal || ''} ${client.ville || ''}`;
+      message += '\n';
+      if (point.creneauDebut || point.creneauFin) {
+        message += `   🕐 Créneau: ${point.creneauDebut ? formatTime(point.creneauDebut) : '?'} - ${point.creneauFin ? formatTime(point.creneauFin) : '?'}\n`;
+      }
+    });
+
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+  };
+
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({
     id: `tournee-${tournee.id}`,
     data: { tourneeId: tournee.id, type: 'tournee' },
@@ -777,6 +807,13 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
             <span className="text-[10px] opacity-70 bg-white/10 px-1.5 py-0.5 rounded">Brouillon</span>
           )}
           <div className="flex items-center gap-0.5">
+            <button
+              onClick={shareViaWhatsApp}
+              className="p-1 rounded hover:bg-white/20 transition-colors"
+              title="Partager via WhatsApp"
+            >
+              <ShareIcon className="h-4 w-4" />
+            </button>
             <button
               onClick={onEdit}
               className="p-1 rounded hover:bg-white/20 transition-colors"
