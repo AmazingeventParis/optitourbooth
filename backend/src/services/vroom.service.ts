@@ -299,10 +299,7 @@ export const vroomService = {
       options: { g: true }, // Retourner la géométrie
     };
 
-    // Appeler l'API
-    const baseUrl = this.getBaseUrl();
-    const isORS = baseUrl.includes('openrouteservice.org');
-
+    // Appeler l'API (baseUrl et isORS déjà définis plus haut)
     try {
       console.log('[VROOM] Calling optimization API:', baseUrl);
       console.log('[VROOM] Request:', JSON.stringify(vroomRequest, null, 2));
