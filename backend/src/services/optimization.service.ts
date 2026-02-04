@@ -128,7 +128,19 @@ export const optimizationService = {
     // Calculer l'heure de fin avec la logique métier (attente aux créneaux)
     let heureFinEstimee: Date | null = null;
     let dureeTotaleMin = dureeTrajetMin + dureeSurPlaceMin;
-    const startTime = heureDepart || tournee.heureDepart;
+    const baseHeureDepart = heureDepart || tournee.heureDepart;
+
+    // Construire la date/heure de départ correcte (combiner date de tournée + heure de départ)
+    let startTime: Date | null = null;
+    if (baseHeureDepart) {
+      startTime = new Date(tournee.date);
+      startTime.setHours(
+        baseHeureDepart.getHours(),
+        baseHeureDepart.getMinutes(),
+        baseHeureDepart.getSeconds(),
+        0
+      );
+    }
 
     if (startTime && route.legs) {
       let currentTime = new Date(startTime);
@@ -210,16 +222,33 @@ export const optimizationService = {
     }
 
     const points = tournee.points;
-    const startTime = heureDepart || tournee.heureDepart;
 
-    // Utiliser TomTom si configuré pour avoir le trafic prédictif
-    if (tomtomService.isConfigured() && startTime) {
-      console.log('[OPTIMIZATION] Using TomTom for traffic-aware arrival times');
-      return this.calculateEstimatedArrivalsWithTomTom(tournee, points, startTime);
+    // Construire la date/heure de départ correcte
+    // heureDepart peut être stocké avec une date 1970-01-01, on doit utiliser la date de la tournée
+    let startTime: Date | null = null;
+    const baseHeureDepart = heureDepart || tournee.heureDepart;
+
+    if (baseHeureDepart) {
+      // Créer une nouvelle date avec la date de la tournée et l'heure de départ
+      startTime = new Date(tournee.date);
+      startTime.setHours(
+        baseHeureDepart.getHours(),
+        baseHeureDepart.getMinutes(),
+        baseHeureDepart.getSeconds(),
+        0
+      );
+      console.log(`[OPTIMIZATION] Corrected start time: ${startTime.toISOString()} (from tournee date: ${tournee.date.toISOString()}, heureDepart: ${baseHeureDepart.toISOString()})`);
     }
 
-    // Fallback sur OSRM (sans trafic)
-    console.log('[OPTIMIZATION] Using OSRM for arrival times (no traffic data)');
+    // NOTE: TomTom désactivé temporairement - la clé API n'a pas accès au Routing API
+    // Pour activer TomTom, obtenir une clé avec "Routing API" sur developer.tomtom.com
+    // if (tomtomService.isConfigured() && startTime) {
+    //   console.log('[OPTIMIZATION] Using TomTom for traffic-aware arrival times');
+    //   return this.calculateEstimatedArrivalsWithTomTom(tournee, points, startTime);
+    // }
+
+    // Utiliser OSRM pour le calcul des temps de trajet
+    console.log('[OPTIMIZATION] Using OSRM for arrival times');
     return this.calculateEstimatedArrivalsWithOsrm(tournee, points, startTime);
   },
 
