@@ -764,11 +764,6 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
             {tournee.distanceTotaleKm != null && (
               <span>{tournee.distanceTotaleKm.toFixed(1)} km</span>
             )}
-            {tournee.dureeTotaleMin != null && (
-              <span>
-                {Math.floor(tournee.dureeTotaleMin / 60)}h{String(tournee.dureeTotaleMin % 60).padStart(2, '0')}
-              </span>
-            )}
           </span>
         </div>
         <div className="flex items-center gap-2">
