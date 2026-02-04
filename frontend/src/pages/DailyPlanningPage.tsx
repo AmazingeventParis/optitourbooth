@@ -2456,6 +2456,8 @@ export default function DailyPlanningPage() {
     if (!validateEditPointForm() || !editingPoint || !editingTourneeId) return;
 
     setIsEditingSaving(true);
+    const tourneeIdToReload = editingTourneeId;
+
     try {
       // Mettre à jour le client
       await clientsService.update(editingPoint.clientId, {
@@ -2472,7 +2474,7 @@ export default function DailyPlanningPage() {
       });
 
       // Mettre à jour le point
-      await tourneesService.updatePoint(editingTourneeId, editingPoint.id, {
+      await tourneesService.updatePoint(tourneeIdToReload, editingPoint.id, {
         type: editPointFormData.type,
         creneauDebut: editPointFormData.creneauDebut || undefined,
         creneauFin: editPointFormData.creneauFin || undefined,
@@ -2481,18 +2483,26 @@ export default function DailyPlanningPage() {
         notesClient: editPointFormData.notesClient || undefined,
       });
 
-      toastSuccess('Point modifié');
+      // Fermer le modal immédiatement
       setIsEditPointModalOpen(false);
-
-      // Recharger la tournée
-      const updatedTournee = await tourneesService.getById(editingTourneeId);
-      const newTournees = tournees.map(t => t.id === editingTourneeId ? updatedTournee : t);
-      setTournees(newTournees);
-      notifyMapPopup(newTournees);
-    } catch (error) {
-      toastError('Erreur', (error as Error).message);
-    } finally {
+      setEditingPoint(null);
+      setEditingTourneeId(null);
       setIsEditingSaving(false);
+
+      toastSuccess('Point modifié');
+
+      // Recharger la tournée en arrière-plan
+      try {
+        const updatedTournee = await tourneesService.getById(tourneeIdToReload);
+        const newTournees = tournees.map(t => t.id === tourneeIdToReload ? updatedTournee : t);
+        setTournees(newTournees);
+        notifyMapPopup(newTournees);
+      } catch (reloadError) {
+        console.error('Erreur rechargement tournée:', reloadError);
+      }
+    } catch (error) {
+      setIsEditingSaving(false);
+      toastError('Erreur', (error as Error).message);
     }
   };
 
