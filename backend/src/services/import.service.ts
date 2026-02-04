@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { prisma } from '../config/database.js';
 import { PointType } from '@prisma/client';
+import { geocodingService } from './geocoding.service.js';
 
 interface ImportedRow {
   CLIENT: string;
@@ -148,7 +149,7 @@ export const importService = {
       };
 
       // Rechercher le client par nom (recherche flexible)
-      const client = await prisma.client.findFirst({
+      let client = await prisma.client.findFirst({
         where: {
           OR: [
             { nom: { contains: clientName, mode: 'insensitive' } },
@@ -162,7 +163,45 @@ export const importService = {
         parsed.clientId = client.id;
         parsed.clientFound = true;
       } else {
-        parsed.errors.push(`Client "${clientName}" non trouvé`);
+        // Client non trouvé - le créer automatiquement si on a une adresse
+        if (parsed.adresse) {
+          try {
+            // Géocoder l'adresse pour obtenir les coordonnées
+            let latitude: number | undefined;
+            let longitude: number | undefined;
+
+            const geocodeResult = await geocodingService.geocodeAddress(parsed.adresse);
+            if (geocodeResult) {
+              latitude = geocodeResult.latitude;
+              longitude = geocodeResult.longitude;
+              console.log(`[IMPORT] Géocodage réussi pour "${clientName}": ${latitude}, ${longitude}`);
+            } else {
+              console.warn(`[IMPORT] Échec géocodage pour "${clientName}" - adresse: ${parsed.adresse}`);
+            }
+
+            // Créer le nouveau client
+            client = await prisma.client.create({
+              data: {
+                nom: clientName,
+                adresse: parsed.adresse,
+                latitude,
+                longitude,
+                contactNom: parsed.contactNom,
+                contactTelephone: parsed.contactTelephone,
+                actif: true,
+              },
+            });
+
+            parsed.clientId = client.id;
+            parsed.clientFound = true;
+            console.log(`[IMPORT] Nouveau client créé: "${clientName}" (ID: ${client.id})`);
+          } catch (error) {
+            console.error(`[IMPORT] Erreur création client "${clientName}":`, error);
+            parsed.errors.push(`Impossible de créer le client "${clientName}": ${(error as Error).message}`);
+          }
+        } else {
+          parsed.errors.push(`Client "${clientName}" non trouvé et pas d'adresse fournie pour le créer`);
+        }
       }
 
       // Rechercher le produit par nom (si spécifié)
