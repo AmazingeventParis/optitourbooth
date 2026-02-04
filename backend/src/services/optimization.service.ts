@@ -240,15 +240,14 @@ export const optimizationService = {
       console.log(`[OPTIMIZATION] Corrected start time: ${startTime.toISOString()} (from tournee date: ${tournee.date.toISOString()}, heureDepart: ${baseHeureDepart.toISOString()})`);
     }
 
-    // NOTE: TomTom désactivé temporairement - la clé API n'a pas accès au Routing API
-    // Pour activer TomTom, obtenir une clé avec "Routing API" sur developer.tomtom.com
-    // if (tomtomService.isConfigured() && startTime) {
-    //   console.log('[OPTIMIZATION] Using TomTom for traffic-aware arrival times');
-    //   return this.calculateEstimatedArrivalsWithTomTom(tournee, points, startTime);
-    // }
+    // Utiliser TomTom si configuré pour avoir le trafic prédictif
+    if (tomtomService.isConfigured() && startTime) {
+      console.log('[OPTIMIZATION] Using TomTom for traffic-aware arrival times');
+      return this.calculateEstimatedArrivalsWithTomTom(tournee, points, startTime);
+    }
 
-    // Utiliser OSRM pour le calcul des temps de trajet
-    console.log('[OPTIMIZATION] Using OSRM for arrival times');
+    // Fallback sur OSRM (sans trafic)
+    console.log('[OPTIMIZATION] Using OSRM for arrival times (no traffic data)');
     return this.calculateEstimatedArrivalsWithOsrm(tournee, points, startTime);
   },
 
@@ -789,6 +788,11 @@ export const optimizationService = {
    * Mettre à jour les statistiques d'une tournée
    */
   async updateTourneeStats(tourneeId: string): Promise<void> {
+    // IMPORTANT: Recalculer les durées de tous les points basées sur les produits
+    // AVANT de calculer les stats et les heures d'arrivée
+    console.log(`[OPTIMIZATION] Updating point durations for tournee ${tourneeId}`);
+    await this.updateAllPointDurations(tourneeId);
+
     const stats = await this.calculateTourneeStats(tourneeId);
 
     if (stats) {
@@ -943,6 +947,7 @@ export const optimizationService = {
 
   /**
    * Mettre à jour les durées de tous les points d'une tournée en batch
+   * Recalcule les durées basées sur les produits et options
    */
   async updateAllPointDurations(tourneeId: string): Promise<void> {
     // Récupérer tous les points de la tournée
@@ -956,6 +961,12 @@ export const optimizationService = {
     // Calculer toutes les durées en batch
     const pointIds = points.map(p => p.id);
     const durations = await this.calculatePointDurationsBatch(pointIds);
+
+    // Log les durées calculées pour debug
+    console.log(`[OPTIMIZATION] Calculated durations for ${durations.size} points:`);
+    for (const [pointId, duration] of durations.entries()) {
+      console.log(`[OPTIMIZATION]   Point ${pointId.substring(0, 8)}...: ${duration} min`);
+    }
 
     // Mettre à jour tous les points en une seule transaction
     await prisma.$transaction(
