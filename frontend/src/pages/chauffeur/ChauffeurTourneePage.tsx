@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, Badge, Button } from '@/components/ui';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { RouteMap } from '@/components/map';
@@ -7,7 +7,7 @@ import { tourneesService } from '@/services/tournees.service';
 import { useAuthStore } from '@/store/authStore';
 import { useChauffeurStore } from '@/store/chauffeurStore';
 import { useToast } from '@/hooks/useToast';
-import { Point, PointProduit, Produit } from '@/types';
+import { Point, PointProduit, Produit, Tournee } from '@/types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { formatTime, formatTimeRange } from '@/utils/format';
@@ -59,9 +59,14 @@ const getProductColor = (point: Point): string => {
 
 export default function ChauffeurTourneePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
-  const { tournee, isLoading, fetchTournee, refreshTournee } = useChauffeurStore();
+  const { tournee: storeTournee, isLoading: storeLoading, fetchTournee, refreshTournee } = useChauffeurStore();
   const { success, error: showError } = useToast();
+
+  // Check if a specific tourneeId was passed via navigation state (from agenda)
+  const stateData = location.state as { tourneeId?: string } | null;
+  const specificTourneeId = stateData?.tourneeId;
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedPointId, setSelectedPointId] = useState<string | undefined>();
@@ -69,11 +74,47 @@ export default function ChauffeurTourneePage() {
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Local state for specific tournee (when viewing from agenda)
+  const [specificTournee, setSpecificTournee] = useState<Tournee | null>(null);
+  const [specificLoading, setSpecificLoading] = useState(false);
+
+  // Fetch specific tournee if provided via navigation state
   useEffect(() => {
-    if (user?.id) {
+    if (specificTourneeId) {
+      setSpecificLoading(true);
+      tourneesService.getById(specificTourneeId)
+        .then((data) => {
+          setSpecificTournee(data);
+          setSpecificLoading(false);
+        })
+        .catch((err) => {
+          showError('Erreur', (err as Error).message);
+          setSpecificLoading(false);
+          navigate('/chauffeur');
+        });
+    } else if (user?.id) {
+      // Default behavior: fetch today's tournee
       fetchTournee(user.id);
     }
-  }, [user?.id, fetchTournee]);
+  }, [specificTourneeId, user?.id, fetchTournee, showError, navigate]);
+
+  // Use specific tournee if available, otherwise use store tournee
+  const tournee = specificTournee || storeTournee;
+  const isLoading = specificLoading || storeLoading;
+
+  // Refresh function that works for both specific and store tournees
+  const handleRefresh = useCallback(async () => {
+    if (specificTourneeId && tournee) {
+      try {
+        const refreshed = await tourneesService.getById(tournee.id);
+        setSpecificTournee(refreshed);
+      } catch (err) {
+        showError('Erreur', (err as Error).message);
+      }
+    } else {
+      refreshTournee();
+    }
+  }, [specificTourneeId, tournee, refreshTournee, showError]);
 
   const handleStartTournee = async () => {
     if (!tournee) return;
@@ -83,7 +124,7 @@ export default function ChauffeurTourneePage() {
       await tourneesService.start(tournee.id);
       success('Tournée démarrée');
       setIsStartDialogOpen(false);
-      refreshTournee();
+      handleRefresh();
     } catch (err) {
       showError('Erreur', (err as Error).message);
     } finally {
@@ -99,7 +140,7 @@ export default function ChauffeurTourneePage() {
       await tourneesService.finish(tournee.id);
       success('Tournée terminée');
       setIsFinishDialogOpen(false);
-      refreshTournee();
+      handleRefresh();
     } catch (err) {
       showError('Erreur', (err as Error).message);
     } finally {
@@ -172,10 +213,12 @@ export default function ChauffeurTourneePage() {
             Pas de tournée
           </h2>
           <p className="text-gray-500 mb-4">
-            Aucune tournée n'est planifiée pour vous aujourd'hui.
+            {specificTourneeId
+              ? "Cette tournée n'existe pas ou n'est plus disponible."
+              : "Aucune tournée n'est planifiée pour vous aujourd'hui."}
           </p>
-          <Button variant="secondary" onClick={() => navigate('/chauffeur')}>
-            Retour à l'accueil
+          <Button variant="secondary" onClick={() => navigate(specificTourneeId ? '/chauffeur/agenda' : '/chauffeur')}>
+            {specificTourneeId ? "Retour à l'agenda" : "Retour à l'accueil"}
           </Button>
         </Card>
       </div>
