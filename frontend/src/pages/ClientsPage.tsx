@@ -221,25 +221,6 @@ export default function ClientsPage() {
       render: (client) => client.telephone || '-',
     },
     {
-      key: 'coords',
-      header: 'Géoloc',
-      render: (client) => (
-        client.latitude && client.longitude ? (
-          <Badge variant="success" size="sm">OK</Badge>
-        ) : (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleGeocode(client);
-            }}
-            className="text-primary-600 hover:text-primary-700 text-sm"
-          >
-            Géocoder
-          </button>
-        )
-      ),
-    },
-    {
       key: 'actif',
       header: 'Statut',
       render: (client) => (
