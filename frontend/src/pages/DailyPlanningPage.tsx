@@ -712,26 +712,55 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
   // Partage WhatsApp
   const shareViaWhatsApp = () => {
     const dateStr = format(new Date(tournee.date), 'EEEE d MMMM yyyy', { locale: fr });
-    const chauffeurName = tournee.chauffeur ? `${tournee.chauffeur.prenom} ${tournee.chauffeur.nom}` : 'Non assigné';
-    const vehicleInfo = tournee.vehicule ? `${tournee.vehicule.nom}${tournee.vehicule.immatriculation ? ` (${tournee.vehicule.immatriculation})` : ''}` : '';
 
-    let message = `🚚 *Tournée du ${dateStr}*\n`;
-    message += `👤 Chauffeur: ${chauffeurName}\n`;
-    if (vehicleInfo) message += `🚐 Véhicule: ${vehicleInfo}\n`;
-    if (tournee.heureDepart) message += `⏰ Départ: ${formatTime(tournee.heureDepart)}\n`;
-    if (tournee.distanceTotaleKm) message += `📍 Distance: ${tournee.distanceTotaleKm.toFixed(1)} km\n`;
-    message += `\n📋 *${points.length} point(s):*\n`;
+    // En-tête du message
+    let message = `🚚 *TOURNÉE DU ${dateStr.toUpperCase()}*\n\n`;
+    message += `📋 Nombre de points : ${points.length}\n`;
+    if (tournee.distanceTotaleKm) message += `📍 Distance totale : ${tournee.distanceTotaleKm.toFixed(1)} km\n`;
+    message += `\n━━━━━━━━━━━━━━━━━━━━\n`;
 
+    // Détails de chaque point
     points.forEach((point, index) => {
       const client = point.client;
-      const typeEmoji = point.type === 'livraison' ? '📦' : point.type === 'ramassage' ? '📥' : '🔄';
-      message += `\n${index + 1}. ${typeEmoji} *${client?.nom || 'Client'}*\n`;
-      if (client?.adresse) message += `   ${client.adresse}`;
-      if (client?.codePostal || client?.ville) message += `, ${client.codePostal || ''} ${client.ville || ''}`;
-      message += '\n';
-      if (point.creneauDebut || point.creneauFin) {
-        message += `   🕐 Créneau: ${point.creneauDebut ? formatTime(point.creneauDebut) : '?'} - ${point.creneauFin ? formatTime(point.creneauFin) : '?'}\n`;
+      const typeLogistique = point.type === 'livraison' ? 'Livraison' : point.type === 'ramassage' ? 'Récupération' : 'Livraison + Récupération';
+
+      // Récupérer les noms des produits (types de bornes)
+      const produits = point.produits?.map((pp: PointProduit) => {
+        const produit = pp.produit as Produit | undefined;
+        return produit ? (pp.quantite > 1 ? `${produit.nom} x${pp.quantite}` : produit.nom) : '';
+      }).filter(Boolean).join(', ') || '-';
+
+      message += `\n*${index + 1}. ${client?.nom || 'Client'}*\n`;
+
+      // Adresse
+      let adresse = client?.adresse || '';
+      if (client?.codePostal || client?.ville) {
+        adresse += `\n${client.codePostal || ''} ${client.ville || ''}`.trim();
       }
+      message += `📍 ${adresse || '-'}\n`;
+
+      // Téléphone
+      const telephone = client?.telephone || client?.contactTelephone || '-';
+      message += `📞 ${telephone}\n`;
+
+      // Créneau horaire
+      if (point.creneauDebut || point.creneauFin) {
+        message += `🕐 ${point.creneauDebut ? formatTime(point.creneauDebut) : '?'} - ${point.creneauFin ? formatTime(point.creneauFin) : '?'}\n`;
+      }
+
+      // Type de borne
+      message += `📦 Borne : ${produits}\n`;
+
+      // Type de logistique
+      message += `🔄 ${typeLogistique}\n`;
+
+      // Notes
+      if (point.notesInternes || point.notesClient) {
+        const notes = point.notesInternes || point.notesClient;
+        message += `📝 ${notes}\n`;
+      }
+
+      message += `\n━━━━━━━━━━━━━━━━━━━━\n`;
     });
 
     const encodedMessage = encodeURIComponent(message);
