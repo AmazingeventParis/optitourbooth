@@ -764,6 +764,12 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
             {tournee.distanceTotaleKm != null && (
               <span>{tournee.distanceTotaleKm.toFixed(1)} km</span>
             )}
+            {/* Consommation carburant estimée */}
+            {tournee.distanceTotaleKm != null && tournee.chauffeur?.consommationL100km && (
+              <span title={`${tournee.chauffeur.vehicule || 'Véhicule'} - ${tournee.chauffeur.consommationL100km} L/100km`}>
+                ⛽ {((tournee.distanceTotaleKm * tournee.chauffeur.consommationL100km) / 100).toFixed(1)} L
+              </span>
+            )}
           </span>
         </div>
         <div className="flex items-center gap-2">

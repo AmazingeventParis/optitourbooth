@@ -70,6 +70,11 @@ model User {
   couleur      String?  @default("#3B82F6") // Couleur pour identifier le chauffeur
   actif        Boolean  @default(true)
 
+  // Véhicule (pour les chauffeurs)
+  vehicule           String?  // Modèle du véhicule (ex: "Renault Master")
+  immatriculation    String?  // Plaque d'immatriculation
+  consommationL100km Float?   @map("consommation_l_100km") // Consommation en L/100km
+
   // Métadonnées
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")

@@ -39,6 +39,9 @@ async function getFullTournee(tourneeId: string) {
           telephone: true,
           email: true,
           couleur: true,
+          vehicule: true,
+          immatriculation: true,
+          consommationL100km: true,
         },
       },
       points: {
@@ -160,6 +163,9 @@ export const tourneeController = {
               prenom: true,
               telephone: true,
               couleur: true,
+              vehicule: true,
+              immatriculation: true,
+              consommationL100km: true,
             },
           },
           _count: {
@@ -210,6 +216,9 @@ export const tourneeController = {
               prenom: true,
               telephone: true,
               couleur: true,
+              vehicule: true,
+              immatriculation: true,
+              consommationL100km: true,
             },
           },
           points: {
@@ -271,6 +280,9 @@ export const tourneeController = {
             telephone: true,
             email: true,
             couleur: true,
+            vehicule: true,
+            immatriculation: true,
+            consommationL100km: true,
           },
         },
         points: {
@@ -1922,7 +1934,7 @@ export const tourneeController = {
     const updatedTournees = await prisma.tournee.findMany({
       where: { id: { in: updatedTourneeIds } },
       include: {
-        chauffeur: { select: { id: true, nom: true, prenom: true, couleur: true } },
+        chauffeur: { select: { id: true, nom: true, prenom: true, couleur: true, vehicule: true, immatriculation: true, consommationL100km: true } },
         points: {
           orderBy: { ordre: 'asc' },
           include: {

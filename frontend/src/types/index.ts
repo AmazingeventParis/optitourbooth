@@ -16,6 +16,10 @@ export interface User {
   telephone?: string;
   couleur?: string;
   actif: boolean;
+  // Véhicule
+  vehicule?: string;
+  immatriculation?: string;
+  consommationL100km?: number;
   createdAt: string;
   updatedAt: string;
 }

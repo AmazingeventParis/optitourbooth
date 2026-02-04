@@ -15,6 +15,10 @@ interface UserFormData {
   role: 'admin' | 'chauffeur';
   telephone: string;
   couleur: string;
+  // Véhicule
+  vehicule: string;
+  immatriculation: string;
+  consommationL100km: string;
 }
 
 // Couleurs prédéfinies pour les chauffeurs
@@ -41,6 +45,9 @@ const initialFormData: UserFormData = {
   role: 'chauffeur',
   telephone: '',
   couleur: '#3B82F6',
+  vehicule: '',
+  immatriculation: '',
+  consommationL100km: '',
 };
 
 export default function UsersPage() {
@@ -105,6 +112,9 @@ export default function UsersPage() {
       role: user.role,
       telephone: user.telephone || '',
       couleur: user.couleur || '#3B82F6',
+      vehicule: user.vehicule || '',
+      immatriculation: user.immatriculation || '',
+      consommationL100km: user.consommationL100km?.toString() || '',
     });
     setFormErrors({});
     setIsModalOpen(true);
@@ -147,6 +157,9 @@ export default function UsersPage() {
           role: formData.role,
           telephone: formData.telephone || null,
           couleur: formData.couleur || null,
+          vehicule: formData.vehicule || null,
+          immatriculation: formData.immatriculation || null,
+          consommationL100km: formData.consommationL100km ? parseFloat(formData.consommationL100km) : null,
         };
         if (formData.password) {
           updateData.password = formData.password;
@@ -154,7 +167,11 @@ export default function UsersPage() {
         await usersService.update(selectedUser.id, updateData);
         success('Utilisateur modifié');
       } else {
-        await usersService.create(formData);
+        const createData = {
+          ...formData,
+          consommationL100km: formData.consommationL100km ? parseFloat(formData.consommationL100km) : undefined,
+        };
+        await usersService.create(createData);
         success('Utilisateur créé');
       }
       setIsModalOpen(false);
@@ -215,6 +232,18 @@ export default function UsersPage() {
       key: 'telephone',
       header: 'Téléphone',
       render: (user) => user.telephone || '-',
+    },
+    {
+      key: 'vehicule',
+      header: 'Véhicule',
+      render: (user) => user.role === 'chauffeur' && user.vehicule ? (
+        <div>
+          <p className="text-sm">{user.vehicule}</p>
+          {user.immatriculation && (
+            <p className="text-xs text-gray-500">{user.immatriculation}</p>
+          )}
+        </div>
+      ) : '-',
     },
     {
       key: 'actif',
@@ -398,6 +427,39 @@ export default function UsersPage() {
               </div>
             </div>
           </div>
+
+          {/* Section Véhicule (visible uniquement pour les chauffeurs) */}
+          {formData.role === 'chauffeur' && (
+            <div className="border-t pt-4 mt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Véhicule</h3>
+              <div className="space-y-4">
+                <Input
+                  label="Modèle du véhicule"
+                  value={formData.vehicule}
+                  onChange={(e) => setFormData({ ...formData, vehicule: e.target.value })}
+                  placeholder="Ex: Renault Master, Mercedes Sprinter..."
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label="Immatriculation"
+                    value={formData.immatriculation}
+                    onChange={(e) => setFormData({ ...formData, immatriculation: e.target.value.toUpperCase() })}
+                    placeholder="AA-123-BB"
+                  />
+                  <Input
+                    label="Consommation (L/100km)"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="50"
+                    value={formData.consommationL100km}
+                    onChange={(e) => setFormData({ ...formData, consommationL100km: e.target.value })}
+                    placeholder="Ex: 9.5"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>

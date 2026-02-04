@@ -21,6 +21,10 @@ export const createUserSchema = z.object({
   prenom: z.string().min(1, 'Prénom requis').max(100),
   telephone: z.string().max(20).optional(),
   couleur: z.string().regex(hexColorRegex, 'Couleur hexadécimale invalide').optional(),
+  // Véhicule
+  vehicule: z.string().max(100).optional(),
+  immatriculation: z.string().max(20).optional(),
+  consommationL100km: z.number().min(0).max(50).optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -43,6 +47,10 @@ export const updateUserSchema = z.object({
   telephone: z.string().max(20).optional().nullable(),
   couleur: z.string().regex(hexColorRegex, 'Couleur hexadécimale invalide').optional().nullable(),
   actif: z.boolean().optional(),
+  // Véhicule
+  vehicule: z.string().max(100).optional().nullable(),
+  immatriculation: z.string().max(20).optional().nullable(),
+  consommationL100km: z.number().min(0).max(50).optional().nullable(),
 });
 
 export const userQuerySchema = z.object({
