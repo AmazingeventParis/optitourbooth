@@ -68,3 +68,19 @@ temp/
 .cache/
 .parcel-cache/
 .eslintcache
+
+# ----- SQLite databases -----
+*.db
+
+# ----- Exports -----
+exports/
+
+# ----- Windows artifacts -----
+nul
+
+# ----- Test files (local) -----
+test_*.ps1
+test_*.xlsx
+
+# ----- Claude AI -----
+.claude/

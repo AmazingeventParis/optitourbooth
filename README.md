@@ -37,19 +37,24 @@ Application de gestion de tournées pour livraison et ramassage de photobooths.
 ### 1. Cloner et installer les dépendances
 
 ```bash
-git clone <repo-url>
-cd OptiTourBooth
+git clone https://github.com/Pixoupix/optitourbooth.git
+cd optitourbooth
 pnpm install
 ```
 
 ### 2. Configurer l'environnement
 
 ```bash
-# Copier le fichier d'exemple (déjà fait)
-cp .env.example .env
+# Backend : copier et configurer le .env
+cp backend/.env.example backend/.env
+# Puis éditer backend/.env avec vos valeurs (voir ci-dessous)
 
-# Modifier les variables si nécessaire
+# Frontend : copier et configurer le .env
+cp frontend/.env.example frontend/.env
 ```
+
+> **Note pour les collaborateurs** : Demandez les clés API et l'URL de la base de données
+> à l'administrateur du projet (ne jamais les partager via GitHub).
 
 ### 3. Lancer les services Docker
 
