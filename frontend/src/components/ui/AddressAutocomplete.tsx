@@ -14,6 +14,17 @@ export interface AddressResult {
   clientNom?: string;
 }
 
+interface ClientLike {
+  id: string;
+  nom: string;
+  societe?: string | null;
+  adresse: string;
+  codePostal?: string | null;
+  ville?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
 interface AddressAutocompleteProps {
   label?: string;
   value: string;
@@ -24,16 +35,10 @@ interface AddressAutocompleteProps {
   required?: boolean;
   disabled?: boolean;
   className?: string;
-  clients?: Array<{
-    id: string;
-    nom: string;
-    societe?: string | null;
-    adresse: string;
-    codePostal?: string | null;
-    ville?: string | null;
-    latitude?: number | null;
-    longitude?: number | null;
-  }>;
+  /** Static client list for local filtering */
+  clients?: ClientLike[];
+  /** Async search function for server-side client search */
+  searchClients?: (query: string) => Promise<ClientLike[]>;
 }
 
 export default function AddressAutocomplete({
@@ -47,6 +52,7 @@ export default function AddressAutocomplete({
   disabled,
   className,
   clients = [],
+  searchClients,
 }: AddressAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<AddressResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -79,28 +85,40 @@ export default function AddressAutocomplete({
       setIsLoading(true);
       const results: AddressResult[] = [];
 
-      // 1. Search in existing clients
-      const queryLower = query.toLowerCase().replace(/\s+/g, '');
-      const clientResults = clients
-        .filter((c) => {
-          const fullAddress = `${c.adresse} ${c.codePostal || ''} ${c.ville || ''}`.toLowerCase().replace(/\s+/g, '');
-          const clientName = `${c.nom} ${c.societe || ''}`.toLowerCase().replace(/\s+/g, '');
-          return fullAddress.includes(queryLower) || clientName.includes(queryLower);
-        })
-        .slice(0, 5)
-        .map((c) => ({
-          label: `${c.nom}${c.societe ? ` (${c.societe})` : ''} - ${c.adresse}, ${c.codePostal || ''} ${c.ville || ''}`,
-          adresse: c.adresse,
-          codePostal: c.codePostal || '',
-          ville: c.ville || '',
-          latitude: c.latitude ?? undefined,
-          longitude: c.longitude ?? undefined,
-          source: 'client' as const,
-          clientId: c.id,
-          clientNom: c.nom,
-        }));
+      // 1. Search in existing clients (local or async)
+      const mapClientToResult = (c: ClientLike): AddressResult => ({
+        label: `${c.nom}${c.societe ? ` (${c.societe})` : ''} - ${c.adresse}, ${c.codePostal || ''} ${c.ville || ''}`,
+        adresse: c.adresse,
+        codePostal: c.codePostal || '',
+        ville: c.ville || '',
+        latitude: c.latitude ?? undefined,
+        longitude: c.longitude ?? undefined,
+        source: 'client' as const,
+        clientId: c.id,
+        clientNom: c.nom,
+      });
 
-      results.push(...clientResults);
+      if (searchClients) {
+        // Async server-side search
+        try {
+          const serverClients = await searchClients(query);
+          results.push(...serverClients.slice(0, 5).map(mapClientToResult));
+        } catch {
+          // Ignore search errors
+        }
+      } else {
+        // Local filtering
+        const queryLower = query.toLowerCase().replace(/\s+/g, '');
+        const clientResults = clients
+          .filter((c) => {
+            const fullAddress = `${c.adresse} ${c.codePostal || ''} ${c.ville || ''}`.toLowerCase().replace(/\s+/g, '');
+            const clientName = `${c.nom} ${c.societe || ''}`.toLowerCase().replace(/\s+/g, '');
+            return fullAddress.includes(queryLower) || clientName.includes(queryLower);
+          })
+          .slice(0, 5)
+          .map(mapClientToResult);
+        results.push(...clientResults);
+      }
 
       // 2. Search via French government address API
       try {
@@ -145,7 +163,7 @@ export default function AddressAutocomplete({
       setHighlightedIndex(-1);
       setIsLoading(false);
     },
-    [clients]
+    [clients, searchClients]
   );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

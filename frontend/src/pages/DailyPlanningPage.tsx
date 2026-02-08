@@ -32,7 +32,8 @@ import { produitsService } from '@/services/produits.service';
 import { socketService, ChauffeurPosition } from '@/services/socket.service';
 import { useSocketStore, isPositionStale } from '@/store/socketStore';
 import { useAuthStore } from '@/store/authStore';
-import { Button, Badge, Modal, Input, Select, TimeSelect } from '@/components/ui';
+import { Button, Badge, Modal, Input, Select, TimeSelect, AddressAutocomplete } from '@/components/ui';
+import type { AddressResult } from '@/components/ui';
 import WheelTimePicker from '@/components/ui/WheelTimePicker';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import MultiTourneeMap, { PendingPointWithCoords } from '@/components/map/MultiTourneeMap';
@@ -3472,11 +3473,20 @@ export default function DailyPlanningPage() {
                 placeholder="06 12 34 56 78"
               />
             </div>
-            <Input
+            <AddressAutocomplete
               label="Adresse"
               value={editPointFormData.editClientAdresse}
-              onChange={(e) => setEditPointFormData({ ...editPointFormData, editClientAdresse: e.target.value })}
-              placeholder="Numéro et rue"
+              onChange={(val) => setEditPointFormData({ ...editPointFormData, editClientAdresse: val })}
+              onSelect={(result: AddressResult) => {
+                setEditPointFormData((prev) => ({
+                  ...prev,
+                  editClientAdresse: result.adresse,
+                  editClientCodePostal: result.codePostal,
+                  editClientVille: result.ville,
+                }));
+              }}
+              searchClients={(q) => clientsService.search(q)}
+              placeholder="Tapez une adresse..."
               error={editPointFormErrors.editClientAdresse}
               required
             />
@@ -3747,11 +3757,21 @@ export default function DailyPlanningPage() {
             onChange={(e) => setAddPendingFormData({ ...addPendingFormData, societe: e.target.value })}
           />
 
-          <Input
+          <AddressAutocomplete
             label="Adresse"
             value={addPendingFormData.adresse || ''}
-            onChange={(e) => setAddPendingFormData({ ...addPendingFormData, adresse: e.target.value })}
-            placeholder="123 rue Example, 75001 Paris"
+            onChange={(val) => setAddPendingFormData({ ...addPendingFormData, adresse: val })}
+            onSelect={(result: AddressResult) => {
+              setAddPendingFormData((prev) => ({
+                ...prev,
+                adresse: result.source === 'api' ? result.label : result.adresse,
+                ...(result.source === 'client' && result.clientId
+                  ? { clientId: result.clientId, clientName: result.clientNom || prev.clientName }
+                  : {}),
+              }));
+            }}
+            searchClients={(q) => clientsService.search(q)}
+            placeholder="Tapez une adresse..."
           />
 
           <div>
