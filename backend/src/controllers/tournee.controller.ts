@@ -135,9 +135,11 @@ export const tourneeController = {
       statut?: TourneeStatut;
     } = {};
 
-    // Filtre par date exacte
+    // Filtre par date exacte (plage du jour entier pour éviter les problèmes de timezone)
     if (date) {
-      where.date = new Date(date);
+      const dayStart = new Date(date + 'T00:00:00.000Z');
+      const dayEnd = new Date(date + 'T23:59:59.999Z');
+      where.date = { gte: dayStart, lte: dayEnd };
     }
     // Filtre par plage de dates
     else if (dateDebut || dateFin) {
@@ -423,10 +425,12 @@ export const tourneeController = {
     }
 
     // Vérifier qu'il n'a pas déjà une tournée ce jour-là
+    const checkDayStart = new Date(data.date + 'T00:00:00.000Z');
+    const checkDayEnd = new Date(data.date + 'T23:59:59.999Z');
     const existingTournee = await prisma.tournee.findFirst({
       where: {
         chauffeurId: data.chauffeurId,
-        date: new Date(data.date),
+        date: { gte: checkDayStart, lte: checkDayEnd },
         statut: { not: 'annulee' },
       },
     });
