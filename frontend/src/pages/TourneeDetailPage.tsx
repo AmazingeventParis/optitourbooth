@@ -15,7 +15,8 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { Button, Card, Badge, Modal, Select, Input, SearchableSelect, TimeSelect } from '@/components/ui';
+import { Button, Card, Badge, Modal, Select, Input, SearchableSelect, TimeSelect, AddressAutocomplete } from '@/components/ui';
+import type { AddressResult } from '@/components/ui';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { RouteMap } from '@/components/map';
 import SortablePointCard from '@/components/tournee/SortablePointCard';
@@ -934,11 +935,23 @@ export default function TourneeDetailPage() {
                     error={pointFormErrors.newClientNom as string}
                     required
                   />
-                  <Input
+                  <AddressAutocomplete
                     label="Adresse"
                     value={pointFormData.newClientAdresse}
-                    onChange={(e) => setPointFormData({ ...pointFormData, newClientAdresse: e.target.value })}
-                    placeholder="Numéro et rue"
+                    onChange={(val) => setPointFormData({ ...pointFormData, newClientAdresse: val })}
+                    onSelect={(result: AddressResult) => {
+                      setPointFormData((prev) => ({
+                        ...prev,
+                        newClientAdresse: result.adresse,
+                        newClientCodePostal: result.codePostal,
+                        newClientVille: result.ville,
+                        ...(result.source === 'client' && result.clientId
+                          ? { isNewClient: false, clientId: result.clientId }
+                          : {}),
+                      }));
+                    }}
+                    clients={clients}
+                    placeholder="Tapez une adresse..."
                     error={pointFormErrors.newClientAdresse as string}
                     required
                   />
@@ -1000,11 +1013,20 @@ export default function TourneeDetailPage() {
                   placeholder="06 12 34 56 78"
                 />
               </div>
-              <Input
+              <AddressAutocomplete
                 label="Adresse"
                 value={pointFormData.editClientAdresse}
-                onChange={(e) => setPointFormData({ ...pointFormData, editClientAdresse: e.target.value })}
-                placeholder="Numéro et rue"
+                onChange={(val) => setPointFormData({ ...pointFormData, editClientAdresse: val })}
+                onSelect={(result: AddressResult) => {
+                  setPointFormData((prev) => ({
+                    ...prev,
+                    editClientAdresse: result.adresse,
+                    editClientCodePostal: result.codePostal,
+                    editClientVille: result.ville,
+                  }));
+                }}
+                clients={clients}
+                placeholder="Tapez une adresse..."
                 required
               />
               <Input
