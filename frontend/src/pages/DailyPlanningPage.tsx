@@ -1546,13 +1546,31 @@ export default function DailyPlanningPage() {
     const { active } = args;
     const activeData = active?.data?.current;
 
-    // Pour les points assignés, utiliser pointerWithin d'abord pour détecter pending-zone
+    // Pour les points assignés, utiliser pointerWithin pour détecter pending-zone ou tournée cible
     if (activeData?.type === 'assigned') {
       const pointerCollisions = pointerWithin(args);
       // Si on survole la pending-zone, la retourner en priorité
       const pendingCollision = pointerCollisions.find(c => c.id === 'pending-zone');
       if (pendingCollision) {
         return [pendingCollision];
+      }
+      // Chercher une zone de tournée pour le déplacement inter-tournées
+      const tourneeCollision = pointerCollisions.find(c => {
+        const id = String(c.id);
+        // Permettre le drop sur une autre tournée (pas la tournée source)
+        return id.startsWith('tournee-') && id !== `tournee-${activeData?.tourneeId}`;
+      });
+      if (tourneeCollision) {
+        return [tourneeCollision];
+      }
+      // Fallback: rectIntersection pour les zones de tournée
+      const rectCollisions = rectIntersection(args);
+      const tourneeRect = rectCollisions.find(c => {
+        const id = String(c.id);
+        return id.startsWith('tournee-') && id !== `tournee-${activeData?.tourneeId}`;
+      });
+      if (tourneeRect) {
+        return [tourneeRect];
       }
     }
 
