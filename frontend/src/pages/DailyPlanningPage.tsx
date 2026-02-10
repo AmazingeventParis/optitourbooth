@@ -2519,6 +2519,7 @@ export default function DailyPlanningPage() {
     setEditPendingFormData({
       clientName: point.clientName,
       societe: point.societe || '',
+      adresse: point.adresse || '',
       type: point.type,
       creneauDebut: point.creneauDebut || '',
       creneauFin: point.creneauFin || '',
@@ -3659,6 +3660,20 @@ export default function DailyPlanningPage() {
             label="Société"
             value={editPendingFormData.societe || ''}
             onChange={(e) => setEditPendingFormData({ ...editPendingFormData, societe: e.target.value })}
+          />
+
+          <AddressAutocomplete
+            label="Adresse"
+            value={editPendingFormData.adresse || ''}
+            onChange={(val) => setEditPendingFormData({ ...editPendingFormData, adresse: val })}
+            onSelect={(result: AddressResult) => {
+              setEditPendingFormData((prev) => ({
+                ...prev,
+                adresse: result.source === 'api' ? result.label : result.adresse,
+              }));
+            }}
+            searchClients={(q) => clientsService.search(q)}
+            placeholder="Tapez une adresse..."
           />
 
           <Select

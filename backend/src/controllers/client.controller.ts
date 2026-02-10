@@ -22,12 +22,11 @@ export const clientController = {
       search?: string;
     };
 
-    // Construire les filtres
+    // Construire les filtres (utilisés uniquement quand pas de recherche texte)
     const where: {
       actif?: boolean;
       ville?: { contains: string; mode: 'insensitive' };
       codePostal?: string;
-      OR?: Array<{ nom?: { contains: string; mode: 'insensitive' }; societe?: { contains: string; mode: 'insensitive' }; adresse?: { contains: string; mode: 'insensitive' }; email?: { contains: string; mode: 'insensitive' } }>;
     } = {};
 
     if (actif !== undefined) {
@@ -42,25 +41,71 @@ export const clientController = {
       where.codePostal = codePostal;
     }
 
-    if (search) {
-      where.OR = [
-        { nom: { contains: search, mode: 'insensitive' } },
-        { societe: { contains: search, mode: 'insensitive' } },
-        { adresse: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+    // Note: quand search est présent, on utilise un raw query avec unaccent() plus bas
 
     // Exécuter la requête
-    const [clients, total] = await Promise.all([
-      prisma.client.findMany({
-        where,
-        orderBy: { nom: 'asc' },
-        skip,
-        take: limit,
-      }),
-      prisma.client.count({ where }),
-    ]);
+    let clients: unknown[];
+    let total: number;
+
+    if (search) {
+      // Utiliser unaccent pour une recherche insensible aux accents via PostgreSQL
+      const normalizedSearch = `%${search.normalize('NFD').replace(/[\u0300-\u036f]/g, '')}%`;
+
+      // Construire les conditions additionnelles
+      const conditions: string[] = ['1=1'];
+      const params: (string | boolean | number)[] = [];
+      let paramIndex = 1;
+
+      if (actif !== undefined) {
+        conditions.push(`"actif" = $${paramIndex}`);
+        params.push(actif === 'true');
+        paramIndex++;
+      }
+      if (ville) {
+        conditions.push(`LOWER("ville") LIKE LOWER($${paramIndex})`);
+        params.push(`%${ville}%`);
+        paramIndex++;
+      }
+      if (codePostal) {
+        conditions.push(`"codePostal" = $${paramIndex}`);
+        params.push(codePostal);
+        paramIndex++;
+      }
+
+      const searchParam = normalizedSearch;
+      const searchCondition = `(
+        unaccent(LOWER("nom")) LIKE unaccent(LOWER($${paramIndex}))
+        OR unaccent(LOWER(COALESCE("societe", ''))) LIKE unaccent(LOWER($${paramIndex}))
+        OR unaccent(LOWER(COALESCE("adresse", ''))) LIKE unaccent(LOWER($${paramIndex}))
+        OR unaccent(LOWER(COALESCE("email", ''))) LIKE unaccent(LOWER($${paramIndex}))
+      )`;
+      conditions.push(searchCondition);
+      params.push(searchParam);
+      paramIndex++;
+
+      const whereClause = conditions.join(' AND ');
+
+      const countResult = await prisma.$queryRawUnsafe<[{ count: bigint }]>(
+        `SELECT COUNT(*) as count FROM "Client" WHERE ${whereClause}`,
+        ...params
+      );
+      total = Number(countResult[0].count);
+
+      clients = await prisma.$queryRawUnsafe<unknown[]>(
+        `SELECT * FROM "Client" WHERE ${whereClause} ORDER BY "nom" ASC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+        ...params, limit, skip
+      );
+    } else {
+      [clients, total] = await Promise.all([
+        prisma.client.findMany({
+          where,
+          orderBy: { nom: 'asc' },
+          skip,
+          take: limit,
+        }),
+        prisma.client.count({ where }),
+      ]);
+    }
 
     apiResponse.paginated(res, clients, { page, limit, total });
   },
@@ -269,28 +314,21 @@ export const clientController = {
       return;
     }
 
-    const clients = await prisma.client.findMany({
-      where: {
-        actif: true,
-        OR: [
-          { nom: { contains: q, mode: 'insensitive' } },
-          { societe: { contains: q, mode: 'insensitive' } },
-          { ville: { contains: q, mode: 'insensitive' } },
-        ],
-      },
-      select: {
-        id: true,
-        nom: true,
-        societe: true,
-        adresse: true,
-        codePostal: true,
-        ville: true,
-        latitude: true,
-        longitude: true,
-      },
-      take: 10,
-      orderBy: { nom: 'asc' },
-    });
+    // Recherche insensible aux accents via unaccent()
+    const searchTerm = `%${q}%`;
+    const clients = await prisma.$queryRawUnsafe<unknown[]>(
+      `SELECT "id", "nom", "societe", "adresse", "codePostal", "ville", "latitude", "longitude"
+       FROM "Client"
+       WHERE "actif" = true
+         AND (
+           unaccent(LOWER("nom")) LIKE unaccent(LOWER($1))
+           OR unaccent(LOWER(COALESCE("societe", ''))) LIKE unaccent(LOWER($1))
+           OR unaccent(LOWER(COALESCE("ville", ''))) LIKE unaccent(LOWER($1))
+         )
+       ORDER BY "nom" ASC
+       LIMIT 10`,
+      searchTerm
+    );
 
     apiResponse.success(res, clients);
   },
