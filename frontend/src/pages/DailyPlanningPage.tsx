@@ -3038,7 +3038,7 @@ export default function DailyPlanningPage() {
                               {client?.adresse}, {client?.codePostal} {client?.ville}
                             </div>
                             {client?.adresse && (
-                              <div className="col-span-2">
+                              <div className="col-span-2 flex items-center gap-3">
                                 <a
                                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${client.adresse}, ${client.codePostal} ${client.ville}`)}&layer=c`}
                                   target="_blank"
@@ -3046,7 +3046,19 @@ export default function DailyPlanningPage() {
                                   className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 hover:underline"
                                 >
                                   <ArrowTopRightOnSquareIcon className="h-3 w-3" />
-                                  Voir dans Street View
+                                  Google Maps
+                                </a>
+                                <a
+                                  href={client?.latitude && client?.longitude
+                                    ? `https://waze.com/ul?ll=${client.latitude},${client.longitude}&navigate=yes`
+                                    : `https://waze.com/ul?q=${encodeURIComponent(`${client.adresse}, ${client.codePostal} ${client.ville}`)}`
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-700 hover:underline"
+                                >
+                                  <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+                                  Waze
                                 </a>
                               </div>
                             )}
@@ -3178,15 +3190,26 @@ export default function DailyPlanningPage() {
                               <div className="col-span-2">
                                 <div className="text-[10px] text-gray-400">Adresse</div>
                                 <div className="text-xs text-gray-600">{point.adresse}</div>
-                                <a
-                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(point.adresse)}&layer=c`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 hover:underline mt-1"
-                                >
-                                  <ArrowTopRightOnSquareIcon className="h-3 w-3" />
-                                  Voir dans Street View
-                                </a>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <a
+                                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(point.adresse)}&layer=c`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 hover:underline"
+                                  >
+                                    <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+                                    Google Maps
+                                  </a>
+                                  <a
+                                    href={`https://waze.com/ul?q=${encodeURIComponent(point.adresse)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-700 hover:underline"
+                                  >
+                                    <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+                                    Waze
+                                  </a>
+                                </div>
                               </div>
                             )}
                             {point.notes && (

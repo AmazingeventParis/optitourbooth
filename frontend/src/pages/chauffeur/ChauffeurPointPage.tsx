@@ -203,13 +203,24 @@ export default function ChauffeurPointPage() {
     }
   };
 
-  const openNavigation = () => {
-    if (!point?.client?.latitude || !point?.client?.longitude) return;
-
+  const openGoogleMaps = () => {
+    if (!point?.client?.adresse) return;
     const address = encodeURIComponent(
       `${point.client.adresse}, ${point.client.codePostal} ${point.client.ville}`
     );
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${address}`, '_blank');
+  };
+
+  const openWaze = () => {
+    if (!point?.client?.adresse) return;
+    if (point.client.latitude && point.client.longitude) {
+      window.open(`https://waze.com/ul?ll=${point.client.latitude},${point.client.longitude}&navigate=yes`, '_blank');
+    } else {
+      const address = encodeURIComponent(
+        `${point.client.adresse}, ${point.client.codePostal} ${point.client.ville}`
+      );
+      window.open(`https://waze.com/ul?q=${address}`, '_blank');
+    }
   };
 
   const callClient = (phone: string) => {
@@ -319,9 +330,13 @@ export default function ChauffeurPointPage() {
 
         {/* Quick Actions */}
         <div className="flex gap-2 mt-4">
-          <Button variant="outline" className="flex-1" onClick={openNavigation}>
+          <Button variant="outline" className="flex-1" onClick={openGoogleMaps}>
             <ArrowTopRightOnSquareIcon className="h-4 w-4 mr-2" />
-            Itinéraire
+            Google Maps
+          </Button>
+          <Button variant="outline" className="flex-1" onClick={openWaze}>
+            <ArrowTopRightOnSquareIcon className="h-4 w-4 mr-2" />
+            Waze
           </Button>
           {(point.client?.telephone || point.client?.contactTelephone) && (
             <Button

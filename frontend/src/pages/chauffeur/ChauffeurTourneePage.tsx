@@ -149,15 +149,24 @@ export default function ChauffeurTourneePage() {
   };
 
   // Callbacks mémorisés pour éviter les re-renders
-  const openNavigation = useCallback((point: Point) => {
-    if (!point.client?.latitude || !point.client?.longitude) return;
-
+  const openGoogleMaps = useCallback((point: Point) => {
+    if (!point.client?.adresse) return;
     const address = encodeURIComponent(
       `${point.client.adresse}, ${point.client.codePostal} ${point.client.ville}`
     );
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${address}`, '_blank');
+  }, []);
 
-    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
-    window.open(googleMapsUrl, '_blank');
+  const openWaze = useCallback((point: Point) => {
+    if (!point.client?.adresse) return;
+    if (point.client.latitude && point.client.longitude) {
+      window.open(`https://waze.com/ul?ll=${point.client.latitude},${point.client.longitude}&navigate=yes`, '_blank');
+    } else {
+      const address = encodeURIComponent(
+        `${point.client.adresse}, ${point.client.codePostal} ${point.client.ville}`
+      );
+      window.open(`https://waze.com/ul?q=${address}`, '_blank');
+    }
   }, []);
 
   const callClient = useCallback((phone: string) => {
@@ -383,11 +392,22 @@ export default function ChauffeurTourneePage() {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              openNavigation(point);
+                              openGoogleMaps(point);
                             }}
                           >
                             <ArrowTopRightOnSquareIcon className="h-4 w-4 mr-1" />
-                            Itinéraire
+                            Maps
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openWaze(point);
+                            }}
+                          >
+                            <ArrowTopRightOnSquareIcon className="h-4 w-4 mr-1" />
+                            Waze
                           </Button>
                           {(point.client?.telephone || point.client?.contactTelephone) && (
                             <Button
