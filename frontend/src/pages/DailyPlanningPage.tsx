@@ -1490,15 +1490,23 @@ export default function DailyPlanningPage() {
   // Modal duplication de point
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [duplicateDate, setDuplicateDate] = useState('');
-  const [isDuplicating, setIsDuplicating] = useState(false);
+  const [isDuplicating] = useState(false);
   const [duplicatePointData, setDuplicatePointData] = useState<{
     clientId: string;
+    clientName: string;
+    societe?: string;
+    adresse?: string;
+    contactNom?: string;
+    contactTelephone?: string;
     type: string;
     creneauDebut?: string;
     creneauFin?: string;
     dureePrevue?: number;
     notesInternes?: string;
     notesClient?: string;
+    produitName?: string;
+    produitId?: string;
+    produitsIds?: { id: string; nom: string }[];
     produits?: { produitId: string; quantite: number }[];
   } | null>(null);
 
@@ -2590,26 +2598,34 @@ export default function DailyPlanningPage() {
 
   // Ouvrir le modal de duplication pour un point en tournée
   const openDuplicatePointModal = (point: Point) => {
-    const produitsGrouped = groupProductsWithQuantity(
-      (point.produits || [])
-        .filter((pp: PointProduit) => pp.produit)
-        .flatMap((pp: PointProduit) => {
-          const items: { id: string; nom: string }[] = [];
-          for (let i = 0; i < pp.quantite; i++) {
-            items.push({ id: pp.produitId, nom: (pp.produit as Produit).nom });
-          }
-          return items;
-        })
-    ).map(p => ({ produitId: p.id, quantite: p.quantite }));
+    const client = point.client as Client | undefined;
+    const produitItems = (point.produits || [])
+      .filter((pp: PointProduit) => pp.produit)
+      .flatMap((pp: PointProduit) => {
+        const items: { id: string; nom: string }[] = [];
+        for (let i = 0; i < pp.quantite; i++) {
+          items.push({ id: pp.produitId, nom: (pp.produit as Produit).nom });
+        }
+        return items;
+      });
+    const produitsGrouped = groupProductsWithQuantity(produitItems).map(p => ({ produitId: p.id, quantite: p.quantite }));
 
     setDuplicatePointData({
       clientId: point.clientId,
+      clientName: client?.nom || 'Client',
+      societe: client?.societe || undefined,
+      adresse: client?.adresse ? `${client.adresse}, ${client.codePostal || ''} ${client.ville || ''}`.trim() : undefined,
+      contactNom: client?.contactNom || undefined,
+      contactTelephone: client?.contactTelephone || undefined,
       type: point.type,
       creneauDebut: point.creneauDebut ? formatTime(point.creneauDebut) : undefined,
       creneauFin: point.creneauFin ? formatTime(point.creneauFin) : undefined,
       dureePrevue: point.dureePrevue,
       notesInternes: point.notesInternes || undefined,
       notesClient: point.notesClient || undefined,
+      produitName: produitItems.length > 0 ? formatGroupedProducts(produitItems) : undefined,
+      produitId: produitItems[0]?.id,
+      produitsIds: produitItems.length > 0 ? produitItems : undefined,
       produits: produitsGrouped.length > 0 ? produitsGrouped : undefined,
     });
     setDuplicateDate('');
@@ -2618,22 +2634,25 @@ export default function DailyPlanningPage() {
 
   // Ouvrir le modal de duplication pour un point pending
   const openDuplicatePendingModal = (point: ImportParsedPoint) => {
-    if (!point.clientId) {
-      toastError('Le client doit être résolu avant de dupliquer');
-      return;
-    }
-
     const produitsGrouped = point.produitsIds
       ? groupProductsWithQuantity(point.produitsIds).map(p => ({ produitId: p.id, quantite: p.quantite }))
       : point.produitId ? [{ produitId: point.produitId, quantite: 1 }] : [];
 
     setDuplicatePointData({
-      clientId: point.clientId,
+      clientId: point.clientId || '',
+      clientName: point.clientName,
+      societe: point.societe || undefined,
+      adresse: point.adresse || undefined,
+      contactNom: point.contactNom || undefined,
+      contactTelephone: point.contactTelephone || undefined,
       type: point.type,
       creneauDebut: point.creneauDebut || undefined,
       creneauFin: point.creneauFin || undefined,
       dureePrevue: 30,
       notesInternes: point.notes || undefined,
+      produitName: point.produitName || undefined,
+      produitId: point.produitId,
+      produitsIds: point.produitsIds,
       produits: produitsGrouped.length > 0 ? produitsGrouped : undefined,
     });
     setDuplicateDate('');
@@ -2641,53 +2660,57 @@ export default function DailyPlanningPage() {
   };
 
   // Exécuter la duplication
-  const handleDuplicatePoint = async () => {
+  const handleDuplicatePoint = () => {
     if (!duplicatePointData || !duplicateDate) {
       toastError('Veuillez sélectionner une date');
       return;
     }
 
-    setIsDuplicating(true);
+    // Construire le point pending dupliqué
+    const newPendingPoint: ImportParsedPoint = {
+      clientName: duplicatePointData.clientName,
+      clientId: duplicatePointData.clientId || undefined,
+      societe: duplicatePointData.societe || '',
+      adresse: duplicatePointData.adresse || '',
+      type: duplicatePointData.type,
+      creneauDebut: duplicatePointData.creneauDebut || '',
+      creneauFin: duplicatePointData.creneauFin || '',
+      contactNom: duplicatePointData.contactNom || '',
+      contactTelephone: duplicatePointData.contactTelephone || '',
+      notes: duplicatePointData.notesInternes || duplicatePointData.notesClient || '',
+      produitName: duplicatePointData.produitName || '',
+      produitId: duplicatePointData.produitId,
+      produitsIds: duplicatePointData.produitsIds,
+      clientFound: !!duplicatePointData.clientId,
+      produitFound: true,
+      errors: [],
+    };
+
+    // Sauvegarder dans le localStorage de la date cible
+    const storageKey = `pending-points-${duplicateDate}`;
+    let existingPoints: ImportParsedPoint[] = [];
     try {
-      // Chercher les tournées existantes à cette date
-      const result = await tourneesService.list({ date: duplicateDate, limit: 50 });
-      const targetTournees = result.data;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) existingPoints = JSON.parse(saved);
+    } catch { /* ignore */ }
+    existingPoints.push(newPendingPoint);
+    localStorage.setItem(storageKey, JSON.stringify(existingPoints));
 
-      if (targetTournees.length === 0) {
-        toastError('Aucune tournée trouvée à cette date. Créez d\'abord une tournée.');
-        setIsDuplicating(false);
-        return;
-      }
+    // Fermer le modal et les panneaux de détail
+    setIsDuplicateModalOpen(false);
+    setDuplicatePointData(null);
+    setSelectedPointId(null);
+    setSelectedPendingIndex(null);
 
-      // Prendre la première tournée brouillon/planifiée
-      const targetTournee = targetTournees.find(t => t.statut === 'brouillon' || t.statut === 'planifiee') || targetTournees[0];
+    const dateStr = format(new Date(duplicateDate + 'T00:00:00'), 'EEEE d MMMM', { locale: fr });
+    toastSuccess(`Point dupliqué dans les points à dispatcher du ${dateStr}`);
 
-      await tourneesService.addPoint(targetTournee.id, {
-        clientId: duplicatePointData.clientId,
-        type: duplicatePointData.type as 'livraison' | 'ramassage' | 'livraison_ramassage',
-        creneauDebut: duplicatePointData.creneauDebut,
-        creneauFin: duplicatePointData.creneauFin,
-        dureePrevue: duplicatePointData.dureePrevue,
-        notesInternes: duplicatePointData.notesInternes,
-        notesClient: duplicatePointData.notesClient,
-        produits: duplicatePointData.produits,
-      });
-
-      setIsDuplicateModalOpen(false);
-      setDuplicatePointData(null);
-
-      const dateStr = format(new Date(duplicateDate + 'T00:00:00'), 'EEEE d MMMM', { locale: fr });
-      toastSuccess(`Point dupliqué dans la tournée du ${dateStr}`);
-
-      // Si la date cible est la date courante, recharger les tournées
-      if (duplicateDate === format(selectedDate, 'yyyy-MM-dd')) {
-        const updated = await tourneesService.list({ date: duplicateDate, limit: 50 });
-        setTournees(updated.data);
-      }
-    } catch (error) {
-      toastError('Erreur', (error as Error).message);
-    } finally {
-      setIsDuplicating(false);
+    // Naviguer vers la date cible
+    if (duplicateDate === selectedDate) {
+      // Même date : recharger les pending points depuis le localStorage
+      setPendingPoints(existingPoints);
+    } else {
+      setSelectedDate(duplicateDate);
     }
   };
 
