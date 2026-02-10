@@ -245,6 +245,8 @@ export default function TourneesPage() {
     {
       key: 'date',
       header: 'Date',
+      sortable: true,
+      sortValue: (tournee) => tournee.date,
       render: (tournee) => (
         <div>
           <p className="font-medium">
@@ -262,6 +264,8 @@ export default function TourneesPage() {
     {
       key: 'chauffeur',
       header: 'Chauffeur',
+      sortable: true,
+      sortValue: (tournee) => tournee.chauffeur ? `${tournee.chauffeur.prenom} ${tournee.chauffeur.nom}` : '',
       render: (tournee) => (
         <div className="flex items-center gap-2">
           {tournee.chauffeur?.couleur ? (
@@ -283,6 +287,8 @@ export default function TourneesPage() {
     {
       key: 'points',
       header: 'Points',
+      sortable: true,
+      sortValue: (tournee) => tournee.nombrePoints,
       render: (tournee) => (
         <div className="flex items-center">
           <MapPinIcon className="h-5 w-5 text-gray-400 mr-2" />
@@ -293,6 +299,8 @@ export default function TourneesPage() {
     {
       key: 'stats',
       header: 'Distance / Durée',
+      sortable: true,
+      sortValue: (tournee) => tournee.distanceTotaleKm ?? null,
       render: (tournee) => (
         <div className="text-sm">
           {tournee.distanceTotaleKm ? (
@@ -313,6 +321,8 @@ export default function TourneesPage() {
     {
       key: 'statut',
       header: 'Statut',
+      sortable: true,
+      sortValue: (tournee) => tournee.statut,
       render: (tournee) => getStatutBadge(tournee.statut),
     },
     {

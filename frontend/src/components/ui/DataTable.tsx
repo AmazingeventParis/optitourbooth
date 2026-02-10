@@ -1,7 +1,7 @@
 import { memo, useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 import { clsx } from 'clsx';
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, ChevronDownIcon, ChevronUpDownIcon } from '@heroicons/react/24/outline';
 import Button from './Button';
 
 export interface Column<T> {
@@ -10,6 +10,8 @@ export interface Column<T> {
   render?: (item: T) => React.ReactNode;
   className?: string;
   width?: number; // Largeur en pixels pour la virtualisation
+  sortable?: boolean; // Activer le tri sur cette colonne
+  sortValue?: (item: T) => string | number | null; // Extraire la valeur de tri
 }
 
 interface DataTableProps<T> {
@@ -128,6 +130,8 @@ function VirtualRow<T>({ data, index, style }: ListChildComponentProps<VirtualLi
 
 const MemoizedVirtualRow = memo(VirtualRow) as typeof VirtualRow;
 
+type SortDirection = 'asc' | 'desc' | null;
+
 function DataTableInner<T>({
   columns,
   data,
@@ -143,6 +147,42 @@ function DataTableInner<T>({
 }: DataTableProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+
+  const handleSort = useCallback((columnKey: string) => {
+    if (sortKey === columnKey) {
+      // Cycle: asc -> desc -> none
+      if (sortDirection === 'asc') setSortDirection('desc');
+      else if (sortDirection === 'desc') { setSortKey(null); setSortDirection(null); }
+    } else {
+      setSortKey(columnKey);
+      setSortDirection('asc');
+    }
+  }, [sortKey, sortDirection]);
+
+  const sortedData = useMemo(() => {
+    if (!sortKey || !sortDirection) return data;
+    const col = columns.find((c) => c.key === sortKey);
+    if (!col?.sortable) return data;
+
+    const getValue = col.sortValue || ((item: T) => {
+      const val = (item as Record<string, unknown>)[col.key];
+      return val as string | number | null;
+    });
+
+    return [...data].sort((a, b) => {
+      const aVal = getValue(a);
+      const bVal = getValue(b);
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+      const cmp = typeof aVal === 'string' && typeof bVal === 'string'
+        ? aVal.localeCompare(bVal, 'fr')
+        : (aVal as number) - (bVal as number);
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+  }, [data, sortKey, sortDirection, columns]);
 
   // Déterminer si on doit virtualiser
   const shouldVirtualize = useMemo(() => {
@@ -189,16 +229,22 @@ function DataTableInner<T>({
 
   // Données pour la liste virtualisée
   const itemData = useMemo<VirtualListItemData<T>>(() => ({
-    items: data,
+    items: sortedData,
     columns,
     onRowClick,
-  }), [data, columns, onRowClick]);
+  }), [sortedData, columns, onRowClick]);
 
   // Calculer la hauteur de la liste
   const listHeight = useMemo(() => {
-    const contentHeight = data.length * rowHeight;
+    const contentHeight = sortedData.length * rowHeight;
     return Math.min(contentHeight, maxHeight);
-  }, [data.length, rowHeight, maxHeight]);
+  }, [sortedData.length, rowHeight, maxHeight]);
+
+  const renderSortIcon = (columnKey: string) => {
+    if (sortKey !== columnKey) return <ChevronUpDownIcon className="h-4 w-4 text-gray-400" />;
+    if (sortDirection === 'asc') return <ChevronUpIcon className="h-4 w-4 text-primary-600" />;
+    return <ChevronDownIcon className="h-4 w-4 text-primary-600" />;
+  };
 
   // Rendu de la table standard (non virtualisée)
   const renderStandardTable = () => (
@@ -212,10 +258,15 @@ function DataTableInner<T>({
                 scope="col"
                 className={clsx(
                   'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider',
+                  column.sortable && 'cursor-pointer select-none hover:text-gray-700',
                   column.className
                 )}
+                onClick={column.sortable ? () => handleSort(column.key) : undefined}
               >
-                {column.header}
+                <span className="inline-flex items-center gap-1">
+                  {column.header}
+                  {column.sortable && renderSortIcon(column.key)}
+                </span>
               </th>
             ))}
           </tr>
@@ -232,7 +283,7 @@ function DataTableInner<T>({
                 </div>
               </td>
             </tr>
-          ) : data.length === 0 ? (
+          ) : sortedData.length === 0 ? (
             <tr>
               <td
                 colSpan={columns.length}
@@ -242,7 +293,7 @@ function DataTableInner<T>({
               </td>
             </tr>
           ) : (
-            data.map((item) => (
+            sortedData.map((item) => (
               <TableRow
                 key={keyExtractor(item)}
                 item={item}
@@ -267,10 +318,15 @@ function DataTableInner<T>({
             style={{ width: column.width || 'auto', flex: column.width ? 'none' : 1 }}
             className={clsx(
               'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider',
+              column.sortable && 'cursor-pointer select-none hover:text-gray-700',
               column.className
             )}
+            onClick={column.sortable ? () => handleSort(column.key) : undefined}
           >
-            {column.header}
+            <span className="inline-flex items-center gap-1">
+              {column.header}
+              {column.sortable && renderSortIcon(column.key)}
+            </span>
           </div>
         ))}
       </div>
@@ -282,14 +338,14 @@ function DataTableInner<T>({
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
           </div>
         </div>
-      ) : data.length === 0 ? (
+      ) : sortedData.length === 0 ? (
         <div className="px-6 py-12 text-center text-gray-500 bg-white">
           {emptyMessage}
         </div>
       ) : (
         <List
           height={listHeight}
-          itemCount={data.length}
+          itemCount={sortedData.length}
           itemSize={rowHeight}
           width={containerWidth || '100%'}
           itemData={itemData}
