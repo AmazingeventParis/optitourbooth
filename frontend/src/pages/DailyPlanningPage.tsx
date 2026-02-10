@@ -1481,6 +1481,11 @@ export default function DailyPlanningPage() {
     type: 'livraison',
   });
   const [addPendingSelectedProduits, setAddPendingSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
+  // Champs spécifiques au mode Livraison + Récupération
+  const [addPendingLivraisonDate, setAddPendingLivraisonDate] = useState('');
+  const [addPendingRamassageDate, setAddPendingRamassageDate] = useState('');
+  const [addPendingRamassageCreneauDebut, setAddPendingRamassageCreneauDebut] = useState('');
+  const [addPendingRamassageCreneauFin, setAddPendingRamassageCreneauFin] = useState('');
   const [editPendingSelectedProduits, setEditPendingSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
   const [editPointSelectedProduits, setEditPointSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
   const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
@@ -2851,7 +2856,7 @@ export default function DailyPlanningPage() {
         toastSuccess(`Client "${newClient.nom}" créé`);
       }
 
-      const newPoint: ImportParsedPoint = {
+      const basePoint = {
         clientName: addPendingFormData.clientName.trim(),
         clientId,
         societe: addPendingFormData.societe || '',
@@ -2859,24 +2864,80 @@ export default function DailyPlanningPage() {
         produitName: formatGroupedProducts(addPendingSelectedProduits),
         produitId: addPendingSelectedProduits[0]?.id,
         produitsIds: addPendingSelectedProduits.length > 0 ? addPendingSelectedProduits : undefined,
-        type: addPendingFormData.type || 'livraison',
-        creneauDebut: addPendingFormData.creneauDebut || '',
-        creneauFin: addPendingFormData.creneauFin || '',
         contactNom: addPendingFormData.contactNom || '',
         contactTelephone: addPendingFormData.contactTelephone || '',
         notes: addPendingFormData.notes || '',
         clientFound,
         produitFound: addPendingSelectedProduits.length > 0,
-        errors: [],
+        errors: [] as string[],
       };
 
-      setPendingPoints([...pendingPoints, newPoint]);
+      if (addPendingFormData.type === 'livraison_ramassage') {
+        // Créer 2 points séparés : un pour la livraison, un pour la récupération
+        const pointLivraison: ImportParsedPoint = {
+          ...basePoint,
+          type: 'livraison',
+          creneauDebut: addPendingFormData.creneauDebut || '',
+          creneauFin: addPendingFormData.creneauFin || '',
+        };
+        const pointRamassage: ImportParsedPoint = {
+          ...basePoint,
+          type: 'ramassage',
+          creneauDebut: addPendingRamassageCreneauDebut || '',
+          creneauFin: addPendingRamassageCreneauFin || '',
+        };
+
+        const livraisonDate = addPendingLivraisonDate || selectedDate;
+        const ramassageDate = addPendingRamassageDate || selectedDate;
+
+        // Ajouter le point livraison à la date de livraison
+        if (livraisonDate === selectedDate) {
+          setPendingPoints(prev => [...prev, pointLivraison]);
+        } else {
+          const key = `pending-points-${livraisonDate}`;
+          let existing: ImportParsedPoint[] = [];
+          try { const s = localStorage.getItem(key); if (s) existing = JSON.parse(s); } catch { /* ignore */ }
+          existing.push(pointLivraison);
+          localStorage.setItem(key, JSON.stringify(existing));
+        }
+
+        // Ajouter le point ramassage à la date de récupération
+        if (ramassageDate === selectedDate) {
+          setPendingPoints(prev => [...prev, pointRamassage]);
+        } else {
+          const key = `pending-points-${ramassageDate}`;
+          let existing: ImportParsedPoint[] = [];
+          try { const s = localStorage.getItem(key); if (s) existing = JSON.parse(s); } catch { /* ignore */ }
+          existing.push(pointRamassage);
+          localStorage.setItem(key, JSON.stringify(existing));
+        }
+
+        const msgs: string[] = [];
+        if (livraisonDate === selectedDate) msgs.push('Livraison ajoutée');
+        else msgs.push(`Livraison ajoutée le ${format(new Date(livraisonDate + 'T00:00:00'), 'd MMM', { locale: fr })}`);
+        if (ramassageDate === selectedDate) msgs.push('Récupération ajoutée');
+        else msgs.push(`Récupération ajoutée le ${format(new Date(ramassageDate + 'T00:00:00'), 'd MMM', { locale: fr })}`);
+        toastSuccess(msgs.join(' + '));
+      } else {
+        const newPoint: ImportParsedPoint = {
+          ...basePoint,
+          type: addPendingFormData.type || 'livraison',
+          creneauDebut: addPendingFormData.creneauDebut || '',
+          creneauFin: addPendingFormData.creneauFin || '',
+        };
+        setPendingPoints([...pendingPoints, newPoint]);
+        toastSuccess('Point ajouté');
+      }
+
       setIsAddPendingModalOpen(false);
       setAddPendingFormData({ type: 'livraison' });
       setAddPendingSelectedProduits([]);
+      setAddPendingLivraisonDate('');
+      setAddPendingRamassageDate('');
+      setAddPendingRamassageCreneauDebut('');
+      setAddPendingRamassageCreneauFin('');
       setClientSuggestions([]);
       setShowClientSuggestions(false);
-      toastSuccess('Point ajouté');
     } catch (err) {
       toastError('Erreur', `Impossible de créer le client: ${(err as Error).message}`);
     } finally {
@@ -4099,7 +4160,7 @@ export default function DailyPlanningPage() {
                 type="button"
                 onClick={() => setAddPendingFormData({ ...addPendingFormData, type: 'livraison' })}
                 className={clsx(
-                  'flex-1 py-2 px-4 rounded-lg font-medium transition-all',
+                  'flex-1 py-2 px-3 rounded-lg font-medium transition-all text-sm',
                   addPendingFormData.type === 'livraison' || !addPendingFormData.type
                     ? 'bg-green-500 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -4111,7 +4172,7 @@ export default function DailyPlanningPage() {
                 type="button"
                 onClick={() => setAddPendingFormData({ ...addPendingFormData, type: 'ramassage' })}
                 className={clsx(
-                  'flex-1 py-2 px-4 rounded-lg font-medium transition-all',
+                  'flex-1 py-2 px-3 rounded-lg font-medium transition-all text-sm',
                   addPendingFormData.type === 'ramassage'
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -4119,23 +4180,93 @@ export default function DailyPlanningPage() {
               >
                 Récupération
               </button>
+              <button
+                type="button"
+                onClick={() => setAddPendingFormData({ ...addPendingFormData, type: 'livraison_ramassage' })}
+                className={clsx(
+                  'flex-1 py-2 px-3 rounded-lg font-medium transition-all text-sm',
+                  addPendingFormData.type === 'livraison_ramassage'
+                    ? 'bg-purple-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                )}
+              >
+                Livraison + Récup
+              </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <WheelTimePicker
-              label="Créneau début"
-              value={addPendingFormData.creneauDebut || ''}
-              onChange={(val) => setAddPendingFormData({ ...addPendingFormData, creneauDebut: val })}
-              placeholder="--:--"
-            />
-            <WheelTimePicker
-              label="Créneau fin"
-              value={addPendingFormData.creneauFin || ''}
-              onChange={(val) => setAddPendingFormData({ ...addPendingFormData, creneauFin: val })}
-              placeholder="--:--"
-            />
-          </div>
+          {addPendingFormData.type === 'livraison_ramassage' ? (
+            <>
+              {/* Mode Livraison + Récupération : dates et créneaux séparés */}
+              <div className="space-y-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                <h4 className="text-sm font-semibold text-green-800">Livraison</h4>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Date de livraison</label>
+                  <input
+                    type="date"
+                    value={addPendingLivraisonDate}
+                    onChange={(e) => setAddPendingLivraisonDate(e.target.value)}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <WheelTimePicker
+                    label="Créneau début"
+                    value={addPendingFormData.creneauDebut || ''}
+                    onChange={(val) => setAddPendingFormData({ ...addPendingFormData, creneauDebut: val })}
+                    placeholder="--:--"
+                  />
+                  <WheelTimePicker
+                    label="Créneau fin"
+                    value={addPendingFormData.creneauFin || ''}
+                    onChange={(val) => setAddPendingFormData({ ...addPendingFormData, creneauFin: val })}
+                    placeholder="--:--"
+                  />
+                </div>
+              </div>
+              <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="text-sm font-semibold text-blue-800">Récupération</h4>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Date de récupération</label>
+                  <input
+                    type="date"
+                    value={addPendingRamassageDate}
+                    onChange={(e) => setAddPendingRamassageDate(e.target.value)}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <WheelTimePicker
+                    label="Créneau début"
+                    value={addPendingRamassageCreneauDebut}
+                    onChange={(val) => setAddPendingRamassageCreneauDebut(val)}
+                    placeholder="--:--"
+                  />
+                  <WheelTimePicker
+                    label="Créneau fin"
+                    value={addPendingRamassageCreneauFin}
+                    onChange={(val) => setAddPendingRamassageCreneauFin(val)}
+                    placeholder="--:--"
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <WheelTimePicker
+                label="Créneau début"
+                value={addPendingFormData.creneauDebut || ''}
+                onChange={(val) => setAddPendingFormData({ ...addPendingFormData, creneauDebut: val })}
+                placeholder="--:--"
+              />
+              <WheelTimePicker
+                label="Créneau fin"
+                value={addPendingFormData.creneauFin || ''}
+                onChange={(val) => setAddPendingFormData({ ...addPendingFormData, creneauFin: val })}
+                placeholder="--:--"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <Input
