@@ -1595,7 +1595,7 @@ export const tourneeController = {
       return;
     }
 
-    if (point.tournee.statut !== 'planifiee') {
+    if (!['brouillon', 'planifiee'].includes(point.tournee.statut)) {
       apiResponse.badRequest(res, 'La tournée source ne peut plus être modifiée');
       return;
     }

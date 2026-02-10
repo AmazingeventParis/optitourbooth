@@ -1541,76 +1541,89 @@ export default function DailyPlanningPage() {
     },
   }), []);
 
-  // Collision detection personnalisée - simple et efficace
+  // Collision detection personnalisée
   const collisionDetection: CollisionDetection = useCallback((args) => {
     const { active } = args;
     const activeData = active?.data?.current;
 
-    // Pour les points assignés, utiliser pointerWithin pour détecter pending-zone ou tournée cible
+    // Récupérer toutes les collisions via les deux stratégies
+    const pointerCollisions = pointerWithin(args);
+    const rectCollisions = rectIntersection(args);
+    const allCollisions = [...pointerCollisions, ...rectCollisions];
+
+    // Helper: trouver une zone tournée dans les collisions
+    const findTourneeZone = (collisions: typeof pointerCollisions, excludeTourneeId?: string) => {
+      return collisions.find(c => {
+        const id = String(c.id);
+        if (!id.startsWith('tournee-')) return false;
+        if (excludeTourneeId && id === `tournee-${excludeTourneeId}`) return false;
+        return true;
+      });
+    };
+
+    // Helper: trouver la pending-zone
+    const findPendingZone = (collisions: typeof pointerCollisions) => {
+      return collisions.find(c => c.id === 'pending-zone');
+    };
+
+    // Pour les points assignés (drag depuis une tournée)
     if (activeData?.type === 'assigned') {
-      const pointerCollisions = pointerWithin(args);
-      // Si on survole la pending-zone, la retourner en priorité
-      const pendingCollision = pointerCollisions.find(c => c.id === 'pending-zone');
+      const sourceTourneeId = activeData.tourneeId as string;
+
+      // Priorité 1: pending-zone (retirer de la tournée)
+      const pendingCollision = findPendingZone(pointerCollisions);
       if (pendingCollision) {
         return [pendingCollision];
       }
-      // Chercher une zone de tournée pour le déplacement inter-tournées
-      const tourneeCollision = pointerCollisions.find(c => {
-        const id = String(c.id);
-        // Permettre le drop sur une autre tournée (pas la tournée source)
-        return id.startsWith('tournee-') && id !== `tournee-${activeData?.tourneeId}`;
-      });
-      if (tourneeCollision) {
-        return [tourneeCollision];
+
+      // Priorité 2: autre tournée (déplacer entre tournées)
+      const otherTournee = findTourneeZone(pointerCollisions, sourceTourneeId)
+        || findTourneeZone(rectCollisions, sourceTourneeId);
+      if (otherTournee) {
+        return [otherTournee];
       }
-      // Fallback: rectIntersection pour les zones de tournée
-      const rectCollisions = rectIntersection(args);
-      const tourneeRect = rectCollisions.find(c => {
+
+      // Priorité 3: point dans la même tournée (réordonnancement)
+      const samePointCollision = pointerCollisions.find(c => {
         const id = String(c.id);
-        return id.startsWith('tournee-') && id !== `tournee-${activeData?.tourneeId}`;
+        const data = c.data?.droppableContainer?.data?.current;
+        return !id.startsWith('tournee-') && id !== 'pending-zone' && data?.tourneeId === sourceTourneeId;
       });
-      if (tourneeRect) {
-        return [tourneeRect];
+      if (samePointCollision) {
+        return [samePointCollision];
       }
+
+      // Priorité 4: closestCenter pour les points dans la même tournée
+      const closest = closestCenter(args);
+      const closestSamePoint = closest.find(c => {
+        const id = String(c.id);
+        const data = c.data?.droppableContainer?.data?.current;
+        return !id.startsWith('tournee-') && id !== 'pending-zone' && data?.tourneeId === sourceTourneeId;
+      });
+      if (closestSamePoint) {
+        return [closestSamePoint];
+      }
+
+      // Fallback: tournée source (pour réordonnancement dans même tournée)
+      const sourceTournee = findTourneeZone(allCollisions);
+      if (sourceTournee) {
+        return [sourceTournee];
+      }
+
+      return rectCollisions;
     }
 
     // Pour les points en attente (pending), privilégier les zones de tournée
     if (activeData?.type === 'pending') {
-      const pointerCollisions = pointerWithin(args);
-      // Chercher une zone de tournée
-      const tourneeCollision = pointerCollisions.find(c => String(c.id).startsWith('tournee-'));
+      const tourneeCollision = findTourneeZone(pointerCollisions) || findTourneeZone(rectCollisions);
       if (tourneeCollision) {
         return [tourneeCollision];
       }
-      // Sinon essayer rectIntersection pour les zones
-      const rectCollisions = rectIntersection(args);
-      const tourneeRect = rectCollisions.find(c => String(c.id).startsWith('tournee-'));
-      if (tourneeRect) {
-        return [tourneeRect];
-      }
-      return pointerCollisions;
+      return pointerCollisions.length > 0 ? pointerCollisions : rectCollisions;
     }
 
-    // Pour tous les cas, utiliser pointerWithin pour les zones puis closestCenter pour les éléments
-    const pointerCollisions = pointerWithin(args);
-    if (pointerCollisions.length > 0) {
-      // Si on est dans une zone, chercher l'élément le plus proche
-      const closest = closestCenter(args);
-      if (closest.length > 0) {
-        // Privilégier les points (pas les zones)
-        const pointCollision = closest.find(c => {
-          const id = String(c.id);
-          return !id.startsWith('tournee-') && id !== 'pending-zone';
-        });
-        if (pointCollision) {
-          return [pointCollision];
-        }
-      }
-      return pointerCollisions;
-    }
-
-    // Fallback: rectIntersection
-    return rectIntersection(args);
+    // Fallback générique
+    return pointerCollisions.length > 0 ? pointerCollisions : rectCollisions;
   }, []);
 
   // Charger les pending points au montage et quand la date change
