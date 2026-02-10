@@ -1,4 +1,10 @@
-// OptiTour Booth - Service Worker for Push Notifications
+// OptiTour Booth - Service Worker for Push Notifications + PWA Install
+
+// Fetch handler - required for PWA install prompt
+self.addEventListener('fetch', (event) => {
+  // Network-first strategy: let the browser handle requests normally
+  // This minimal handler satisfies Chrome's PWA installability requirement
+});
 
 self.addEventListener('push', (event) => {
   if (!event.data) return;
@@ -12,8 +18,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: payload.body || '',
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
     data: { url: payload.url || '/' },
     vibrate: [200, 100, 200],
     tag: 'optitour-notification',
