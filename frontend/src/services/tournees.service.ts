@@ -56,6 +56,7 @@ interface UpdatePointData {
   notesClient?: string;
   signatureData?: string;
   signatureNom?: string;
+  produits?: { produitId: string; quantite: number }[];
 }
 
 interface CreateIncidentData {

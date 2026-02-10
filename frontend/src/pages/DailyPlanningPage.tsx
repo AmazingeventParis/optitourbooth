@@ -1481,6 +1481,7 @@ export default function DailyPlanningPage() {
   });
   const [addPendingSelectedProduits, setAddPendingSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
   const [editPendingSelectedProduits, setEditPendingSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
+  const [editPointSelectedProduits, setEditPointSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
   const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const clientSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -2443,6 +2444,17 @@ export default function DailyPlanningPage() {
       editClientContactTelephone: client?.contactTelephone || '',
     });
     setEditPointFormErrors({});
+    // Charger les produits existants du point
+    const existingProduits = (point.produits || [])
+      .filter((pp: PointProduit) => pp.produit)
+      .flatMap((pp: PointProduit) => {
+        const items: { id: string; nom: string }[] = [];
+        for (let i = 0; i < pp.quantite; i++) {
+          items.push({ id: pp.produitId, nom: (pp.produit as Produit).nom });
+        }
+        return items;
+      });
+    setEditPointSelectedProduits(existingProduits);
     setIsEditPointModalOpen(true);
   };
 
@@ -2479,6 +2491,12 @@ export default function DailyPlanningPage() {
         contactTelephone: editPointFormData.editClientContactTelephone || undefined,
       });
 
+      // Construire les produits groupés par quantité pour le backend
+      const produitsGrouped = groupProductsWithQuantity(editPointSelectedProduits).map(p => ({
+        produitId: p.id,
+        quantite: p.quantite,
+      }));
+
       // Mettre à jour le point
       await tourneesService.updatePoint(tourneeIdToReload, editingPoint.id, {
         type: editPointFormData.type,
@@ -2487,6 +2505,7 @@ export default function DailyPlanningPage() {
         dureePrevue: editPointFormData.dureePrevue,
         notesInternes: editPointFormData.notesInternes || undefined,
         notesClient: editPointFormData.notesClient || undefined,
+        produits: produitsGrouped,
       });
 
       // Fermer le modal immédiatement
@@ -3610,6 +3629,54 @@ export default function DailyPlanningPage() {
             value={editPointFormData.dureePrevue}
             onChange={(e) => setEditPointFormData({ ...editPointFormData, dureePrevue: parseInt(e.target.value) || 30 })}
           />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Produits
+            </label>
+            {editPointSelectedProduits.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {groupProductsWithQuantity(editPointSelectedProduits).map((p) => (
+                  <span
+                    key={p.id}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-primary-100 text-primary-800 text-sm rounded-full"
+                  >
+                    {p.nom}{p.quantite > 1 && ` x${p.quantite}`}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idx = editPointSelectedProduits.findIndex(prod => prod.id === p.id);
+                        if (idx !== -1) {
+                          setEditPointSelectedProduits(editPointSelectedProduits.filter((_, i) => i !== idx));
+                        }
+                      }}
+                      className="hover:text-primary-600"
+                      title="Retirer un exemplaire"
+                    >
+                      <XMarkIcon className="h-4 w-4" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <select
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
+                value=""
+                onChange={(e) => {
+                  const selectedProduit = produits.find(p => p.id === e.target.value);
+                  if (selectedProduit) {
+                    setEditPointSelectedProduits([...editPointSelectedProduits, { id: selectedProduit.id, nom: selectedProduit.nom }]);
+                  }
+                }}
+              >
+                <option value="">-- Ajouter un produit --</option>
+                {produits.map(p => (
+                  <option key={p.id} value={p.id}>{p.nom}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
