@@ -3009,15 +3009,55 @@ export default function DailyPlanningPage() {
     setIsDeleteTourneeDialogOpen(true);
   };
 
-  // Supprimer une tournée
+  // Supprimer une tournée - les points remontent dans "à dispatcher"
   const confirmDeleteTournee = async () => {
     if (!tourneeToDelete) return;
 
     setIsDeleting(true);
     try {
+      // Récupérer la tournée et ses points avant suppression
+      const tournee = tournees.find(t => t.id === tourneeToDelete);
+      const pointsToRestore = (tournee?.points || []).map(point => {
+        const client = point.client as Client | undefined;
+        const produits = point.produits as PointProduit[] | undefined;
+        const firstProduct = produits?.[0]?.produit as Produit | undefined;
+
+        const pendingPoint: ImportParsedPoint = {
+          clientName: client?.nom || 'Client inconnu',
+          clientId: client?.id,
+          clientFound: !!client?.id,
+          societe: client?.societe || undefined,
+          produitName: firstProduct?.nom,
+          produitCouleur: firstProduct?.couleur,
+          produitId: firstProduct?.id,
+          produitsIds: produits?.map(pp => {
+            const p = pp.produit as Produit | undefined;
+            return p ? { id: p.id, nom: p.nom } : null;
+          }).filter((p): p is { id: string; nom: string } => p !== null),
+          produitFound: !!firstProduct || !produits?.length,
+          type: point.type,
+          creneauDebut: point.creneauDebut ? formatTime(point.creneauDebut) : undefined,
+          creneauFin: point.creneauFin ? formatTime(point.creneauFin) : undefined,
+          contactNom: client?.contactNom || undefined,
+          contactTelephone: client?.contactTelephone || undefined,
+          notes: point.notesInternes || undefined,
+          errors: [],
+        };
+        return pendingPoint;
+      });
+
       await tourneesService.delete(tourneeToDelete);
       setTournees(current => current.filter(t => t.id !== tourneeToDelete));
-      toastSuccess('Tournée supprimée');
+
+      // Remonter les points dans "à dispatcher"
+      if (pointsToRestore.length > 0) {
+        setPendingPoints(current => [...current, ...pointsToRestore]);
+      }
+
+      toastSuccess('Tournée supprimée', pointsToRestore.length > 0
+        ? `${pointsToRestore.length} point(s) remis à dispatcher`
+        : undefined
+      );
       setIsDeleteTourneeDialogOpen(false);
       setTourneeToDelete(null);
       notifyMapPopup();
