@@ -739,17 +739,21 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
         adresseText += `, ${client.codePostal || ''} ${client.ville || ''}`.trim();
       }
 
-      // Créer le lien Maps (coordonnées si disponibles, sinon adresse)
+      // Créer les liens Maps et Waze (coordonnées si disponibles, sinon adresse)
       let mapsLink = '';
+      let wazeLink = '';
       if (client?.latitude && client?.longitude) {
         mapsLink = `https://maps.google.com/?q=${client.latitude},${client.longitude}`;
+        wazeLink = `https://waze.com/ul?ll=${client.latitude},${client.longitude}&navigate=yes`;
       } else if (adresseText) {
         mapsLink = `https://maps.google.com/?q=${encodeURIComponent(adresseText)}`;
+        wazeLink = `https://waze.com/ul?q=${encodeURIComponent(adresseText)}`;
       }
 
       message += `Adresse : ${adresseText || '-'}\n`;
       if (mapsLink) {
-        message += `GPS : ${mapsLink}\n`;
+        message += `Maps : ${mapsLink}\n`;
+        message += `Waze : ${wazeLink}\n`;
       }
 
       // Téléphone
