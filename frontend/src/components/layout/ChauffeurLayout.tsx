@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useSocketStore } from '@/store/socketStore';
 import { socketService } from '@/services/socket.service';
+import { pushNotificationService } from '@/services/pushNotification.service';
 import { useGPSTracking } from '@/hooks/useGPSTracking';
 import { tourneesService } from '@/services/tournees.service';
 import { format } from 'date-fns';
@@ -13,6 +14,8 @@ import {
   ArrowRightOnRectangleIcon,
   SignalIcon,
   SignalSlashIcon,
+  BellIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -23,6 +26,10 @@ export default function ChauffeurLayout() {
 
   // Track if the chauffeur has an active tournee (en_cours status)
   const [hasActiveTournee, setHasActiveTournee] = useState(false);
+
+  // Push notification state
+  const [pushState, setPushState] = useState<'loading' | 'prompt' | 'subscribed' | 'denied' | 'unsupported'>('loading');
+  const [showPushBanner, setShowPushBanner] = useState(false);
 
   // Check for active tournee
   const checkActiveTournee = useCallback(async () => {
@@ -60,6 +67,27 @@ export default function ChauffeurLayout() {
 
     connectSocket();
 
+    // Check push notification status (don't request permission yet)
+    (async () => {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        setPushState('unsupported');
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        setPushState('denied');
+        return;
+      }
+      const subscribed = await pushNotificationService.isSubscribed();
+      if (subscribed) {
+        // Already subscribed, just re-sync with server
+        pushNotificationService.init().catch(console.error);
+        setPushState('subscribed');
+      } else {
+        setPushState('prompt');
+        setShowPushBanner(true);
+      }
+    })();
+
     // Check for active tournee initially
     checkActiveTournee();
 
@@ -91,6 +119,16 @@ export default function ChauffeurLayout() {
   const { isTracking, error: gpsError, accuracy } = useGPSTracking({
     enabled: hasActiveTournee && isConnected,
   });
+
+  const handleEnablePush = async () => {
+    const success = await pushNotificationService.init();
+    if (success) {
+      setPushState('subscribed');
+    } else if (Notification.permission === 'denied') {
+      setPushState('denied');
+    }
+    setShowPushBanner(false);
+  };
 
   const handleLogout = () => {
     socketService.disconnect();
@@ -199,6 +237,28 @@ export default function ChauffeurLayout() {
           </button>
         </div>
       </header>
+
+      {/* Push notification banner */}
+      {showPushBanner && pushState === 'prompt' && (
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-3 flex items-center gap-3">
+          <BellIcon className="h-6 w-6 text-blue-600 flex-shrink-0" />
+          <p className="text-sm text-blue-800 flex-1">
+            Activez les notifications pour être alerté des nouvelles tournées.
+          </p>
+          <button
+            onClick={handleEnablePush}
+            className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 flex-shrink-0"
+          >
+            Activer
+          </button>
+          <button
+            onClick={() => setShowPushBanner(false)}
+            className="p-1 text-blue-400 hover:text-blue-600 flex-shrink-0"
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-20">

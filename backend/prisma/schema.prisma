@@ -76,8 +76,9 @@ model User {
   lastLoginAt  DateTime? @map("last_login_at")
 
   // Relations
-  tournees     Tournee[]
-  positions    Position[]
+  tournees          Tournee[]
+  positions         Position[]
+  pushSubscriptions PushSubscription[]
 
   @@index([role, actif]) // Requêtes fréquentes: chauffeurs actifs
   @@map("users")
@@ -406,6 +407,23 @@ model Position {
 
   @@index([chauffeurId, timestamp(sort: Desc)])
   @@map("positions")
+}
+
+/// Abonnements Push Notification (Web Push VAPID)
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 /// Sessions de refresh token

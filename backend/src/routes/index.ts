@@ -9,6 +9,7 @@ import produitRoutes from './produit.routes.js';
 import tourneeRoutes from './tournee.routes.js';
 import gpsRoutes from './gps.routes.js';
 import vehiculeRoutes from './vehicule.routes.js';
+import notificationRoutes from './notification.routes.js';
 
 const router = Router();
 
@@ -94,6 +95,11 @@ router.get('/', (_req: Request, res: Response) => {
         update: 'PUT /api/vehicules/:id',
         delete: 'DELETE /api/vehicules/:id',
       },
+      notifications: {
+        vapidKey: 'GET /api/notifications/vapid-public-key',
+        subscribe: 'POST /api/notifications/subscribe',
+        unsubscribe: 'DELETE /api/notifications/unsubscribe',
+      },
     },
   });
 });
@@ -106,5 +112,6 @@ router.use('/produits', produitRoutes);
 router.use('/tournees', tourneeRoutes);
 router.use('/gps', gpsRoutes);
 router.use('/vehicules', vehiculeRoutes);
+router.use('/notifications', notificationRoutes);
 
 export default router;

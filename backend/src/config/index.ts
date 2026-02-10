@@ -43,6 +43,13 @@ export const config = {
     apiKey: process.env.ORS_API_KEY || '', // Clé API gratuite sur openrouteservice.org
   },
 
+  // Web Push (VAPID)
+  webPush: {
+    publicKey: process.env.VAPID_PUBLIC_KEY || '',
+    privateKey: process.env.VAPID_PRIVATE_KEY || '',
+    subject: process.env.VAPID_SUBJECT || 'mailto:admin@optitour.fr',
+  },
+
   // Upload
   upload: {
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '10485760', 10), // 10MB

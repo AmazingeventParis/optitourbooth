@@ -6,6 +6,7 @@ import { geocodingService } from '../services/geocoding.service.js';
 import { autoDispatchService } from '../services/autodispatch.service.js';
 import { vroomService } from '../services/vroom.service.js';
 import { config } from '../config/index.js';
+import { notificationService } from '../services/notification.service.js';
 import {
   CreateTourneeInput,
   UpdateTourneeInput,
@@ -506,6 +507,9 @@ export const tourneeController = {
       },
     });
 
+    // Fire-and-forget push notification
+    notificationService.notifyTourneeCreated(data.chauffeurId, data.date, 0).catch(console.error);
+
     apiResponse.created(res, tournee, 'Tournée créée');
   },
 
@@ -637,6 +641,14 @@ export const tourneeController = {
         },
       },
     });
+
+    // Fire-and-forget push notifications
+    const tourneeDate = (data.date || tournee.date.toISOString()).split('T')[0]!;
+    notificationService.notifyTourneeUpdated(updated.chauffeurId, tourneeDate, 'mise à jour générale').catch(console.error);
+    // If chauffeur changed, notify the old chauffeur too
+    if (data.chauffeurId && data.chauffeurId !== tournee.chauffeurId) {
+      notificationService.notifyTourneeUpdated(tournee.chauffeurId, tourneeDate, 'réassignation à un autre chauffeur').catch(console.error);
+    }
 
     apiResponse.success(res, updated, 'Tournée modifiée');
   },
@@ -1320,6 +1332,13 @@ export const tourneeController = {
     // Mettre à jour les stats de la tournée (calcule les ETAs avec OSRM)
     await optimizationService.updateTourneeStats(id);
 
+    // Fire-and-forget push notification
+    notificationService.notifyPointAdded(
+      tournee.chauffeurId,
+      tournee.date.toISOString(),
+      client.nom
+    ).catch(console.error);
+
     // Retourner la tournée complète avec tous les points et leurs ETAs
     const updatedTournee = await getFullTournee(id);
     apiResponse.created(res, updatedTournee, 'Point ajouté');
@@ -1462,6 +1481,15 @@ export const tourneeController = {
       },
     });
 
+    // Fire-and-forget push notification (only if admin is editing)
+    if (req.user?.role === 'admin') {
+      notificationService.notifyTourneeUpdated(
+        point.tournee.chauffeurId,
+        point.tournee.date.toISOString(),
+        'modification d\'un point'
+      ).catch(console.error);
+    }
+
     apiResponse.success(res, updated, 'Point modifié');
   },
 
@@ -1508,6 +1536,12 @@ export const tourneeController = {
 
     // Mettre à jour les stats (calcule les ETAs avec OSRM)
     await optimizationService.updateTourneeStats(id);
+
+    // Fire-and-forget push notification
+    notificationService.notifyPointRemoved(
+      point.tournee.chauffeurId,
+      point.tournee.date.toISOString()
+    ).catch(console.error);
 
     // Retourner la tournée complète avec tous les points et leurs ETAs
     const updatedTournee = await getFullTournee(id);
@@ -1565,6 +1599,12 @@ export const tourneeController = {
 
     // Mettre à jour les stats (calcule les ETAs avec OSRM)
     await optimizationService.updateTourneeStats(id);
+
+    // Fire-and-forget push notification
+    notificationService.notifyPointsReordered(
+      tournee.chauffeurId,
+      tournee.date.toISOString()
+    ).catch(console.error);
 
     // Retourner la tournée complète avec tous les points et leurs ETAs
     const updatedTournee = await getFullTournee(id);
@@ -1682,6 +1722,20 @@ export const tourneeController = {
       getFullTournee(sourceTourneeId),
       getFullTournee(targetTourneeId),
     ]);
+
+    // Fire-and-forget push notifications for both chauffeurs
+    {
+      const srcDate = point.tournee.date.toISOString();
+      const tgtDate = targetTournee.date.toISOString();
+      const cName = (await prisma.client.findUnique({ where: { id: point.clientId }, select: { nom: true } }))?.nom || 'inconnu';
+
+      if (point.tournee.chauffeurId !== targetTournee.chauffeurId) {
+        notificationService.notifyPointMovedOut(point.tournee.chauffeurId, srcDate).catch(console.error);
+        notificationService.notifyPointMovedIn(targetTournee.chauffeurId, tgtDate, cName).catch(console.error);
+      } else {
+        notificationService.notifyTourneeUpdated(point.tournee.chauffeurId, srcDate, 'déplacement d\'un point entre tournées').catch(console.error);
+      }
+    }
 
     apiResponse.success(res, {
       sourceTournee,
@@ -1981,6 +2035,19 @@ export const tourneeController = {
         },
       },
     });
+
+    // Fire-and-forget push notifications for each affected chauffeur
+    const notifiedChauffeurs = new Set<string>();
+    for (const t of updatedTournees) {
+      if (!notifiedChauffeurs.has(t.chauffeurId)) {
+        notifiedChauffeurs.add(t.chauffeurId);
+        notificationService.notifyTourneeUpdated(
+          t.chauffeurId,
+          date,
+          `dispatch automatique de ${result.totalDispatched} point(s)`
+        ).catch(console.error);
+      }
+    }
 
     apiResponse.success(res, {
       ...result,
