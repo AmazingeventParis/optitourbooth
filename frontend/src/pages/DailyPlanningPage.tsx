@@ -1480,6 +1480,7 @@ export default function DailyPlanningPage() {
     type: 'livraison',
   });
   const [addPendingSelectedProduits, setAddPendingSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
+  const [editPendingSelectedProduits, setEditPendingSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
   const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const clientSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -2528,6 +2529,7 @@ export default function DailyPlanningPage() {
       notes: point.notes || '',
       produitName: point.produitName || '',
     });
+    setEditPendingSelectedProduits(point.produitsIds || []);
     setIsEditPendingModalOpen(true);
   };
 
@@ -2539,10 +2541,15 @@ export default function DailyPlanningPage() {
     updatedPoints[editingPendingIndex] = {
       ...updatedPoints[editingPendingIndex],
       ...editPendingFormData,
+      produitName: formatGroupedProducts(editPendingSelectedProduits),
+      produitId: editPendingSelectedProduits[0]?.id,
+      produitsIds: editPendingSelectedProduits.length > 0 ? editPendingSelectedProduits : undefined,
+      produitFound: editPendingSelectedProduits.length > 0,
     };
     setPendingPoints(updatedPoints);
     setIsEditPendingModalOpen(false);
     setEditingPendingIndex(null);
+    setEditPendingSelectedProduits([]);
     toastSuccess('Point modifié');
   };
 
@@ -3715,11 +3722,53 @@ export default function DailyPlanningPage() {
             />
           </div>
 
-          <Input
-            label="Produit"
-            value={editPendingFormData.produitName || ''}
-            onChange={(e) => setEditPendingFormData({ ...editPendingFormData, produitName: e.target.value })}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Produits
+            </label>
+            {editPendingSelectedProduits.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {groupProductsWithQuantity(editPendingSelectedProduits).map((p) => (
+                  <span
+                    key={p.id}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-primary-100 text-primary-800 text-sm rounded-full"
+                  >
+                    {p.nom}{p.quantite > 1 && ` x${p.quantite}`}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idx = editPendingSelectedProduits.findIndex(prod => prod.id === p.id);
+                        if (idx !== -1) {
+                          setEditPendingSelectedProduits(editPendingSelectedProduits.filter((_, i) => i !== idx));
+                        }
+                      }}
+                      className="hover:text-primary-600"
+                      title="Retirer un exemplaire"
+                    >
+                      <XMarkIcon className="h-4 w-4" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <select
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
+                value=""
+                onChange={(e) => {
+                  const selectedProduit = produits.find(p => p.id === e.target.value);
+                  if (selectedProduit) {
+                    setEditPendingSelectedProduits([...editPendingSelectedProduits, { id: selectedProduit.id, nom: selectedProduit.nom }]);
+                  }
+                }}
+              >
+                <option value="">-- Ajouter un produit --</option>
+                {produits.map(p => (
+                  <option key={p.id} value={p.id}>{p.nom}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
