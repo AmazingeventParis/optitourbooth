@@ -37,9 +37,10 @@ interface JwtPayload {
 let io: Server | null = null;
 
 export function initializeSocket(httpServer: HttpServer): Server {
+  const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim());
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+      origin: corsOrigins,
       methods: ['GET', 'POST'],
       credentials: true,
     },

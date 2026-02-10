@@ -3,12 +3,18 @@ import { prisma } from '../config/database.js';
 import { config } from '../config/index.js';
 
 // Configure VAPID keys
+let vapidConfigured = false;
 if (config.webPush.publicKey && config.webPush.privateKey) {
-  webpush.setVapidDetails(
-    config.webPush.subject,
-    config.webPush.publicKey,
-    config.webPush.privateKey
-  );
+  try {
+    webpush.setVapidDetails(
+      config.webPush.subject,
+      config.webPush.publicKey,
+      config.webPush.privateKey
+    );
+    vapidConfigured = true;
+  } catch (error) {
+    console.warn('[Push] Invalid VAPID keys, push notifications disabled:', (error as Error).message);
+  }
 }
 
 interface PushPayload {
@@ -52,8 +58,8 @@ export const notificationService = {
    * Send a push notification to a specific user (all their devices)
    */
   async sendToUser(userId: string, payload: PushPayload) {
-    if (!config.webPush.publicKey || !config.webPush.privateKey) {
-      return; // VAPID not configured, silently skip
+    if (!vapidConfigured) {
+      return; // VAPID not configured or invalid, silently skip
     }
 
     const subscriptions = await prisma.pushSubscription.findMany({
