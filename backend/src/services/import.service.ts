@@ -8,6 +8,8 @@ interface ImportedRow {
   SOCIETE?: string;
   ADRESSE?: string;
   PRODUIT?: string;
+  'PRODUIT 1'?: string;
+  'PRODUIT 2'?: string;
   TYPE: string;
   'DEBUT CRENEAU'?: string;
   'FIN CRENEAU'?: string;
@@ -31,6 +33,7 @@ interface ParsedPoint {
   // Résolution
   clientId?: string;
   produitId?: string;
+  produitsIds?: { id: string; nom: string }[];
   clientFound: boolean;
   produitFound: boolean;
   errors: string[];
@@ -130,7 +133,20 @@ export const importService = {
       }
 
       const clientName = String(row.CLIENT).trim();
-      const produitName = row.PRODUIT ? String(row.PRODUIT).trim() : undefined;
+
+      // Collecter les noms de produits depuis PRODUIT, PRODUIT 1, PRODUIT 2
+      const produitNames: string[] = [];
+      if (row.PRODUIT && String(row.PRODUIT).trim()) {
+        produitNames.push(String(row.PRODUIT).trim());
+      }
+      if (row['PRODUIT 1'] && String(row['PRODUIT 1']).trim()) {
+        produitNames.push(String(row['PRODUIT 1']).trim());
+      }
+      if (row['PRODUIT 2'] && String(row['PRODUIT 2']).trim()) {
+        produitNames.push(String(row['PRODUIT 2']).trim());
+      }
+
+      const produitName = produitNames.length > 0 ? produitNames.join(', ') : undefined;
 
       const parsed: ParsedPoint = {
         clientName,
@@ -207,22 +223,32 @@ export const importService = {
         }
       }
 
-      // Rechercher le produit par nom (si spécifié)
-      if (produitName) {
-        const produit = await prisma.produit.findFirst({
-          where: {
-            nom: { contains: produitName, mode: 'insensitive' },
-            actif: true,
-          },
-        });
+      // Rechercher les produits par nom
+      if (produitNames.length > 0) {
+        const resolvedProduits: { id: string; nom: string }[] = [];
 
-        if (produit) {
-          parsed.produitId = produit.id;
-          parsed.produitCouleur = produit.couleur || undefined;
-          parsed.produitFound = true;
-        } else {
-          parsed.errors.push(`Produit "${produitName}" non trouvé`);
+        for (const pName of produitNames) {
+          const produit = await prisma.produit.findFirst({
+            where: {
+              nom: { contains: pName, mode: 'insensitive' },
+              actif: true,
+            },
+          });
+
+          if (produit) {
+            resolvedProduits.push({ id: produit.id, nom: produit.nom });
+            // Garder le premier produit en rétro-compatibilité
+            if (!parsed.produitId) {
+              parsed.produitId = produit.id;
+              parsed.produitCouleur = produit.couleur || undefined;
+            }
+          } else {
+            parsed.errors.push(`Produit "${pName}" non trouvé`);
+          }
         }
+
+        parsed.produitsIds = resolvedProduits;
+        parsed.produitFound = resolvedProduits.length > 0;
       } else {
         parsed.produitFound = true; // Pas de produit requis
       }
@@ -304,8 +330,19 @@ export const importService = {
           },
         });
 
-        // Ajouter le produit si spécifié
-        if (parsed.produitId) {
+        // Ajouter les produits
+        if (parsed.produitsIds && parsed.produitsIds.length > 0) {
+          for (const produit of parsed.produitsIds) {
+            await prisma.pointProduit.create({
+              data: {
+                pointId: point.id,
+                produitId: produit.id,
+                quantite: 1,
+              },
+            });
+          }
+        } else if (parsed.produitId) {
+          // Rétro-compatibilité : un seul produit
           await prisma.pointProduit.create({
             data: {
               pointId: point.id,
