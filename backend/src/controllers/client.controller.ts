@@ -86,13 +86,13 @@ export const clientController = {
       const whereClause = conditions.join(' AND ');
 
       const countResult = await prisma.$queryRawUnsafe<[{ count: bigint }]>(
-        `SELECT COUNT(*) as count FROM "Client" WHERE ${whereClause}`,
+        `SELECT COUNT(*) as count FROM "clients" WHERE ${whereClause}`,
         ...params
       );
       total = Number(countResult[0].count);
 
       clients = await prisma.$queryRawUnsafe<unknown[]>(
-        `SELECT * FROM "Client" WHERE ${whereClause} ORDER BY "nom" ASC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+        `SELECT * FROM "clients" WHERE ${whereClause} ORDER BY "nom" ASC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
         ...params, limit, skip
       );
     } else {
@@ -318,7 +318,7 @@ export const clientController = {
     const searchTerm = `%${q}%`;
     const clients = await prisma.$queryRawUnsafe<unknown[]>(
       `SELECT "id", "nom", "societe", "adresse", "codePostal", "ville", "latitude", "longitude"
-       FROM "Client"
+       FROM "clients"
        WHERE "actif" = true
          AND (
            unaccent(LOWER("nom")) LIKE unaccent(LOWER($1))
