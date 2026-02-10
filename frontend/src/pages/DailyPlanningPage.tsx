@@ -60,6 +60,7 @@ import {
   BoltIcon,
   TrashIcon,
   ShareIcon,
+  DocumentDuplicateIcon,
 } from '@heroicons/react/24/outline';
 
 // Couleurs hex pour la légende de la carte
@@ -1486,6 +1487,21 @@ export default function DailyPlanningPage() {
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const clientSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Modal duplication de point
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [duplicateDate, setDuplicateDate] = useState('');
+  const [isDuplicating, setIsDuplicating] = useState(false);
+  const [duplicatePointData, setDuplicatePointData] = useState<{
+    clientId: string;
+    type: string;
+    creneauDebut?: string;
+    creneauFin?: string;
+    dureePrevue?: number;
+    notesInternes?: string;
+    notesClient?: string;
+    produits?: { produitId: string; quantite: number }[];
+  } | null>(null);
+
   // Dialog validation tournée
   const [isValidateDialogOpen, setIsValidateDialogOpen] = useState(false);
   const [tourneeToValidate, setTourneeToValidate] = useState<string | null>(null);
@@ -2572,6 +2588,109 @@ export default function DailyPlanningPage() {
     toastSuccess('Point modifié');
   };
 
+  // Ouvrir le modal de duplication pour un point en tournée
+  const openDuplicatePointModal = (point: Point) => {
+    const produitsGrouped = groupProductsWithQuantity(
+      (point.produits || [])
+        .filter((pp: PointProduit) => pp.produit)
+        .flatMap((pp: PointProduit) => {
+          const items: { id: string; nom: string }[] = [];
+          for (let i = 0; i < pp.quantite; i++) {
+            items.push({ id: pp.produitId, nom: (pp.produit as Produit).nom });
+          }
+          return items;
+        })
+    ).map(p => ({ produitId: p.id, quantite: p.quantite }));
+
+    setDuplicatePointData({
+      clientId: point.clientId,
+      type: point.type,
+      creneauDebut: point.creneauDebut ? formatTime(point.creneauDebut) : undefined,
+      creneauFin: point.creneauFin ? formatTime(point.creneauFin) : undefined,
+      dureePrevue: point.dureePrevue,
+      notesInternes: point.notesInternes || undefined,
+      notesClient: point.notesClient || undefined,
+      produits: produitsGrouped.length > 0 ? produitsGrouped : undefined,
+    });
+    setDuplicateDate('');
+    setIsDuplicateModalOpen(true);
+  };
+
+  // Ouvrir le modal de duplication pour un point pending
+  const openDuplicatePendingModal = (point: ImportParsedPoint) => {
+    if (!point.clientId) {
+      toastError('Le client doit être résolu avant de dupliquer');
+      return;
+    }
+
+    const produitsGrouped = point.produitsIds
+      ? groupProductsWithQuantity(point.produitsIds).map(p => ({ produitId: p.id, quantite: p.quantite }))
+      : point.produitId ? [{ produitId: point.produitId, quantite: 1 }] : [];
+
+    setDuplicatePointData({
+      clientId: point.clientId,
+      type: point.type,
+      creneauDebut: point.creneauDebut || undefined,
+      creneauFin: point.creneauFin || undefined,
+      dureePrevue: 30,
+      notesInternes: point.notes || undefined,
+      produits: produitsGrouped.length > 0 ? produitsGrouped : undefined,
+    });
+    setDuplicateDate('');
+    setIsDuplicateModalOpen(true);
+  };
+
+  // Exécuter la duplication
+  const handleDuplicatePoint = async () => {
+    if (!duplicatePointData || !duplicateDate) {
+      toastError('Veuillez sélectionner une date');
+      return;
+    }
+
+    setIsDuplicating(true);
+    try {
+      // Chercher les tournées existantes à cette date
+      const result = await tourneesService.list({ date: duplicateDate, limit: 50 });
+      const targetTournees = result.data;
+
+      if (targetTournees.length === 0) {
+        toastError('Aucune tournée trouvée à cette date. Créez d\'abord une tournée.');
+        setIsDuplicating(false);
+        return;
+      }
+
+      // Prendre la première tournée brouillon/planifiée
+      const targetTournee = targetTournees.find(t => t.statut === 'brouillon' || t.statut === 'planifiee') || targetTournees[0];
+
+      await tourneesService.addPoint(targetTournee.id, {
+        clientId: duplicatePointData.clientId,
+        type: duplicatePointData.type as 'livraison' | 'ramassage' | 'livraison_ramassage',
+        creneauDebut: duplicatePointData.creneauDebut,
+        creneauFin: duplicatePointData.creneauFin,
+        dureePrevue: duplicatePointData.dureePrevue,
+        notesInternes: duplicatePointData.notesInternes,
+        notesClient: duplicatePointData.notesClient,
+        produits: duplicatePointData.produits,
+      });
+
+      setIsDuplicateModalOpen(false);
+      setDuplicatePointData(null);
+
+      const dateStr = format(new Date(duplicateDate + 'T00:00:00'), 'EEEE d MMMM', { locale: fr });
+      toastSuccess(`Point dupliqué dans la tournée du ${dateStr}`);
+
+      // Si la date cible est la date courante, recharger les tournées
+      if (duplicateDate === format(selectedDate, 'yyyy-MM-dd')) {
+        const updated = await tourneesService.list({ date: duplicateDate, limit: 50 });
+        setTournees(updated.data);
+      }
+    } catch (error) {
+      toastError('Erreur', (error as Error).message);
+    } finally {
+      setIsDuplicating(false);
+    }
+  };
+
   // Recherche de clients pour autocomplétion
   const handleClientSearch = (searchTerm: string) => {
     if (clientSearchTimeoutRef.current) {
@@ -3044,13 +3163,22 @@ export default function DailyPlanningPage() {
                             <h3 className="font-semibold text-sm">Détail du point</h3>
                             <div className="flex items-center gap-1">
                               {tournee && (
-                                <button
-                                  onClick={() => openEditPointModal(point, tournee.id)}
-                                  className="text-gray-400 hover:text-primary-600 p-1 rounded transition-colors"
-                                  title="Modifier le point"
-                                >
-                                  <PencilIcon className="h-4 w-4" />
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => openEditPointModal(point, tournee.id)}
+                                    className="text-gray-400 hover:text-primary-600 p-1 rounded transition-colors"
+                                    title="Modifier le point"
+                                  >
+                                    <PencilIcon className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => openDuplicatePointModal(point)}
+                                    className="text-gray-400 hover:text-green-600 p-1 rounded transition-colors"
+                                    title="Dupliquer le point"
+                                  >
+                                    <DocumentDuplicateIcon className="h-4 w-4" />
+                                  </button>
+                                </>
                               )}
                               <button
                                 onClick={() => setSelectedPointId(null)}
@@ -3170,6 +3298,13 @@ export default function DailyPlanningPage() {
                                 title="Modifier le point"
                               >
                                 <PencilIcon className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => openDuplicatePendingModal(point)}
+                                className="text-gray-400 hover:text-green-600 p-1 rounded transition-colors"
+                                title="Dupliquer le point"
+                              >
+                                <DocumentDuplicateIcon className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() => setSelectedPendingIndex(null)}
@@ -4062,6 +4197,39 @@ export default function DailyPlanningPage() {
             </Button>
             <Button onClick={handleAddPending} isLoading={isAddingPending}>
               Ajouter
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal duplication de point */}
+      <Modal
+        isOpen={isDuplicateModalOpen}
+        onClose={() => setIsDuplicateModalOpen(false)}
+        title="Dupliquer le point"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Le point sera dupliqué avec toutes ses caractéristiques (client, produits, créneaux, notes) dans une tournée de la date choisie.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date de destination
+            </label>
+            <input
+              type="date"
+              value={duplicateDate}
+              onChange={(e) => setDuplicateDate(e.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setIsDuplicateModalOpen(false)} disabled={isDuplicating}>
+              Annuler
+            </Button>
+            <Button onClick={handleDuplicatePoint} isLoading={isDuplicating} disabled={!duplicateDate}>
+              Dupliquer
             </Button>
           </div>
         </div>
