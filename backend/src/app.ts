@@ -118,6 +118,15 @@ async function startServer(): Promise<void> {
       console.log(`❤️  Health: http://localhost:${config.port}/api/health`);
       console.log('🚀 =====================================');
       console.log('');
+
+      // Keep-alive: ping self every 10 min to prevent Render free tier sleep
+      if (!config.isDev && process.env.RENDER_EXTERNAL_URL) {
+        const url = `${process.env.RENDER_EXTERNAL_URL}/api/health`;
+        setInterval(() => {
+          fetch(url).catch(() => {});
+        }, 10 * 60 * 1000);
+        console.log(`🏓 Keep-alive enabled: pinging ${url} every 10 min`);
+      }
     });
   } catch (error) {
     console.error('❌ Erreur au démarrage:', error);
