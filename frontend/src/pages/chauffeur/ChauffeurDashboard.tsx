@@ -17,7 +17,6 @@ import {
   ExclamationTriangleIcon,
   ChartBarIcon,
   DevicePhoneMobileIcon,
-  BellIcon,
   Cog6ToothIcon,
   ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
@@ -307,7 +306,7 @@ export default function ChauffeurDashboard() {
 
                 <Button
                   onClick={handleReconfigurePermissions}
-                  variant={!hasGPSPermission || !hasNotificationPermission ? 'default' : 'secondary'}
+                  variant={!hasGPSPermission || !hasNotificationPermission ? 'primary' : 'secondary'}
                   className="w-full"
                 >
                   <Cog6ToothIcon className="h-5 w-5 mr-2" />
