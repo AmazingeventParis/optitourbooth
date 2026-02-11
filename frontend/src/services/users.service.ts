@@ -67,4 +67,18 @@ export const usersService = {
     const response = await api.get<ApiResponse<User[]>>('/users/chauffeurs');
     return response.data.data;
   },
+
+  async uploadAvatar(userId: string, file: File): Promise<User> {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const response = await api.post<ApiResponse<User>>(`/users/${userId}/avatar`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.data;
+  },
+
+  async deleteAvatar(userId: string): Promise<User> {
+    const response = await api.delete<ApiResponse<User>>(`/users/${userId}/avatar`);
+    return response.data.data;
+  },
 };

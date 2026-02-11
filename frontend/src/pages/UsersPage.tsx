@@ -5,7 +5,8 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { usersService } from '@/services/users.service';
 import { useToast } from '@/hooks/useToast';
 import { User, PaginationMeta } from '@/types';
-import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, CameraIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import Avatar from '@/components/ui/Avatar';
 
 interface UserFormData {
   email: string;
@@ -61,6 +62,7 @@ export default function UsersPage() {
   const [formData, setFormData] = useState<UserFormData>(initialFormData);
   const [formErrors, setFormErrors] = useState<Partial<UserFormData>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   const fetchUsers = useCallback(async (page = 1) => {
     setIsLoading(true);
@@ -113,6 +115,38 @@ export default function UsersPage() {
   const openDeleteDialog = (user: User) => {
     setSelectedUser(user);
     setIsDeleteDialogOpen(true);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedUser || !e.target.files?.[0]) return;
+    const file = e.target.files[0];
+    setIsUploadingAvatar(true);
+    try {
+      const updated = await usersService.uploadAvatar(selectedUser.id, file);
+      setSelectedUser(updated);
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, avatarUrl: updated.avatarUrl } : u)));
+      success('Photo mise à jour');
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsUploadingAvatar(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleAvatarDelete = async () => {
+    if (!selectedUser) return;
+    setIsUploadingAvatar(true);
+    try {
+      const updated = await usersService.deleteAvatar(selectedUser.id);
+      setSelectedUser(updated);
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, avatarUrl: undefined } : u)));
+      success('Photo supprimée');
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsUploadingAvatar(false);
+    }
   };
 
   const validateForm = () => {
@@ -188,13 +222,7 @@ export default function UsersPage() {
       header: 'Nom',
       render: (user) => (
         <div className="flex items-center gap-3">
-          {user.couleur && (
-            <div
-              className="w-4 h-4 rounded-full flex-shrink-0 border border-gray-200"
-              style={{ backgroundColor: user.couleur }}
-              title={`Couleur: ${user.couleur}`}
-            />
-          )}
+          <Avatar user={user} size="sm" />
           <div>
             <p className="font-medium">{user.prenom} {user.nom}</p>
             <p className="text-sm text-gray-500">{user.email}</p>
@@ -314,6 +342,43 @@ export default function UsersPage() {
         title={selectedUser ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'}
       >
         <div className="space-y-4">
+          {/* Avatar upload (edit mode only) */}
+          {selectedUser && (
+            <div className="flex flex-col items-center gap-2 pb-2">
+              <div className="relative group">
+                <Avatar
+                  user={{ ...selectedUser, couleur: formData.couleur }}
+                  size="lg"
+                />
+                <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                  {isUploadingAvatar ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+                  ) : (
+                    <CameraIcon className="h-6 w-6 text-white" />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={handleAvatarUpload}
+                    disabled={isUploadingAvatar}
+                  />
+                </label>
+              </div>
+              {selectedUser.avatarUrl && (
+                <button
+                  type="button"
+                  onClick={handleAvatarDelete}
+                  disabled={isUploadingAvatar}
+                  className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+                >
+                  <XMarkIcon className="h-3 w-3" />
+                  Supprimer la photo
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Prénom"

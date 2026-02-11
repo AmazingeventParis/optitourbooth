@@ -78,6 +78,7 @@ export const authController = {
         nom: true,
         prenom: true,
         telephone: true,
+        avatarUrl: true,
         actif: true,
         createdAt: true,
         lastLoginAt: true,

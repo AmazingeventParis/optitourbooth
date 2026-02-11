@@ -8,6 +8,7 @@ export interface User {
   nom: string;
   prenom: string;
   telephone?: string;
+  avatarUrl?: string;
   actif?: boolean;
 }
 

@@ -15,6 +15,7 @@ export interface User {
   prenom: string;
   telephone?: string;
   couleur?: string;
+  avatarUrl?: string;
   actif: boolean;
   createdAt: string;
   updatedAt: string;

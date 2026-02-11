@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { authService } from '../services/auth.service.js';
+import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary.js';
 import { apiResponse, parsePagination } from '../utils/index.js';
 import { UserRole } from '@prisma/client';
 
@@ -56,6 +57,7 @@ export const userController = {
           prenom: true,
           telephone: true,
           couleur: true,
+          avatarUrl: true,
           actif: true,
           createdAt: true,
           lastLoginAt: true,
@@ -87,6 +89,7 @@ export const userController = {
         prenom: true,
         telephone: true,
         couleur: true,
+        avatarUrl: true,
         actif: true,
         createdAt: true,
         updatedAt: true,
@@ -149,6 +152,7 @@ export const userController = {
         prenom: true,
         telephone: true,
         couleur: true,
+        avatarUrl: true,
         actif: true,
         createdAt: true,
       },
@@ -216,6 +220,7 @@ export const userController = {
         prenom: true,
         telephone: true,
         couleur: true,
+        avatarUrl: true,
         actif: true,
         createdAt: true,
         updatedAt: true,
@@ -289,10 +294,119 @@ export const userController = {
         prenom: true,
         telephone: true,
         couleur: true,
+        avatarUrl: true,
       },
       orderBy: [{ nom: 'asc' }, { prenom: 'asc' }],
     });
 
     apiResponse.success(res, chauffeurs);
+  },
+
+  /**
+   * POST /api/users/:id/avatar
+   * Upload une photo de profil
+   */
+  async uploadAvatar(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+
+    if (!req.file) {
+      apiResponse.badRequest(res, 'Aucun fichier fourni');
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, avatarUrl: true },
+    });
+
+    if (!user) {
+      apiResponse.notFound(res, 'Utilisateur non trouvé');
+      return;
+    }
+
+    // Supprimer l'ancien avatar de Cloudinary si existant
+    if (user.avatarUrl) {
+      try {
+        const publicId = user.avatarUrl!.split('/').slice(-2).join('/').replace(/\.[^.]+$/, '');
+        await deleteFromCloudinary(publicId);
+      } catch {
+        // Ignorer les erreurs de suppression de l'ancien avatar
+      }
+    }
+
+    // Upload vers Cloudinary avec transformation crop/resize 200x200
+    const { url } = await uploadToCloudinary(req.file.buffer, 'avatars');
+    const avatarUrl = url.replace('/upload/', '/upload/w_200,h_200,c_fill,g_face/');
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { avatarUrl },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        nom: true,
+        prenom: true,
+        telephone: true,
+        couleur: true,
+        avatarUrl: true,
+        actif: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    apiResponse.success(res, updated, 'Photo de profil mise à jour');
+  },
+
+  /**
+   * DELETE /api/users/:id/avatar
+   * Supprimer la photo de profil
+   */
+  async deleteAvatar(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, avatarUrl: true },
+    });
+
+    if (!user) {
+      apiResponse.notFound(res, 'Utilisateur non trouvé');
+      return;
+    }
+
+    if (!user.avatarUrl) {
+      apiResponse.badRequest(res, 'Aucune photo de profil à supprimer');
+      return;
+    }
+
+    // Supprimer de Cloudinary
+    try {
+      const publicId = user.avatarUrl!.split('/').slice(-2).join('/').replace(/\.[^.]+$/, '');
+      await deleteFromCloudinary(publicId);
+    } catch {
+      // Ignorer les erreurs de suppression Cloudinary
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { avatarUrl: null },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        nom: true,
+        prenom: true,
+        telephone: true,
+        couleur: true,
+        avatarUrl: true,
+        actif: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    apiResponse.success(res, updated, 'Photo de profil supprimée');
   },
 };

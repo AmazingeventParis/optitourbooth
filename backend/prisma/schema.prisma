@@ -68,6 +68,7 @@ model User {
   prenom       String
   telephone    String?
   couleur      String?  @default("#3B82F6") // Couleur pour identifier le chauffeur
+  avatarUrl    String?  @map("avatar_url")
   actif        Boolean  @default(true)
 
   // Métadonnées
