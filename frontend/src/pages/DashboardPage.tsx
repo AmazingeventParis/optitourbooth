@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { tourneesService } from '@/services/tournees.service';
+import { socketService, PositionUpdate } from '@/services/socket.service';
 import { useToast } from '@/hooks/useToast';
 import { User, Tournee, Point } from '@/types';
 import { format } from 'date-fns';
@@ -89,15 +90,15 @@ const pointStatutDot: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
   const { error: showError } = useToast();
   const navigate = useNavigate();
 
   const [todayTournees, setTodayTournees] = useState<Tournee[]>([]);
   const [isLoadingTournees, setIsLoadingTournees] = useState(true);
 
-  // GPS map (ready for real positions)
-  const [positions] = useState<Map<string, ChauffeurPosition>>(new Map());
+  // GPS map - positions state that can be updated
+  const [positions, setPositions] = useState<Map<string, ChauffeurPosition>>(new Map());
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -105,6 +106,48 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchTodayTournees();
   }, []);
+
+  // Connect to Socket.io and listen for GPS positions
+  useEffect(() => {
+    if (!token) return;
+
+    // Connect to socket
+    socketService.connect(token).catch((err) => {
+      console.error('[Dashboard] Socket connection failed:', err);
+    });
+
+    // Handle position updates from chauffeurs
+    const handlePositionUpdate = (data: PositionUpdate & { chauffeurId: string }) => {
+      console.log('[Dashboard] Position update received:', data);
+
+      setPositions((prev) => {
+        const newPositions = new Map(prev);
+
+        // Find chauffeur info from tournees
+        const chauffeur = todayTournees
+          .map(t => t.chauffeur)
+          .find(c => c?.id === data.chauffeurId);
+
+        newPositions.set(data.chauffeurId, {
+          chauffeurId: data.chauffeurId,
+          chauffeur: chauffeur as User | undefined,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          isOnline: true,
+          speed: data.speed,
+        });
+
+        return newPositions;
+      });
+    };
+
+    // Listen for position updates (backend emits 'chauffeur:position' to admins)
+    socketService.on('chauffeur:position', handlePositionUpdate);
+
+    return () => {
+      socketService.off('chauffeur:position', handlePositionUpdate);
+    };
+  }, [token, todayTournees]);
 
   // Initialize map
   useEffect(() => {
