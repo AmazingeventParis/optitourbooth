@@ -93,6 +93,7 @@ export interface Tournee {
   depotLongitude?: number;
   notes?: string;
   points?: Point[];
+  _count?: { points: number };
   createdAt: string;
   updatedAt: string;
 }

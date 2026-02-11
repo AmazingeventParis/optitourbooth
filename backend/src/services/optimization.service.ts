@@ -793,6 +793,13 @@ export const optimizationService = {
     console.log(`[OPTIMIZATION] Updating point durations for tournee ${tourneeId}`);
     await this.updateAllPointDurations(tourneeId);
 
+    // Always sync nombrePoints from actual count (even if stats calculation fails)
+    const pointCount = await prisma.point.count({ where: { tourneeId } });
+    await prisma.tournee.update({
+      where: { id: tourneeId },
+      data: { nombrePoints: pointCount },
+    });
+
     const stats = await this.calculateTourneeStats(tourneeId);
 
     if (stats) {

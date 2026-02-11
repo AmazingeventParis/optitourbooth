@@ -61,6 +61,9 @@ const createChauffeurIcon = (isOnline: boolean) => {
   });
 };
 
+/** Get real point count: prefer actual points array, then _count, fallback to nombrePoints */
+const getPointCount = (t: Tournee) => t.points?.length ?? t._count?.points ?? t.nombrePoints;
+
 const getStatutBadge = (statut: Tournee['statut']) => {
   const config = {
     brouillon: { variant: 'default' as const, label: 'Brouillon' },
@@ -244,7 +247,7 @@ export default function DashboardPage() {
         />
         <StatCard
           title="Points total"
-          value={String(todayTournees.reduce((sum, t) => sum + t.nombrePoints, 0))}
+          value={String(todayTournees.reduce((sum, t) => sum + getPointCount(t), 0))}
           icon={
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -399,7 +402,7 @@ function TourneeCard({ tournee, onClick }: { tournee: Tournee; onClick: () => vo
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">{completedCount}/{points.length}</span>
+          <span className="text-xs text-gray-500">{completedCount}/{getPointCount(tournee)}</span>
           {getStatutBadge(tournee.statut)}
           <ChevronRightIcon className="h-4 w-4 text-gray-400" />
         </div>
@@ -430,7 +433,7 @@ function TourneeCard({ tournee, onClick }: { tournee: Tournee; onClick: () => vo
       <div className="ml-5 mt-2 flex items-center gap-3 text-xs text-gray-500">
         <span className="flex items-center gap-1">
           <MapPinIcon className="h-3.5 w-3.5" />
-          {points.length} point{points.length > 1 ? 's' : ''}
+          {getPointCount(tournee)} point{getPointCount(tournee) > 1 ? 's' : ''}
         </span>
         {tournee.distanceTotaleKm != null && (
           <span>{tournee.distanceTotaleKm.toFixed(1)} km</span>
