@@ -122,16 +122,13 @@ export default function ChauffeurPointPage() {
   };
 
   const handleSaveClientInfo = async () => {
-    if (!signatureName || !tournee || !point) {
-      showError('Erreur', 'Veuillez entrer le nom du signataire');
-      return;
-    }
+    if (!tournee || !point) return;
 
     setIsSaving(true);
     try {
       await tourneesService.updatePoint(tournee.id, point.id, {
         signatureData: clientComment || undefined,
-        signatureNom: signatureName,
+        signatureNom: signatureName || undefined,
       });
 
       success('Informations enregistrées');
@@ -491,11 +488,10 @@ export default function ChauffeurPointPage() {
       >
         <div className="space-y-4">
           <Input
-            label="Nom du signataire"
+            label="Nom du signataire (optionnel)"
             value={signatureName}
             onChange={(e) => setSignatureName(e.target.value)}
             placeholder="Nom et prénom"
-            required
           />
 
           <div>
@@ -523,7 +519,7 @@ export default function ChauffeurPointPage() {
               className="flex-1"
               onClick={handleSaveClientInfo}
               isLoading={isSaving}
-              disabled={!signatureName}
+              disabled={!signatureName && !clientComment}
             >
               Enregistrer
             </Button>
