@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/useToast';
 import { User, PaginationMeta } from '@/types';
 import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, CameraIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import Avatar from '@/components/ui/Avatar';
+import { useAuthStore } from '@/store/authStore';
 
 interface UserFormData {
   email: string;
@@ -46,6 +47,7 @@ const initialFormData: UserFormData = {
 
 export default function UsersPage() {
   const { success, error: showError } = useToast();
+  const { user: authUser, setUser: setAuthUser } = useAuthStore();
 
   const [users, setUsers] = useState<User[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 20, total: 0, totalPages: 0 });
@@ -125,6 +127,9 @@ export default function UsersPage() {
       const updated = await usersService.uploadAvatar(selectedUser.id, file);
       setSelectedUser(updated);
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, avatarUrl: updated.avatarUrl } : u)));
+      if (authUser && authUser.id === updated.id) {
+        setAuthUser({ ...authUser, avatarUrl: updated.avatarUrl });
+      }
       success('Photo mise à jour');
     } catch (err) {
       showError('Erreur', (err as Error).message);
@@ -141,6 +146,9 @@ export default function UsersPage() {
       const updated = await usersService.deleteAvatar(selectedUser.id);
       setSelectedUser(updated);
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, avatarUrl: undefined } : u)));
+      if (authUser && authUser.id === updated.id) {
+        setAuthUser({ ...authUser, avatarUrl: undefined });
+      }
       success('Photo supprimée');
     } catch (err) {
       showError('Erreur', (err as Error).message);
@@ -359,7 +367,7 @@ export default function UsersPage() {
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
+                    className="sr-only"
                     onChange={handleAvatarUpload}
                     disabled={isUploadingAvatar}
                   />
