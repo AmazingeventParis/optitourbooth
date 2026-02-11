@@ -162,68 +162,34 @@ export const tourneeController = {
       where.statut = statut;
     }
 
-    // Build include object
-    const include: Record<string, unknown> = {
-      chauffeur: {
-        select: {
-          id: true,
-          nom: true,
-          prenom: true,
-          telephone: true,
-          couleur: true,
-        },
-      },
-      vehicule: {
-        select: {
-          id: true,
-          nom: true,
-          marque: true,
-          modele: true,
-          immatriculation: true,
-          consommationL100km: true,
-        },
-      },
-      _count: {
-        select: { points: true },
-      },
-    };
+    // Exécuter la requête
+    const baseOptions = { where, orderBy: [{ date: 'desc' as const }, { heureDepart: 'asc' as const }], skip, take: limit };
 
-    // Inclure les points avec clients et produits si demandé (pour le dashboard)
-    if (includePoints === 'true') {
-      include.points = {
-        orderBy: { ordre: 'asc' },
-        include: {
-          client: {
-            select: {
-              id: true,
-              nom: true,
-              societe: true,
-              ville: true,
-            },
-          },
-          produits: {
+    const [tournees, total] = await Promise.all([
+      includePoints === 'true'
+        ? prisma.tournee.findMany({
+            ...baseOptions,
             include: {
-              produit: {
-                select: {
-                  id: true,
-                  nom: true,
+              chauffeur: { select: { id: true, nom: true, prenom: true, telephone: true, couleur: true } },
+              vehicule: { select: { id: true, nom: true, marque: true, modele: true, immatriculation: true, consommationL100km: true } },
+              _count: { select: { points: true } },
+              points: {
+                orderBy: { ordre: 'asc' },
+                include: {
+                  client: { select: { id: true, nom: true, societe: true, ville: true } },
+                  produits: { include: { produit: { select: { id: true, nom: true } } } },
                 },
               },
             },
-          },
-        },
-      };
-    }
-
-    // Exécuter la requête
-    const [tournees, total] = await Promise.all([
-      prisma.tournee.findMany({
-        where,
-        include,
-        orderBy: [{ date: 'desc' }, { heureDepart: 'asc' }],
-        skip,
-        take: limit,
-      }),
+          })
+        : prisma.tournee.findMany({
+            ...baseOptions,
+            include: {
+              chauffeur: { select: { id: true, nom: true, prenom: true, telephone: true, couleur: true } },
+              vehicule: { select: { id: true, nom: true, marque: true, modele: true, immatriculation: true, consommationL100km: true } },
+              _count: { select: { points: true } },
+            },
+          }),
       prisma.tournee.count({ where }),
     ]);
 
