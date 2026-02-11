@@ -162,15 +162,37 @@ export const tourneeController = {
       where.statut = statut;
     }
 
-    // Inclure les points avec clients et produits si demandé (pour le dashboard)
-    const pointsInclude = includePoints === 'true' ? {
-      points: {
-        orderBy: { ordre: 'asc' as const },
+    // Build include object
+    const include: Record<string, unknown> = {
+      chauffeur: {
         select: {
           id: true,
-          ordre: true,
-          type: true,
-          statut: true,
+          nom: true,
+          prenom: true,
+          telephone: true,
+          couleur: true,
+        },
+      },
+      vehicule: {
+        select: {
+          id: true,
+          nom: true,
+          marque: true,
+          modele: true,
+          immatriculation: true,
+          consommationL100km: true,
+        },
+      },
+      _count: {
+        select: { points: true },
+      },
+    };
+
+    // Inclure les points avec clients et produits si demandé (pour le dashboard)
+    if (includePoints === 'true') {
+      include.points = {
+        orderBy: { ordre: 'asc' },
+        include: {
           client: {
             select: {
               id: true,
@@ -180,8 +202,7 @@ export const tourneeController = {
             },
           },
           produits: {
-            select: {
-              quantite: true,
+            include: {
               produit: {
                 select: {
                   id: true,
@@ -191,38 +212,14 @@ export const tourneeController = {
             },
           },
         },
-      },
-    } : {};
+      };
+    }
 
     // Exécuter la requête
     const [tournees, total] = await Promise.all([
       prisma.tournee.findMany({
         where,
-        include: {
-          chauffeur: {
-            select: {
-              id: true,
-              nom: true,
-              prenom: true,
-              telephone: true,
-              couleur: true,
-            },
-          },
-          vehicule: {
-            select: {
-              id: true,
-              nom: true,
-              marque: true,
-              modele: true,
-              immatriculation: true,
-              consommationL100km: true,
-            },
-          },
-          _count: {
-            select: { points: true },
-          },
-          ...pointsInclude,
-        },
+        include,
         orderBy: [{ date: 'desc' }, { heureDepart: 'asc' }],
         skip,
         take: limit,
