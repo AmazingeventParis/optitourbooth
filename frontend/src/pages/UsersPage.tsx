@@ -5,7 +5,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { usersService } from '@/services/users.service';
 import { useToast } from '@/hooks/useToast';
 import { User, PaginationMeta } from '@/types';
-import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, CameraIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, CameraIcon, XMarkIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import Avatar from '@/components/ui/Avatar';
 import { useAuthStore } from '@/store/authStore';
 
@@ -65,6 +65,7 @@ export default function UsersPage() {
   const [formErrors, setFormErrors] = useState<Partial<UserFormData>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const fetchUsers = useCallback(async (page = 1) => {
@@ -97,6 +98,7 @@ export default function UsersPage() {
     setSelectedUser(null);
     setFormData(initialFormData);
     setFormErrors({});
+    setShowPassword(false);
     setIsModalOpen(true);
   };
 
@@ -112,6 +114,7 @@ export default function UsersPage() {
       couleur: user.couleur || '#3B82F6',
     });
     setFormErrors({});
+    setShowPassword(false);
     setIsModalOpen(true);
   };
 
@@ -418,15 +421,34 @@ export default function UsersPage() {
             error={formErrors.email}
             required
           />
-          <Input
-            label={selectedUser ? 'Nouveau mot de passe (laisser vide pour ne pas changer)' : 'Mot de passe'}
-            type="password"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            error={formErrors.password}
-            placeholder="Min. 8 caractères, majuscule, minuscule, chiffre"
-            required={!selectedUser}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {selectedUser ? 'Nouveau mot de passe (laisser vide pour ne pas changer)' : 'Mot de passe'}{!selectedUser && <span className="text-red-500"> *</span>}
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="Min. 8 caractères, majuscule, minuscule, chiffre"
+                className={`input pr-10 ${formErrors.password ? 'border-red-500' : ''}`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? (
+                  <EyeSlashIcon className="h-5 w-5" />
+                ) : (
+                  <EyeIcon className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+            {formErrors.password && (
+              <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>
+            )}
+          </div>
           <Select
             label="Rôle"
             value={formData.role}

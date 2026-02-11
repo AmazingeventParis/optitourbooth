@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { authService } from '../services/auth.service.js';
-import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary.js';
+import { uploadToCloudinary, deleteFromCloudinary, isCloudinaryConfigured } from '../config/cloudinary.js';
 import { apiResponse, parsePagination } from '../utils/index.js';
 import { UserRole } from '@prisma/client';
 
@@ -309,6 +309,11 @@ export const userController = {
   async uploadAvatar(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
 
+    if (!isCloudinaryConfigured()) {
+      apiResponse.badRequest(res, 'Le service de stockage d\'images n\'est pas configuré');
+      return;
+    }
+
     if (!req.file) {
       apiResponse.badRequest(res, 'Aucun fichier fourni');
       return;
@@ -335,8 +340,15 @@ export const userController = {
     }
 
     // Upload vers Cloudinary avec transformation crop/resize 200x200
-    const { url } = await uploadToCloudinary(req.file.buffer, 'avatars');
-    const avatarUrl = url.replace('/upload/', '/upload/w_200,h_200,c_fill,g_face/');
+    let avatarUrl: string;
+    try {
+      const { url } = await uploadToCloudinary(req.file.buffer, 'avatars');
+      avatarUrl = url.replace('/upload/', '/upload/w_200,h_200,c_fill,g_face/');
+    } catch (err) {
+      console.error('Cloudinary avatar upload error:', err);
+      apiResponse.badRequest(res, 'Erreur lors de l\'upload de l\'image');
+      return;
+    }
 
     const updated = await prisma.user.update({
       where: { id },

@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
+import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
 import api from '@/services/api';
 
@@ -18,6 +19,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -103,14 +105,27 @@ export default function LoginPage() {
               <label htmlFor="password" className="label">
                 Mot de passe
               </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                className={errors.password ? 'input-error' : 'input'}
-                placeholder="••••••••"
-                {...register('password')}
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  className={errors.password ? 'input-error pr-10' : 'input pr-10'}
+                  placeholder="••••••••"
+                  {...register('password')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? (
+                    <EyeSlashIcon className="h-5 w-5" />
+                  ) : (
+                    <EyeIcon className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600">
                   {errors.password.message}
@@ -152,16 +167,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Info de démo */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-500 text-center">
-              <strong>Comptes de démo :</strong>
-              <br />
-              Admin : admin@shootnbox.fr / admin123
-              <br />
-              Chauffeur : chauffeur@shootnbox.fr / chauffeur123
-            </p>
-          </div>
         </div>
       </div>
     </div>
