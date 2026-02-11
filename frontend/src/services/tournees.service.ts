@@ -129,8 +129,8 @@ export const tourneesService = {
     };
   },
 
-  async getById(id: string): Promise<Tournee> {
-    const response = await api.get<ApiResponse<Tournee>>(`/tournees/${id}`);
+  async getById(id: string, light = false): Promise<Tournee> {
+    const response = await api.get<ApiResponse<Tournee>>(`/tournees/${id}${light ? '?light=true' : ''}`);
     return response.data.data;
   },
 

@@ -164,8 +164,12 @@ export default function DashboardPage() {
     setIsLoadingTournees(true);
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
-      const result = await tourneesService.list({ date: today, limit: 50, includePoints: true });
-      setTodayTournees(result.data);
+      const result = await tourneesService.list({ date: today, limit: 50 });
+      // Fetch full details (with points) for each tournée
+      const detailed = await Promise.all(
+        result.data.map((t) => tourneesService.getById(t.id, true))
+      );
+      setTodayTournees(detailed);
     } catch (err) {
       showError('Erreur', (err as Error).message);
     } finally {
