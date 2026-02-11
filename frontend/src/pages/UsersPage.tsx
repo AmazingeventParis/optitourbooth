@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Card, Input, Select, Badge, Modal } from '@/components/ui';
 import DataTable, { Column } from '@/components/ui/DataTable';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -65,6 +65,7 @@ export default function UsersPage() {
   const [formErrors, setFormErrors] = useState<Partial<UserFormData>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const fetchUsers = useCallback(async (page = 1) => {
     setIsLoading(true);
@@ -353,26 +354,32 @@ export default function UsersPage() {
           {/* Avatar upload (edit mode only) */}
           {selectedUser && (
             <div className="flex flex-col items-center gap-2 pb-2">
-              <div className="relative group">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleAvatarUpload}
+                disabled={isUploadingAvatar}
+              />
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={isUploadingAvatar}
+                className="relative group rounded-full cursor-pointer"
+              >
                 <Avatar
                   user={{ ...selectedUser, couleur: formData.couleur }}
                   size="lg"
                 />
-                <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
                   {isUploadingAvatar ? (
                     <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
                   ) : (
                     <CameraIcon className="h-6 w-6 text-white" />
                   )}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="sr-only"
-                    onChange={handleAvatarUpload}
-                    disabled={isUploadingAvatar}
-                  />
-                </label>
-              </div>
+                </div>
+              </button>
               {selectedUser.avatarUrl && (
                 <button
                   type="button"

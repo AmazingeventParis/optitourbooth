@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { authService } from '@/services/auth.service';
 import { PageLoader } from '@/components/ui/PageLoader';
 
 // Layouts (chargés immédiatement car toujours utilisés)
@@ -123,6 +124,15 @@ function ChauffeurRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  const { isAuthenticated, setUser } = useAuthStore();
+
+  // Refresh user data on mount (picks up avatarUrl and other changes)
+  useEffect(() => {
+    if (isAuthenticated) {
+      authService.getMe().then(setUser).catch(() => {});
+    }
+  }, [isAuthenticated, setUser]);
+
   return (
     <Routes>
       {/* Routes publiques */}
