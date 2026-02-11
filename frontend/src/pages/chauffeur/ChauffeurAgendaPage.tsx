@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Badge } from '@/components/ui';
 import { tourneesService } from '@/services/tournees.service';
-import { useAuthStore } from '@/store/authStore';
+import { useEffectiveUser } from '@/hooks/useEffectiveUser';
 import { useToast } from '@/hooks/useToast';
 import { Tournee } from '@/types';
 import {
@@ -34,7 +34,7 @@ interface TourneesByDate {
 }
 
 export default function ChauffeurAgendaPage() {
-  const { user } = useAuthStore();
+  const { effectiveUser } = useEffectiveUser();
   const navigate = useNavigate();
   const { error: showError } = useToast();
 
@@ -44,7 +44,7 @@ export default function ChauffeurAgendaPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchTournees = useCallback(async () => {
-    if (!user?.id) return;
+    if (!effectiveUser?.id) return;
 
     setIsLoading(true);
     try {
@@ -53,7 +53,7 @@ export default function ChauffeurAgendaPage() {
       const monthEnd = endOfMonth(currentMonth);
 
       const result = await tourneesService.list({
-        chauffeurId: user.id,
+        chauffeurId: effectiveUser.id,
         dateDebut: format(monthStart, 'yyyy-MM-dd'),
         dateFin: format(monthEnd, 'yyyy-MM-dd'),
         limit: 100,
@@ -75,7 +75,7 @@ export default function ChauffeurAgendaPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id, currentMonth, showError]);
+  }, [effectiveUser?.id, currentMonth, showError]);
 
   useEffect(() => {
     fetchTournees();

@@ -17,12 +17,15 @@ interface AuthState {
   refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  impersonatedChauffeur: User | null;
 
   // Actions
   setAuth: (user: User, token: string, refreshToken: string) => void;
   setUser: (user: User) => void;
   setLoading: (loading: boolean) => void;
   logout: () => void;
+  startImpersonation: (chauffeur: User) => void;
+  stopImpersonation: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -33,6 +36,7 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       isAuthenticated: false,
       isLoading: true,
+      impersonatedChauffeur: null,
 
       setAuth: (user, token, refreshToken) =>
         set({
@@ -54,7 +58,14 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
           isAuthenticated: false,
           isLoading: false,
+          impersonatedChauffeur: null,
         }),
+
+      startImpersonation: (chauffeur) =>
+        set({ impersonatedChauffeur: chauffeur }),
+
+      stopImpersonation: () =>
+        set({ impersonatedChauffeur: null }),
     }),
     {
       name: 'optitour-auth',
@@ -63,6 +74,7 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
+        impersonatedChauffeur: state.impersonatedChauffeur,
       }),
       onRehydrateStorage: () => (state) => {
         // Une fois réhydraté, on n'est plus en loading

@@ -4,8 +4,8 @@ import { Card, Badge, Button } from '@/components/ui';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { RouteMap } from '@/components/map';
 import { tourneesService } from '@/services/tournees.service';
-import { useAuthStore } from '@/store/authStore';
 import { useChauffeurStore } from '@/store/chauffeurStore';
+import { useEffectiveUser } from '@/hooks/useEffectiveUser';
 import { useToast } from '@/hooks/useToast';
 import { Point, PointProduit, Produit, Tournee } from '@/types';
 import { format, isAfter, startOfDay } from 'date-fns';
@@ -60,7 +60,7 @@ const getProductColor = (point: Point): string => {
 export default function ChauffeurTourneePage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuthStore();
+  const { effectiveUser } = useEffectiveUser();
   const { tournee: storeTournee, isLoading: storeLoading, fetchTournee, refreshTournee } = useChauffeurStore();
   const { success, error: showError } = useToast();
 
@@ -92,11 +92,11 @@ export default function ChauffeurTourneePage() {
           setSpecificLoading(false);
           navigate('/chauffeur');
         });
-    } else if (user?.id) {
+    } else if (effectiveUser?.id) {
       // Default behavior: fetch today's tournee
-      fetchTournee(user.id);
+      fetchTournee(effectiveUser.id);
     }
-  }, [specificTourneeId, user?.id, fetchTournee, showError, navigate]);
+  }, [specificTourneeId, effectiveUser?.id, fetchTournee, showError, navigate]);
 
   // Use specific tournee if available, otherwise use store tournee
   const tournee = specificTournee || storeTournee;

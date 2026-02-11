@@ -1,10 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useSocketStore } from '@/store/socketStore';
 import { socketService } from '@/services/socket.service';
 import { pushNotificationService } from '@/services/pushNotification.service';
 import { useGPSTracking } from '@/hooks/useGPSTracking';
+import { useEffectiveUser } from '@/hooks/useEffectiveUser';
+import { useChauffeurStore } from '@/store/chauffeurStore';
 import { tourneesService } from '@/services/tournees.service';
 import { format } from 'date-fns';
 import {
@@ -16,11 +18,15 @@ import {
   SignalSlashIcon,
   BellIcon,
   XMarkIcon,
+  ShieldCheckIcon,
+  EyeIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
 export default function ChauffeurLayout() {
-  const { user, token, logout } = useAuthStore();
+  const { token, logout, stopImpersonation } = useAuthStore();
+  const { effectiveUser, isImpersonating } = useEffectiveUser();
+  const { clearTournee } = useChauffeurStore();
   const { isConnected, setConnected } = useSocketStore();
   const navigate = useNavigate();
 
@@ -31,15 +37,24 @@ export default function ChauffeurLayout() {
   const [pushState, setPushState] = useState<'loading' | 'prompt' | 'subscribed' | 'denied' | 'unsupported'>('loading');
   const [showPushBanner, setShowPushBanner] = useState(false);
 
+  // Clear tournee store when effective user changes (impersonation switch)
+  const prevEffectiveUserId = useRef(effectiveUser?.id);
+  useEffect(() => {
+    if (prevEffectiveUserId.current && prevEffectiveUserId.current !== effectiveUser?.id) {
+      clearTournee();
+    }
+    prevEffectiveUserId.current = effectiveUser?.id;
+  }, [effectiveUser?.id, clearTournee]);
+
   // Check for active tournee
   const checkActiveTournee = useCallback(async () => {
-    if (!user?.id) return;
+    if (!effectiveUser?.id) return;
 
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
       const result = await tourneesService.list({
         date: today,
-        chauffeurId: user.id,
+        chauffeurId: effectiveUser.id,
         limit: 10,
       });
 
@@ -49,7 +64,7 @@ export default function ChauffeurLayout() {
     } catch (error) {
       console.error('[ChauffeurLayout] Error checking active tournee:', error);
     }
-  }, [user?.id]);
+  }, [effectiveUser?.id]);
 
   // Initialize socket connection
   useEffect(() => {
@@ -68,25 +83,28 @@ export default function ChauffeurLayout() {
     connectSocket();
 
     // Check push notification status (don't request permission yet)
-    (async () => {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        setPushState('unsupported');
-        return;
-      }
-      if (Notification.permission === 'denied') {
-        setPushState('denied');
-        return;
-      }
-      const subscribed = await pushNotificationService.isSubscribed();
-      if (subscribed) {
-        // Already subscribed, just re-sync with server
-        pushNotificationService.init().catch(console.error);
-        setPushState('subscribed');
-      } else {
-        setPushState('prompt');
-        setShowPushBanner(true);
-      }
-    })();
+    // Skip when impersonating - admin doesn't need chauffeur push notifications
+    if (!isImpersonating) {
+      (async () => {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+          setPushState('unsupported');
+          return;
+        }
+        if (Notification.permission === 'denied') {
+          setPushState('denied');
+          return;
+        }
+        const subscribed = await pushNotificationService.isSubscribed();
+        if (subscribed) {
+          // Already subscribed, just re-sync with server
+          pushNotificationService.init().catch(console.error);
+          setPushState('subscribed');
+        } else {
+          setPushState('prompt');
+          setShowPushBanner(true);
+        }
+      })();
+    }
 
     // Check for active tournee initially
     checkActiveTournee();
@@ -99,7 +117,7 @@ export default function ChauffeurLayout() {
       socketService.disconnect();
       setConnected(false);
     };
-  }, [token, setConnected, checkActiveTournee]);
+  }, [token, setConnected, checkActiveTournee, isImpersonating]);
 
   // Listen for tournee updates from socket
   useEffect(() => {
@@ -115,9 +133,9 @@ export default function ChauffeurLayout() {
     };
   }, [checkActiveTournee]);
 
-  // GPS tracking - only enabled when there's an active tournee
+  // GPS tracking - only enabled when there's an active tournee and NOT impersonating
   const { isTracking, error: gpsError, accuracy } = useGPSTracking({
-    enabled: hasActiveTournee && isConnected,
+    enabled: hasActiveTournee && isConnected && !isImpersonating,
   });
 
   const handleEnablePush = async () => {
@@ -128,6 +146,12 @@ export default function ChauffeurLayout() {
       setPushState('denied');
     }
     setShowPushBanner(false);
+  };
+
+  const handleReturnToAdmin = () => {
+    stopImpersonation();
+    clearTournee();
+    navigate('/');
   };
 
   const handleLogout = () => {
@@ -173,7 +197,7 @@ export default function ChauffeurLayout() {
           <div>
             <h1 className="font-bold text-lg">OptiTour</h1>
             <p className="text-xs text-primary-200">
-              {user?.prenom} {user?.nom}
+              {effectiveUser?.prenom} {effectiveUser?.nom}
             </p>
           </div>
         </div>
@@ -238,8 +262,27 @@ export default function ChauffeurLayout() {
         </div>
       </header>
 
+      {/* Impersonation banner */}
+      {isImpersonating && (
+        <div className="bg-amber-500 text-white px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <EyeIcon className="h-5 w-5 flex-shrink-0" />
+            <span className="text-sm font-medium">
+              Mode Chauffeur : {effectiveUser?.prenom} {effectiveUser?.nom}
+            </span>
+          </div>
+          <button
+            onClick={handleReturnToAdmin}
+            className="flex items-center gap-1.5 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
+          >
+            <ShieldCheckIcon className="h-4 w-4" />
+            Retour Admin
+          </button>
+        </div>
+      )}
+
       {/* Push notification banner */}
-      {showPushBanner && pushState === 'prompt' && (
+      {showPushBanner && pushState === 'prompt' && !isImpersonating && (
         <div className="bg-blue-50 border-b border-blue-200 px-4 py-3 flex items-center gap-3">
           <BellIcon className="h-6 w-6 text-blue-600 flex-shrink-0" />
           <p className="text-sm text-blue-800 flex-1">

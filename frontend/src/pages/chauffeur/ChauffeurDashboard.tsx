@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Badge, Button } from '@/components/ui';
-import { useAuthStore } from '@/store/authStore';
 import { useChauffeurStore } from '@/store/chauffeurStore';
+import { useEffectiveUser } from '@/hooks/useEffectiveUser';
 import { tourneesService } from '@/services/tournees.service';
 import { formatTime } from '@/utils/format';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
@@ -26,7 +26,7 @@ interface WeeklyStats {
 
 export default function ChauffeurDashboard() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { effectiveUser } = useEffectiveUser();
   const { tournee, isLoading, fetchTournee } = useChauffeurStore();
 
   // Weekly stats state
@@ -39,14 +39,14 @@ export default function ChauffeurDashboard() {
   const [isLoadingWeekly, setIsLoadingWeekly] = useState(true);
 
   useEffect(() => {
-    if (user?.id) {
-      fetchTournee(user.id);
+    if (effectiveUser?.id) {
+      fetchTournee(effectiveUser.id);
     }
-  }, [user?.id, fetchTournee]);
+  }, [effectiveUser?.id, fetchTournee]);
 
   // Fetch weekly stats
   useEffect(() => {
-    if (!user?.id) return;
+    if (!effectiveUser?.id) return;
 
     const fetchWeeklyStats = async () => {
       setIsLoadingWeekly(true);
@@ -56,7 +56,7 @@ export default function ChauffeurDashboard() {
         const weekEnd = endOfWeek(today, { weekStartsOn: 1 }); // Sunday
 
         const result = await tourneesService.list({
-          chauffeurId: user.id,
+          chauffeurId: effectiveUser.id,
           dateDebut: format(weekStart, 'yyyy-MM-dd'),
           dateFin: format(weekEnd, 'yyyy-MM-dd'),
           limit: 100,
@@ -106,7 +106,7 @@ export default function ChauffeurDashboard() {
     };
 
     fetchWeeklyStats();
-  }, [user?.id]);
+  }, [effectiveUser?.id]);
 
   const getStatutConfig = (statut: string) => {
     const configs: Record<string, { variant: 'info' | 'warning' | 'success' | 'danger'; label: string; icon: React.ElementType }> = {
@@ -145,7 +145,7 @@ export default function ChauffeurDashboard() {
       {/* Greeting */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">
-          Bonjour {user?.prenom} !
+          Bonjour {effectiveUser?.prenom} !
         </h1>
         <p className="text-gray-500">
           {format(new Date(), "EEEE d MMMM yyyy", { locale: fr })}
