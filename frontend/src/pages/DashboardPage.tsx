@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { tourneesService } from '@/services/tournees.service';
+import { usersService } from '@/services/users.service';
 import { socketService, PositionUpdate } from '@/services/socket.service';
 import { useToast } from '@/hooks/useToast';
 import { User, Tournee, Point } from '@/types';
@@ -33,9 +34,41 @@ interface ChauffeurPosition {
   speed?: number;
 }
 
-const createChauffeurIcon = (isOnline: boolean) => {
+const createChauffeurIcon = (chauffeur?: User, isOnline: boolean = true) => {
   const color = isOnline ? '#10B981' : '#6B7280';
-  const size = 32;
+  const size = 48;
+
+  // If chauffeur has avatar, use it
+  if (chauffeur?.avatarUrl) {
+    return L.divIcon({
+      className: 'chauffeur-marker',
+      html: `
+        <div style="
+          width: ${size}px;
+          height: ${size}px;
+          border-radius: 50%;
+          overflow: hidden;
+          border: 4px solid ${color};
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          background-color: white;
+        ">
+          <img
+            src="${chauffeur.avatarUrl}"
+            alt="${chauffeur.prenom} ${chauffeur.nom}"
+            style="width: 100%; height: 100%; object-fit: cover;"
+          />
+        </div>
+      `,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+      popupAnchor: [0, -size / 2],
+    });
+  }
+
+  // Otherwise, show initials or truck icon
+  const initials = chauffeur
+    ? `${chauffeur.prenom?.[0] || ''}${chauffeur.nom?.[0] || ''}`.toUpperCase()
+    : '?';
 
   return L.divIcon({
     className: 'chauffeur-marker',
@@ -49,19 +82,17 @@ const createChauffeurIcon = (isOnline: boolean) => {
         align-items: center;
         justify-content: center;
         color: white;
-        border: 3px solid white;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        border: 4px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        font-size: 18px;
+        font-weight: bold;
       ">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="1" y="3" width="15" height="13" rx="2" ry="2"></rect>
-          <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
-          <circle cx="5.5" cy="18.5" r="2.5"></circle>
-          <circle cx="18.5" cy="18.5" r="2.5"></circle>
-        </svg>
+        ${initials}
       </div>
     `,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
   });
 };
 
@@ -117,20 +148,37 @@ export default function DashboardPage() {
     });
 
     // Handle position updates from chauffeurs
-    const handlePositionUpdate = (data: PositionUpdate & { chauffeurId: string }) => {
+    const handlePositionUpdate = async (data: PositionUpdate & { chauffeurId: string }) => {
       console.log('[Dashboard] Position update received:', data);
+
+      // Fetch chauffeur info if not already in state
+      let chauffeur: User | undefined;
+
+      setPositions((prev) => {
+        const existing = prev.get(data.chauffeurId);
+        chauffeur = existing?.chauffeur;
+        return prev;
+      });
+
+      // If we don't have chauffeur info, fetch it
+      if (!chauffeur) {
+        try {
+          chauffeur = await usersService.getById(data.chauffeurId);
+        } catch (error) {
+          console.error('[Dashboard] Failed to fetch chauffeur info:', error);
+          // Try to find in tournees as fallback
+          chauffeur = todayTournees
+            .map(t => t.chauffeur)
+            .find(c => c?.id === data.chauffeurId) as User | undefined;
+        }
+      }
 
       setPositions((prev) => {
         const newPositions = new Map(prev);
 
-        // Find chauffeur info from tournees
-        const chauffeur = todayTournees
-          .map(t => t.chauffeur)
-          .find(c => c?.id === data.chauffeurId);
-
         newPositions.set(data.chauffeurId, {
           chauffeurId: data.chauffeurId,
-          chauffeur: chauffeur as User | undefined,
+          chauffeur: chauffeur,
           latitude: data.latitude,
           longitude: data.longitude,
           isOnline: true,
@@ -179,14 +227,14 @@ export default function DashboardPage() {
 
       if (existingMarker) {
         existingMarker.setLatLng([pos.latitude, pos.longitude]);
-        existingMarker.setIcon(createChauffeurIcon(pos.isOnline));
+        existingMarker.setIcon(createChauffeurIcon(pos.chauffeur, pos.isOnline));
       } else {
         const marker = L.marker([pos.latitude, pos.longitude], {
-          icon: createChauffeurIcon(pos.isOnline),
+          icon: createChauffeurIcon(pos.chauffeur, pos.isOnline),
         }).addTo(mapRef.current!);
 
         marker.bindPopup(`
-          <strong>${pos.chauffeur?.prenom} ${pos.chauffeur?.nom}</strong><br/>
+          <strong>${pos.chauffeur?.prenom || 'Chauffeur'} ${pos.chauffeur?.nom || 'inconnu'}</strong><br/>
           ${pos.isOnline ? '🟢 En ligne' : '🔴 Hors ligne'}<br/>
           ${pos.speed ? `Vitesse: ${pos.speed.toFixed(0)} km/h` : ''}
         `);
