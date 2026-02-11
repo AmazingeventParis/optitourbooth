@@ -189,8 +189,83 @@ TOMTOM_API_KEY=your_api_key_here
 
 ---
 
+---
+
+## Session du 11 février 2026
+
+### Problèmes résolus
+
+#### 8. Duplication du type de produit dans le dashboard
+**Problème** : Les produits étaient affichés 2 fois dans les cartes de tournée du dashboard :
+- Une fois sous le nom du client (pour chaque point)
+- Une fois en bas de la carte dans des cartouches grisées (résumé global)
+
+**Solution** : Suppression du résumé global en bas et conservation de l'affichage par point.
+
+**Fichiers modifiés** :
+- `frontend/src/pages/DashboardPage.tsx`
+
+---
+
+#### 9. Onboarding PWA pour les chauffeurs
+**Problème** : Les chauffeurs n'activaient pas les permissions GPS et notifications car :
+- Aucun processus guidé pour demander les permissions
+- Les bannières étaient faciles à ignorer
+- Pas d'explication sur l'importance des permissions
+
+**Solution** : Création d'un système d'onboarding complet pour les chauffeurs
+- Page d'onboarding en 4 étapes au premier lancement
+- Demande explicite du GPS avec explications claires
+- Demande explicite des notifications push
+- Proposition d'installation de la PWA
+- Blocage de l'accès tant que le GPS n'est pas autorisé
+- Page d'aide avec instructions détaillées par navigateur/OS
+- Bannière d'alerte si permissions refusées
+- Stockage local pour ne montrer qu'une fois
+
+**Fichiers créés** :
+- `frontend/src/pages/ChauffeurOnboardingPage.tsx` (page d'onboarding)
+- `frontend/src/pages/ChauffeurPermissionsHelp.tsx` (page d'aide)
+
+**Fichiers modifiés** :
+- `frontend/src/App.tsx` (nouvelles routes)
+- `frontend/src/components/layout/ChauffeurLayout.tsx` (redirection onboarding + bannière aide)
+- `frontend/public/manifest.json` (amélioration PWA)
+
+**Fonctionnalités** :
+- **Étape 1** : Écran de bienvenue
+- **Étape 2** : Demande permission GPS avec explications
+- **Étape 3** : Demande permission notifications avec explications
+- **Étape 4** : Installation PWA (si disponible)
+- **Aide** : Instructions détaillées pour Android/iOS, Chrome/Safari
+- **Bannière** : Alerte visible si GPS ou notifications désactivés
+
+**Améliorations manifest.json** :
+- Description de l'application
+- Catégories (business, productivity, logistics)
+- Raccourcis vers Tournée et Agenda
+- Point d'entrée sur `/chauffeur`
+
+**Card de configuration dans le dashboard** :
+- Visible si app non installée OU permissions manquantes
+- Checklist visuelle de l'état (✓ ou ⚠️) :
+  - Application installée
+  - GPS autorisé
+  - Notifications activées
+- Bouton "Installer l'application" (si disponible)
+- Bouton "Configurer les permissions" (relance l'onboarding)
+- Instructions pour iOS si installation non disponible
+- Design attrayant avec gradient bleu/violet
+
+---
+
 ### Notes techniques
 
+- **PWA** : Progressive Web App installable (Android + iOS)
+- **Permissions** : GPS + Notifications demandées explicitement
+- **Installation** : Bouton "Installer l'app" pour Android, instructions Safari pour iOS
+- **Stockage** : `localStorage` pour tracker l'onboarding complété
+- **Help** : Page d'aide `/chauffeur/aide-permissions` accessible depuis la bannière
 - **VROOM** : Utilise OpenRouteService API (gratuit, 500 req/jour)
 - **TomTom** : Trafic prédictif (gratuit, 2500 req/jour)
 - **Géocodage** : Nominatim (OpenStreetMap) - 1 req/seconde max

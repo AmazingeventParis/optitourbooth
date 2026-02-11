@@ -253,15 +253,6 @@ export default function DashboardPage() {
 function TourneeCard({ tournee, onClick }: { tournee: Tournee; onClick: () => void }) {
   const points = (tournee.points || []) as (Point & { produits?: { quantite: number; produit?: { nom: string } }[] })[];
 
-  // Agréger les produits de toute la tournée
-  const produitsSummary = new Map<string, number>();
-  points.forEach((pt) => {
-    pt.produits?.forEach((pp) => {
-      const nom = pp.produit?.nom || 'Produit';
-      produitsSummary.set(nom, (produitsSummary.get(nom) || 0) + pp.quantite);
-    });
-  });
-
   const completedCount = points.filter((p) => p.statut === 'termine').length;
   const totalCount = getPointCount(tournee);
 
@@ -353,18 +344,6 @@ function TourneeCard({ tournee, onClick }: { tournee: Tournee; onClick: () => vo
         )}
       </div>
 
-      {/* Résumé produits */}
-      {produitsSummary.size > 0 && (
-        <div className="px-4 py-2 border-t border-gray-100">
-          <div className="flex flex-wrap gap-2">
-            {Array.from(produitsSummary.entries()).map(([nom, qty]) => (
-              <span key={nom} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
-                {qty}× {nom}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

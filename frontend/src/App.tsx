@@ -29,6 +29,12 @@ const MapPopupPage = lazy(() => import('@/pages/MapPopupPage'));
 // ============================================
 // LAZY LOADING - Pages Chauffeur
 // ============================================
+const ChauffeurOnboardingPage = lazy(() =>
+  import('@/pages/ChauffeurOnboardingPage')
+);
+const ChauffeurPermissionsHelp = lazy(() =>
+  import('@/pages/ChauffeurPermissionsHelp')
+);
 const ChauffeurDashboard = lazy(() =>
   import('@/pages/chauffeur/ChauffeurDashboard')
 );
@@ -177,6 +183,22 @@ function App() {
       </Route>
 
       {/* Routes Chauffeur */}
+      <Route
+        path="/chauffeur/onboarding"
+        element={
+          <ChauffeurRoute>
+            <LazyPage><ChauffeurOnboardingPage /></LazyPage>
+          </ChauffeurRoute>
+        }
+      />
+      <Route
+        path="/chauffeur/aide-permissions"
+        element={
+          <ChauffeurRoute>
+            <LazyPage><ChauffeurPermissionsHelp /></LazyPage>
+          </ChauffeurRoute>
+        }
+      />
       <Route
         path="/chauffeur"
         element={

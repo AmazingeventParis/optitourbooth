@@ -20,6 +20,7 @@ import {
   XMarkIcon,
   ShieldCheckIcon,
   EyeIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -29,6 +30,16 @@ export default function ChauffeurLayout() {
   const { clearTournee } = useChauffeurStore();
   const { isConnected, setConnected } = useSocketStore();
   const navigate = useNavigate();
+
+  // Check if onboarding is complete (skip for admins impersonating)
+  useEffect(() => {
+    if (!isImpersonating && effectiveUser?.role === 'chauffeur') {
+      const onboardingComplete = localStorage.getItem('chauffeur_onboarding_complete');
+      if (!onboardingComplete) {
+        navigate('/chauffeur/onboarding', { replace: true });
+      }
+    }
+  }, [effectiveUser, isImpersonating, navigate]);
 
   // Track if the chauffeur has an active tournee (en_cours status)
   const [hasActiveTournee, setHasActiveTournee] = useState(false);
@@ -166,6 +177,9 @@ export default function ChauffeurLayout() {
     { name: 'Agenda', href: '/chauffeur/agenda', icon: CalendarDaysIcon },
   ];
 
+  // Show help link if GPS error or notifications denied
+  const showHelpLink = gpsError || pushState === 'denied';
+
   // Format GPS accuracy for display
   const getAccuracyText = () => {
     if (!accuracy) return '';
@@ -299,6 +313,22 @@ export default function ChauffeurLayout() {
             className="p-1 text-blue-400 hover:text-blue-600 flex-shrink-0"
           >
             <XMarkIcon className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
+      {/* Help banner for permission issues */}
+      {showHelpLink && !isImpersonating && (
+        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-3 flex items-center gap-3">
+          <ExclamationTriangleIcon className="h-6 w-6 text-yellow-600 flex-shrink-0" />
+          <p className="text-sm text-yellow-800 flex-1">
+            {gpsError ? 'GPS désactivé' : 'Notifications désactivées'} - Certaines fonctionnalités sont limitées
+          </p>
+          <button
+            onClick={() => navigate('/chauffeur/aide-permissions')}
+            className="px-3 py-1.5 bg-yellow-600 text-white text-sm font-medium rounded-lg hover:bg-yellow-700 flex-shrink-0"
+          >
+            Aide
           </button>
         </div>
       )}

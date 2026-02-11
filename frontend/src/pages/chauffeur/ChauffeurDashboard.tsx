@@ -4,6 +4,7 @@ import { Card, Badge, Button } from '@/components/ui';
 import { useChauffeurStore } from '@/store/chauffeurStore';
 import { useEffectiveUser } from '@/hooks/useEffectiveUser';
 import { tourneesService } from '@/services/tournees.service';
+import { pushNotificationService } from '@/services/pushNotification.service';
 import { formatTime } from '@/utils/format';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -15,6 +16,10 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
   ChartBarIcon,
+  DevicePhoneMobileIcon,
+  BellIcon,
+  Cog6ToothIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
 
 interface WeeklyStats {
@@ -22,6 +27,11 @@ interface WeeklyStats {
   tempsRoute: number; // en minutes
   pointsLivres: number;
   tourneesTerminees: number;
+}
+
+interface DeferredPrompt extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
 export default function ChauffeurDashboard() {
@@ -38,11 +48,65 @@ export default function ChauffeurDashboard() {
   });
   const [isLoadingWeekly, setIsLoadingWeekly] = useState(true);
 
+  // App install & permissions state
+  const [isAppInstalled, setIsAppInstalled] = useState(false);
+  const [canInstall, setCanInstall] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<DeferredPrompt | null>(null);
+  const [hasNotificationPermission, setHasNotificationPermission] = useState(false);
+  const [hasGPSPermission, setHasGPSPermission] = useState(false);
+
   useEffect(() => {
     if (effectiveUser?.id) {
       fetchTournee(effectiveUser.id);
     }
   }, [effectiveUser?.id, fetchTournee]);
+
+  // Check app installation & permissions on mount
+  useEffect(() => {
+    // Check if app is installed (standalone mode)
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsAppInstalled(true);
+    }
+
+    // Listen for install prompt
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as DeferredPrompt);
+      setCanInstall(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // Check notification permission
+    const checkNotificationPermission = async () => {
+      if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+          const isSubscribed = await pushNotificationService.isSubscribed();
+          setHasNotificationPermission(isSubscribed);
+        }
+      }
+    };
+
+    // Check GPS permission (try to get it without actually requesting)
+    const checkGPSPermission = async () => {
+      if ('permissions' in navigator) {
+        try {
+          const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+          setHasGPSPermission(result.state === 'granted');
+        } catch {
+          // Fallback: assume granted if we can't check
+          setHasGPSPermission(false);
+        }
+      }
+    };
+
+    checkNotificationPermission();
+    checkGPSPermission();
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
 
   // Fetch weekly stats
   useEffect(() => {
@@ -130,6 +194,32 @@ export default function ChauffeurDashboard() {
     return { total, done, inProgress, remaining };
   };
 
+  const handleInstallApp = async () => {
+    if (!installPrompt) return;
+
+    try {
+      await installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+
+      if (outcome === 'accepted') {
+        setIsAppInstalled(true);
+        setCanInstall(false);
+      }
+
+      setInstallPrompt(null);
+    } catch (error) {
+      console.error('Install error:', error);
+    }
+  };
+
+  const handleReconfigurePermissions = () => {
+    // Clear onboarding flag to force re-configuration
+    localStorage.removeItem('chauffeur_onboarding_complete');
+    navigate('/chauffeur/onboarding');
+  };
+
+  const showAppConfigCard = !isAppInstalled || !hasNotificationPermission || !hasGPSPermission;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -151,6 +241,91 @@ export default function ChauffeurDashboard() {
           {format(new Date(), "EEEE d MMMM yyyy", { locale: fr })}
         </p>
       </div>
+
+      {/* App Configuration Card */}
+      {showAppConfigCard && (
+        <Card className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-primary-200">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="flex-shrink-0 w-12 h-12 bg-primary-600 rounded-full flex items-center justify-center">
+              <DevicePhoneMobileIcon className="h-6 w-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <h2 className="font-bold text-lg text-gray-900 mb-1">
+                Configurer l'application
+              </h2>
+              <p className="text-sm text-gray-600 mb-3">
+                Pour une expérience optimale, activez toutes les fonctionnalités
+              </p>
+
+              {/* Status checklist */}
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center gap-2 text-sm">
+                  {isAppInstalled ? (
+                    <CheckCircleIcon className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600" />
+                  )}
+                  <span className={isAppInstalled ? 'text-green-700 font-medium' : 'text-gray-700'}>
+                    {isAppInstalled ? 'Application installée' : 'Application non installée'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 text-sm">
+                  {hasGPSPermission ? (
+                    <CheckCircleIcon className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600" />
+                  )}
+                  <span className={hasGPSPermission ? 'text-green-700 font-medium' : 'text-gray-700'}>
+                    {hasGPSPermission ? 'GPS autorisé' : 'GPS non autorisé'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 text-sm">
+                  {hasNotificationPermission ? (
+                    <CheckCircleIcon className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600" />
+                  )}
+                  <span className={hasNotificationPermission ? 'text-green-700 font-medium' : 'text-gray-700'}>
+                    {hasNotificationPermission ? 'Notifications activées' : 'Notifications désactivées'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-col gap-2">
+                {!isAppInstalled && canInstall && (
+                  <Button
+                    onClick={handleInstallApp}
+                    className="w-full bg-primary-600 hover:bg-primary-700"
+                  >
+                    <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+                    Installer l'application
+                  </Button>
+                )}
+
+                <Button
+                  onClick={handleReconfigurePermissions}
+                  variant={!hasGPSPermission || !hasNotificationPermission ? 'default' : 'secondary'}
+                  className="w-full"
+                >
+                  <Cog6ToothIcon className="h-5 w-5 mr-2" />
+                  {!hasGPSPermission || !hasNotificationPermission
+                    ? 'Configurer les permissions'
+                    : 'Reconfigurer'}
+                </Button>
+
+                {!isAppInstalled && !canInstall && (
+                  <p className="text-xs text-gray-500 text-center mt-1">
+                    Sur iOS : Ouvrez Safari, puis Partager &gt; Sur l'écran d'accueil
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Today's Tournee */}
       {tournee ? (
