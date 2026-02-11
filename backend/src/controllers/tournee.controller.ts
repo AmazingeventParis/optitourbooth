@@ -121,12 +121,13 @@ export const tourneeController = {
    */
   async list(req: Request, res: Response): Promise<void> {
     const { page, limit, skip } = parsePagination(req.query as { page?: string; limit?: string });
-    const { date, dateDebut, dateFin, chauffeurId, statut } = req.query as {
+    const { date, dateDebut, dateFin, chauffeurId, statut, includePoints } = req.query as {
       date?: string;
       dateDebut?: string;
       dateFin?: string;
       chauffeurId?: string;
       statut?: TourneeStatut;
+      includePoints?: string;
     };
 
     // Construire les filtres
@@ -161,6 +162,38 @@ export const tourneeController = {
       where.statut = statut;
     }
 
+    // Inclure les points avec clients et produits si demandé (pour le dashboard)
+    const pointsInclude = includePoints === 'true' ? {
+      points: {
+        orderBy: { ordre: 'asc' as const },
+        select: {
+          id: true,
+          ordre: true,
+          type: true,
+          statut: true,
+          client: {
+            select: {
+              id: true,
+              nom: true,
+              societe: true,
+              ville: true,
+            },
+          },
+          produits: {
+            select: {
+              quantite: true,
+              produit: {
+                select: {
+                  id: true,
+                  nom: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    } : {};
+
     // Exécuter la requête
     const [tournees, total] = await Promise.all([
       prisma.tournee.findMany({
@@ -188,6 +221,7 @@ export const tourneeController = {
           _count: {
             select: { points: true },
           },
+          ...pointsInclude,
         },
         orderBy: [{ date: 'desc' }, { heureDepart: 'asc' }],
         skip,

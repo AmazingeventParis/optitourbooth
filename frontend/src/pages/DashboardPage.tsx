@@ -4,10 +4,15 @@ import { useAuthStore } from '@/store/authStore';
 import { usersService } from '@/services/users.service';
 import { tourneesService } from '@/services/tournees.service';
 import { useToast } from '@/hooks/useToast';
-import { User, Position, Tournee } from '@/types';
+import { User, Position, Tournee, Point } from '@/types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui';
+import { formatTime } from '@/utils/format';
+import {
+  MapPinIcon,
+  ChevronRightIcon,
+} from '@heroicons/react/24/outline';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -196,7 +201,7 @@ export default function DashboardPage() {
     setIsLoadingTournees(true);
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
-      const result = await tourneesService.list({ date: today, limit: 50 });
+      const result = await tourneesService.list({ date: today, limit: 50, includePoints: true });
       setTodayTournees(result.data);
     } catch (err) {
       showError('Erreur', (err as Error).message);
@@ -317,7 +322,7 @@ export default function DashboardPage() {
               </span>
             </h2>
           </div>
-          <div className="card-body">
+          <div className="card-body p-0">
             {isLoadingTournees ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
@@ -330,34 +335,9 @@ export default function DashboardPage() {
                 <p className="mt-2 text-sm">Aucune tournée aujourd'hui</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-gray-200">
                 {todayTournees.map((tournee) => (
-                  <div
-                    key={tournee.id}
-                    className="py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 px-2 rounded-lg transition-colors"
-                    onClick={() => navigate(`/tournees/${tournee.id}`)}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {tournee.chauffeur?.couleur && (
-                        <div
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: tournee.chauffeur.couleur }}
-                        />
-                      )}
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm text-gray-900 truncate">
-                          {tournee.chauffeur
-                            ? `${tournee.chauffeur.prenom} ${tournee.chauffeur.nom}`
-                            : 'Non assigné'}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {tournee.nombrePoints} point{tournee.nombrePoints > 1 ? 's' : ''}
-                          {tournee.distanceTotaleKm ? ` · ${tournee.distanceTotaleKm.toFixed(1)} km` : ''}
-                        </p>
-                      </div>
-                    </div>
-                    {getStatutBadge(tournee.statut)}
-                  </div>
+                  <TourneeCard key={tournee.id} tournee={tournee} onClick={() => navigate(`/tournees/${tournee.id}`)} />
                 ))}
               </div>
             )}
@@ -365,6 +345,107 @@ export default function DashboardPage() {
         </div>
       </div>
 
+    </div>
+  );
+}
+
+// Statut point avec pastille colorée
+const pointStatutDot: Record<string, string> = {
+  a_faire: 'bg-gray-400',
+  en_cours: 'bg-yellow-400',
+  termine: 'bg-green-500',
+  incident: 'bg-red-500',
+  annule: 'bg-gray-300',
+};
+
+// Carte détaillée d'une tournée
+function TourneeCard({ tournee, onClick }: { tournee: Tournee; onClick: () => void }) {
+  const points = (tournee.points || []) as (Point & { produits?: { quantite: number; produit?: { nom: string } }[] })[];
+
+  // Agréger les produits de toute la tournée
+  const produitsSummary = new Map<string, number>();
+  points.forEach((pt) => {
+    pt.produits?.forEach((pp) => {
+      const nom = pp.produit?.nom || 'Produit';
+      produitsSummary.set(nom, (produitsSummary.get(nom) || 0) + pp.quantite);
+    });
+  });
+
+  const completedCount = points.filter((p) => p.statut === 'termine').length;
+
+  return (
+    <div
+      className="px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+      onClick={onClick}
+    >
+      {/* Header chauffeur */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {tournee.chauffeur?.couleur && (
+            <div
+              className="w-3 h-3 rounded-full flex-shrink-0 border border-gray-200"
+              style={{ backgroundColor: tournee.chauffeur.couleur }}
+            />
+          )}
+          <span className="font-semibold text-gray-900">
+            {tournee.chauffeur
+              ? `${tournee.chauffeur.prenom} ${tournee.chauffeur.nom}`
+              : 'Non assigné'}
+          </span>
+          {tournee.heureDepart && (
+            <span className="text-xs text-gray-500">
+              · départ {formatTime(tournee.heureDepart)}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">{completedCount}/{points.length}</span>
+          {getStatutBadge(tournee.statut)}
+          <ChevronRightIcon className="h-4 w-4 text-gray-400" />
+        </div>
+      </div>
+
+      {/* Liste des points */}
+      {points.length > 0 && (
+        <div className="ml-5 space-y-1">
+          {points.map((pt, idx) => (
+            <div key={pt.id} className="flex items-center gap-2 text-sm">
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pointStatutDot[pt.statut] || 'bg-gray-400'}`} />
+              <span className="text-gray-500 w-4 text-right text-xs">{idx + 1}.</span>
+              <span className="text-gray-800 truncate">
+                {pt.client?.societe || pt.client?.nom || 'Client'}
+                {pt.client?.ville && <span className="text-gray-400 text-xs ml-1">({pt.client.ville})</span>}
+              </span>
+              {pt.produits && pt.produits.length > 0 && (
+                <span className="text-xs text-gray-400 truncate ml-auto">
+                  {pt.produits.map((pp) => `${pp.quantite}× ${pp.produit?.nom || '?'}`).join(', ')}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Résumé bas */}
+      <div className="ml-5 mt-2 flex items-center gap-3 text-xs text-gray-500">
+        <span className="flex items-center gap-1">
+          <MapPinIcon className="h-3.5 w-3.5" />
+          {points.length} point{points.length > 1 ? 's' : ''}
+        </span>
+        {tournee.distanceTotaleKm != null && (
+          <span>{tournee.distanceTotaleKm.toFixed(1)} km</span>
+        )}
+        {tournee.dureeTotaleMin != null && (
+          <span>
+            {Math.floor(tournee.dureeTotaleMin / 60)}h{String(Math.round(tournee.dureeTotaleMin % 60)).padStart(2, '0')}
+          </span>
+        )}
+        {produitsSummary.size > 0 && (
+          <span className="ml-auto">
+            {Array.from(produitsSummary.entries()).map(([nom, qty]) => `${qty}× ${nom}`).join(' · ')}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

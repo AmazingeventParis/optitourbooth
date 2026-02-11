@@ -9,6 +9,7 @@ interface TourneesFilters {
   dateFin?: string;
   chauffeurId?: string;
   statut?: string;
+  includePoints?: boolean;
 }
 
 interface CreateTourneeData {
@@ -119,6 +120,7 @@ export const tourneesService = {
     if (filters.dateFin) params.append('dateFin', filters.dateFin);
     if (filters.chauffeurId) params.append('chauffeurId', filters.chauffeurId);
     if (filters.statut) params.append('statut', filters.statut);
+    if (filters.includePoints) params.append('includePoints', 'true');
 
     const response = await api.get<ApiResponse<Tournee[]>>(`/tournees?${params}`);
     return {
