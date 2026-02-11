@@ -324,12 +324,21 @@ function TourneeCard({ tournee, onClick }: { tournee: Tournee; onClick: () => vo
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${pointStatutDot[pt.statut] || 'bg-gray-400'}`} />
                 <span className="text-gray-400 text-xs w-4 text-right mt-0.5">{idx + 1}.</span>
                 <div className="flex-1 min-w-0">
-                  <span className="text-gray-800">
-                    {pt.client?.societe || pt.client?.nom || 'Client'}
-                  </span>
-                  {pt.client?.ville && (
-                    <span className="text-gray-400 text-xs ml-1">({pt.client.ville})</span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-800">
+                      {pt.client?.societe || pt.client?.nom || 'Client'}
+                    </span>
+                    {pt.client?.ville && (
+                      <span className="text-gray-400 text-xs">({pt.client.ville})</span>
+                    )}
+                    {(pt.creneauDebut || pt.creneauFin) && (
+                      <span className="text-xs text-primary-600 font-medium ml-auto flex-shrink-0">
+                        {pt.creneauDebut ? formatTime(pt.creneauDebut) : ''}
+                        {pt.creneauDebut && pt.creneauFin ? ' - ' : ''}
+                        {pt.creneauFin ? formatTime(pt.creneauFin) : ''}
+                      </span>
+                    )}
+                  </div>
                   {pt.produits && pt.produits.length > 0 && (
                     <p className="text-xs text-gray-400 truncate">
                       {pt.produits.map((pp) => `${pp.quantite}× ${pp.produit?.nom || '?'}`).join(', ')}

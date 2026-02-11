@@ -258,6 +258,7 @@ export const tourneeController = {
                 select: {
                   id: true,
                   nom: true,
+                  societe: true,
                   adresse: true,
                   codePostal: true,
                   ville: true,
@@ -267,9 +268,14 @@ export const tourneeController = {
                   contactTelephone: true,
                 },
               },
+              produits: {
+                select: {
+                  quantite: true,
+                  produit: { select: { id: true, nom: true } },
+                },
+              },
               _count: {
                 select: {
-                  produits: true,
                   options: true,
                   photos: true,
                   incidents: true,
