@@ -41,7 +41,7 @@ const createChauffeurIcon = (chauffeur?: User, isOnline: boolean = true) => {
   // If chauffeur has avatar, use it
   if (chauffeur?.avatarUrl) {
     return L.divIcon({
-      className: 'chauffeur-marker',
+      className: 'chauffeur-marker-custom',
       html: `
         <div style="
           width: ${size}px;
@@ -49,13 +49,16 @@ const createChauffeurIcon = (chauffeur?: User, isOnline: boolean = true) => {
           border-radius: 50%;
           overflow: hidden;
           border: 4px solid ${color};
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.4);
           background-color: white;
+          opacity: 1 !important;
+          animation: none !important;
+          transition: none !important;
         ">
           <img
             src="${chauffeur.avatarUrl}"
             alt="${chauffeur.prenom} ${chauffeur.nom}"
-            style="width: 100%; height: 100%; object-fit: cover;"
+            style="width: 100%; height: 100%; object-fit: cover; opacity: 1 !important;"
           />
         </div>
       `,
@@ -71,7 +74,7 @@ const createChauffeurIcon = (chauffeur?: User, isOnline: boolean = true) => {
     : '?';
 
   return L.divIcon({
-    className: 'chauffeur-marker',
+    className: 'chauffeur-marker-custom',
     html: `
       <div style="
         background-color: ${color};
@@ -83,9 +86,12 @@ const createChauffeurIcon = (chauffeur?: User, isOnline: boolean = true) => {
         justify-content: center;
         color: white;
         border: 4px solid white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         font-size: 18px;
         font-weight: bold;
+        opacity: 1 !important;
+        animation: none !important;
+        transition: none !important;
       ">
         ${initials}
       </div>

@@ -179,5 +179,18 @@
 /* Position chauffeur */
 .chauffeur-marker {
   @apply w-10 h-10 rounded-full bg-primary-500 border-4 border-white
-         shadow-lg flex items-center justify-center animate-pulse;
+         shadow-lg flex items-center justify-center;
+}
+
+/* Position chauffeur - version sans animation (pour la carte dashboard) */
+.chauffeur-marker-custom {
+  opacity: 1 !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+.chauffeur-marker-custom * {
+  opacity: 1 !important;
+  animation: none !important;
+  transition: none !important;
 }
