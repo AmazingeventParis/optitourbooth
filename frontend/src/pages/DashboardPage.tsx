@@ -1,8 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { usersService } from '@/services/users.service';
+import { tourneesService } from '@/services/tournees.service';
 import { useToast } from '@/hooks/useToast';
-import { User, Position } from '@/types';
+import { User, Position, Tournee } from '@/types';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { Badge } from '@/components/ui';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -51,13 +56,28 @@ const createChauffeurIcon = (isOnline: boolean) => {
   });
 };
 
+const getStatutBadge = (statut: Tournee['statut']) => {
+  const config = {
+    brouillon: { variant: 'default' as const, label: 'Brouillon' },
+    planifiee: { variant: 'info' as const, label: 'Planifiée' },
+    en_cours: { variant: 'warning' as const, label: 'En cours' },
+    terminee: { variant: 'success' as const, label: 'Terminée' },
+    annulee: { variant: 'danger' as const, label: 'Annulée' },
+  };
+  const { variant, label } = config[statut];
+  return <Badge variant={variant}>{label}</Badge>;
+};
+
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const { error: showError } = useToast();
+  const navigate = useNavigate();
 
   const [chauffeurs, setChauffeurs] = useState<User[]>([]);
   const [positions, setPositions] = useState<Map<string, ChauffeurPosition>>(new Map());
   const [isLoadingChauffeurs, setIsLoadingChauffeurs] = useState(true);
+  const [todayTournees, setTodayTournees] = useState<Tournee[]>([]);
+  const [isLoadingTournees, setIsLoadingTournees] = useState(true);
 
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -94,6 +114,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchChauffeurs();
+    fetchTodayTournees();
   }, []);
 
   useEffect(() => {
@@ -171,6 +192,19 @@ export default function DashboardPage() {
     }
   };
 
+  const fetchTodayTournees = async () => {
+    setIsLoadingTournees(true);
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const result = await tourneesService.list({ date: today, limit: 50 });
+      setTodayTournees(result.data);
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsLoadingTournees(false);
+    }
+  };
+
   const getOnlineCount = () => {
     let count = 0;
     positions.forEach((pos) => {
@@ -191,11 +225,11 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Statistiques rapides (placeholder) */}
+      {/* Statistiques rapides */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Tournées du jour"
-          value="0"
+          value={String(todayTournees.length)}
           icon={
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -204,8 +238,8 @@ export default function DashboardPage() {
           color="blue"
         />
         <StatCard
-          title="Points en cours"
-          value="0"
+          title="Points total"
+          value={String(todayTournees.reduce((sum, t) => sum + t.nombrePoints, 0))}
           icon={
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -215,8 +249,8 @@ export default function DashboardPage() {
           color="green"
         />
         <StatCard
-          title="Chauffeurs en ligne"
-          value={String(getOnlineCount())}
+          title="Chauffeurs actifs"
+          value={String(new Set(todayTournees.map((t) => t.chauffeurId)).size)}
           icon={
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -225,14 +259,14 @@ export default function DashboardPage() {
           color="purple"
         />
         <StatCard
-          title="Incidents"
-          value="0"
+          title="Terminées"
+          value={String(todayTournees.filter((t) => t.statut === 'terminee').length)}
           icon={
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           }
-          color="red"
+          color="green"
         />
       </div>
 
@@ -276,15 +310,57 @@ export default function DashboardPage() {
         {/* Liste des tournées du jour */}
         <div className="card">
           <div className="card-header">
-            <h2 className="text-lg font-semibold">Tournées du jour</h2>
+            <h2 className="text-lg font-semibold">
+              Tournées du jour
+              <span className="text-sm font-normal text-gray-500 ml-2">
+                {format(new Date(), 'EEEE d MMMM', { locale: fr })}
+              </span>
+            </h2>
           </div>
           <div className="card-body">
-            <div className="text-center text-gray-500 py-8">
-              <svg className="mx-auto h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <p className="mt-2 text-sm">Aucune tournée aujourd'hui</p>
-            </div>
+            {isLoadingTournees ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+              </div>
+            ) : todayTournees.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">
+                <svg className="mx-auto h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <p className="mt-2 text-sm">Aucune tournée aujourd'hui</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {todayTournees.map((tournee) => (
+                  <div
+                    key={tournee.id}
+                    className="py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 px-2 rounded-lg transition-colors"
+                    onClick={() => navigate(`/tournees/${tournee.id}`)}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {tournee.chauffeur?.couleur && (
+                        <div
+                          className="w-3 h-3 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: tournee.chauffeur.couleur }}
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm text-gray-900 truncate">
+                          {tournee.chauffeur
+                            ? `${tournee.chauffeur.prenom} ${tournee.chauffeur.nom}`
+                            : 'Non assigné'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {tournee.nombrePoints} point{tournee.nombrePoints > 1 ? 's' : ''}
+                          {tournee.distanceTotaleKm ? ` · ${tournee.distanceTotaleKm.toFixed(1)} km` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    {getStatutBadge(tournee.statut)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
