@@ -144,9 +144,9 @@ export default function ChauffeurLayout() {
     };
   }, [checkActiveTournee]);
 
-  // GPS tracking - only enabled when there's an active tournee and NOT impersonating
+  // GPS tracking - always enabled when connected (not just during active tournee)
   const { isTracking, error: gpsError, accuracy } = useGPSTracking({
-    enabled: hasActiveTournee && isConnected && !isImpersonating,
+    enabled: isConnected && !isImpersonating,
   });
 
   const handleEnablePush = async () => {
@@ -232,39 +232,37 @@ export default function ChauffeurLayout() {
             )}
           </div>
 
-          {/* GPS tracking indicator */}
-          {hasActiveTournee && (
-            <div
-              className={clsx(
-                'flex items-center gap-1 px-2 py-1 rounded-full text-xs',
-                isTracking && !gpsError
-                  ? 'bg-blue-500/20 text-blue-100'
-                  : 'bg-orange-500/20 text-orange-100'
+          {/* GPS tracking indicator - always visible */}
+          <div
+            className={clsx(
+              'flex items-center gap-1 px-2 py-1 rounded-full text-xs',
+              isTracking && !gpsError
+                ? 'bg-blue-500/20 text-blue-100'
+                : 'bg-orange-500/20 text-orange-100'
+            )}
+            title={
+              gpsError
+                ? gpsError
+                : isTracking
+                ? `GPS actif - ${getAccuracyText()}`
+                : 'GPS inactif'
+            }
+          >
+            <span className="relative flex h-2 w-2">
+              {isTracking && !gpsError && (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                </>
               )}
-              title={
-                gpsError
-                  ? gpsError
-                  : isTracking
-                  ? `GPS actif - ${getAccuracyText()}`
-                  : 'GPS inactif'
-              }
-            >
-              <span className="relative flex h-2 w-2">
-                {isTracking && !gpsError && (
-                  <>
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                  </>
-                )}
-                {(!isTracking || gpsError) && (
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
-                )}
-              </span>
-              <span className="hidden sm:inline">
-                {gpsError ? 'GPS erreur' : isTracking ? 'GPS' : 'GPS off'}
-              </span>
-            </div>
-          )}
+              {(!isTracking || gpsError) && (
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+              )}
+            </span>
+            <span className="hidden sm:inline">
+              {gpsError ? 'GPS erreur' : isTracking ? 'GPS' : 'GPS off'}
+            </span>
+          </div>
 
           <button
             onClick={handleLogout}
