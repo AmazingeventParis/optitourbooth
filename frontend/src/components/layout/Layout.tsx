@@ -15,12 +15,12 @@ export default function Layout() {
       />
 
       {/* Sidebar desktop */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-40 lg:flex lg:w-64 lg:flex-col">
+      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
         <Sidebar />
       </div>
 
-      {/* Contenu principal */}
-      <div className="lg:pl-64">
+      {/* Contenu principal - isolate crée un stacking context pour contenir les z-index de la map */}
+      <div className="lg:pl-64 isolate">
         {/* Bouton menu mobile uniquement */}
         <div className="sticky top-0 z-30 flex h-14 items-center bg-gray-50 px-4 lg:hidden">
           <button
