@@ -369,9 +369,38 @@ const formatTimeRange = (debut?: string | null, fin?: string | null): string => 
 
 // Carte détaillée d'une tournée
 function TourneeCard({ tournee, onClick }: { tournee: Tournee; onClick: () => void }) {
-  // Trier les points par ordre chronologique
+  // Trier les points par ordre chronologique (priorité à l'ordre, puis à l'heure d'arrivée estimée)
   const points = ((tournee.points || []) as (Point & { produits?: { quantite: number; produit?: { nom: string } }[] })[])
-    .sort((a, b) => a.ordre - b.ordre);
+    .sort((a, b) => {
+      // D'abord par ordre
+      if (a.ordre !== b.ordre) {
+        return a.ordre - b.ordre;
+      }
+
+      // Si même ordre, trier par heure d'arrivée estimée
+      if (a.heureArriveeEstimee && b.heureArriveeEstimee) {
+        return new Date(a.heureArriveeEstimee).getTime() - new Date(b.heureArriveeEstimee).getTime();
+      }
+
+      // Sinon par créneau début
+      if (a.creneauDebut && b.creneauDebut) {
+        return new Date(a.creneauDebut).getTime() - new Date(b.creneauDebut).getTime();
+      }
+
+      return 0;
+    });
+
+  // Debug: log order
+  if (points.length > 0) {
+    console.log(`[Dashboard] Tournée ${tournee.id} - Points order:`,
+      points.map((p, idx) => ({
+        idx,
+        ordre: p.ordre,
+        client: p.client?.nom || p.client?.societe,
+        eta: p.heureArriveeEstimee,
+      }))
+    );
+  }
 
   const completedCount = points.filter((p) => p.statut === 'termine').length;
   const totalCount = getPointCount(tournee);
