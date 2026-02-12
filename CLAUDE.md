@@ -259,6 +259,102 @@ TOMTOM_API_KEY=your_api_key_here
 
 ---
 
+---
+
+#### 10. Bug forEach avec les positions GPS
+**Problème** : Erreur JavaScript `TypeError: n.forEach is not a function` lors de la réception des positions GPS via Socket.io.
+
+**Cause** : Le backend retourne les positions sous forme d'objet `Record<chauffeurId, position>`, mais le frontend s'attendait à un tableau et appelait `.forEach()` dessus.
+
+**Solution** : Modifier `socketStore.setAllPositions()` pour gérer les deux formats (array et object)
+- Vérification avec `Array.isArray()`
+- Utilisation de `Object.entries()` pour les objets
+- Conversion en Map avec `chauffeurId` inclus
+
+**Fichiers modifiés** :
+- `frontend/src/store/socketStore.ts`
+- `frontend/src/pages/DailyPlanningPage.tsx`
+
+---
+
+#### 11. GPS tracking en mode impersonation
+**Problème** : Le suivi GPS était désactivé quand un admin se mettait en mode "vue chauffeur" (impersonation). Les admins qui sont aussi chauffeurs avaient besoin d'activer le GPS tout en accédant aux fonctionnalités admin.
+
+**Solution** : Permettre le GPS en mode impersonation en ajoutant le support de `impersonatedUserId`
+
+**Backend** (`backend/src/config/socket.ts`) :
+- Ajout du champ `impersonatedUserId` dans `PositionUpdate` interface
+- Modification de `position:update` pour accepter les admins
+- Utilisation de `impersonatedUserId` si fourni pour stocker sous le bon chauffeur ID
+
+**Frontend** :
+- `frontend/src/hooks/useGPSTracking.ts` : Ajout paramètre `impersonatedChauffeurId`
+- `frontend/src/services/socket.service.ts` : Ajout `impersonatedUserId` à l'interface
+- `frontend/src/components/layout/ChauffeurLayout.tsx` :
+  - Activation du GPS même en impersonation (`enabled: isConnected`)
+  - Passage de `impersonatedChauffeurId` au hook GPS
+
+**Résultat** :
+- Admin en mode normal : GPS désactivé ✓
+- Admin en vue chauffeur : GPS actif avec position stockée sous l'ID du chauffeur impersonné ✓
+- Chauffeur normal : GPS actif comme avant ✓
+
+---
+
+#### 12. Séparation temps de trajet vs temps total
+**Problème** : Les statistiques "temps sur la route" affichaient la durée totale de la tournée au lieu du temps de conduite réel.
+
+**Analyse** :
+- `dureeTotaleMin` incluait : temps de trajet + temps d'installation sur place + temps d'attente aux créneaux
+- Les chauffeurs voyaient des durées gonflées pour le "temps route"
+- Exemple : 2h de conduite + 3h sur place = "5h de route" affiché ❌
+
+**Solution** : Ajout d'un nouveau champ `dureeTrajetMin` qui contient uniquement le temps de déplacement
+
+**Backend** :
+- `backend/prisma/schema.prisma` : Ajout champ `dureeTrajetMin` au modèle Tournee
+- `backend/src/services/optimization.service.ts` :
+  - Interface `TourneeStats` : Ajout `dureeTrajetMin`
+  - `calculateTourneeStats()` : Retourne les deux valeurs séparément
+  - Mise à jour de la tournée avec les deux champs
+
+**Frontend** :
+- `frontend/src/types/index.ts` : Ajout `dureeTrajetMin` au type Tournee
+- `frontend/src/services/tournees.service.ts` : Ajout à l'interface TourneeStats
+- `frontend/src/pages/chauffeur/ChauffeurDashboard.tsx` :
+  - Ligne 137 : Utilise `dureeTrajetMin` au lieu de `dureeTotaleMin` pour "temps route"
+
+**Calcul** :
+```typescript
+// AVANT (ligne 126-130 optimization.service.ts)
+const dureeTrajetMin = Math.ceil(route.duration / 60);  // Temps OSRM/TomTom
+const dureeSurPlaceMin = points.reduce((sum, p) => sum + p.dureePrevue, 0);
+let dureeTotaleMin = dureeTrajetMin + dureeSurPlaceMin;  // Total
+
+// APRÈS
+return {
+  dureeTrajetMin,      // Uniquement le temps de route ✓
+  dureeTotaleMin,      // Total avec attentes (recalculé ligne 187) ✓
+  ...
+};
+```
+
+**Migration** : `npx prisma db push` pour ajouter la colonne
+
+**Résultat** :
+- Temps route = temps de conduite uniquement (2h dans l'exemple) ✓
+- Durée totale = temps complet de la tournée (5h30 dans l'exemple) ✓
+
+---
+
+### Commits de cette session (11 février 2026)
+
+1. `fix: handle both array and object formats for GPS positions`
+2. `feat: enable GPS tracking in admin impersonation mode`
+3. `feat: separate travel time from total time in tournees`
+
+---
+
 ### Notes techniques
 
 - **PWA** : Progressive Web App installable (Android + iOS)
