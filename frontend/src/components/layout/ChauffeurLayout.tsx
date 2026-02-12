@@ -25,7 +25,7 @@ import {
 import clsx from 'clsx';
 
 export default function ChauffeurLayout() {
-  const { token, logout, stopImpersonation } = useAuthStore();
+  const { token, logout, stopImpersonation, impersonatedChauffeur } = useAuthStore();
   const { effectiveUser, isImpersonating } = useEffectiveUser();
   const { clearTournee } = useChauffeurStore();
   const { isConnected, setConnected } = useSocketStore();
@@ -144,9 +144,10 @@ export default function ChauffeurLayout() {
     };
   }, [checkActiveTournee]);
 
-  // GPS tracking - always enabled when connected (not just during active tournee)
+  // GPS tracking - always enabled when connected (including admin impersonation)
   const { isTracking, error: gpsError, accuracy } = useGPSTracking({
-    enabled: isConnected && !isImpersonating,
+    enabled: isConnected,
+    impersonatedChauffeurId: isImpersonating ? impersonatedChauffeur?.id : undefined,
   });
 
   const handleEnablePush = async () => {

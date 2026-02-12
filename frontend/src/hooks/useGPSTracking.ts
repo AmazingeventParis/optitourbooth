@@ -6,6 +6,7 @@ interface UseGPSTrackingOptions {
   enabled: boolean;
   intervalMs?: number; // How often to send position via socket (default: 10s)
   restBackupIntervalMs?: number; // How often to send via REST as backup (default: 30s)
+  impersonatedChauffeurId?: string; // For admin impersonation mode
 }
 
 interface UseGPSTrackingReturn {
@@ -25,6 +26,7 @@ export function useGPSTracking({
   enabled,
   intervalMs = 10000,
   restBackupIntervalMs = 30000,
+  impersonatedChauffeurId,
 }: UseGPSTrackingOptions): UseGPSTrackingReturn {
   const [isTracking, setIsTracking] = useState(false);
   const [lastPosition, setLastPosition] = useState<PositionUpdate | null>(null);
@@ -49,12 +51,13 @@ export function useGPSTracking({
       speed: pos.coords.speed ?? undefined,
       heading: pos.coords.heading ?? undefined,
       timestamp: pos.timestamp,
+      impersonatedUserId: impersonatedChauffeurId, // Include if admin is impersonating
     };
 
     socketService.sendPosition(positionData);
     lastSocketSendRef.current = Date.now();
     setLastPosition(positionData);
-  }, []);
+  }, [impersonatedChauffeurId]);
 
   // Send position via REST API (backup)
   const sendPositionViaRest = useCallback(async () => {
@@ -171,7 +174,7 @@ export function useGPSTracking({
     return () => {
       stopTracking();
     };
-  }, [enabled, startTracking, stopTracking]);
+  }, [enabled, impersonatedChauffeurId, startTracking, stopTracking]);
 
   return {
     isTracking,

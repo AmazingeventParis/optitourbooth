@@ -11,6 +11,7 @@ interface PositionUpdate {
   speed?: number;
   heading?: number;
   timestamp: number;
+  impersonatedUserId?: string; // For admin impersonation
 }
 
 interface PointStatusUpdate {
@@ -89,10 +90,14 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
     // Mise à jour de position GPS
     socket.on('position:update', async (data: PositionUpdate) => {
-      if (role !== 'chauffeur') return;
+      // Allow both chauffeurs and admins (for impersonation)
+      if (role !== 'chauffeur' && role !== 'admin') return;
+
+      // Use impersonatedUserId if provided (admin impersonating), otherwise use userId
+      const effectiveChauffeurId = data.impersonatedUserId || userId;
 
       // Stocker dans Redis pour accès rapide
-      await cacheHelpers.setPosition(userId, {
+      await cacheHelpers.setPosition(effectiveChauffeurId, {
         latitude: data.latitude,
         longitude: data.longitude,
         timestamp: data.timestamp,
@@ -100,8 +105,13 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
       // Broadcast aux admins
       io?.to('admins').emit('chauffeur:position', {
-        chauffeurId: userId,
-        ...data,
+        chauffeurId: effectiveChauffeurId,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        accuracy: data.accuracy,
+        speed: data.speed,
+        heading: data.heading,
+        timestamp: data.timestamp,
       });
     });
 

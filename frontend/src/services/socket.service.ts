@@ -9,6 +9,7 @@ export interface PositionUpdate {
   speed?: number;
   heading?: number;
   timestamp: number;
+  impersonatedUserId?: string; // For admin impersonation
 }
 
 export interface ChauffeurPosition extends PositionUpdate {
