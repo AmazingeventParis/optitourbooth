@@ -346,9 +346,32 @@ export default function DashboardPage() {
   );
 }
 
+// Helper pour détecter si l'heure de fin est le lendemain
+const formatTimeRange = (debut?: string | null, fin?: string | null): string => {
+  if (!debut && !fin) return '';
+  if (!debut) return formatTime(fin!);
+  if (!fin) return formatTime(debut);
+
+  // Parse times to compare
+  const getMinutes = (timeStr: string) => {
+    const date = new Date(timeStr);
+    return date.getUTCHours() * 60 + date.getUTCMinutes();
+  };
+
+  const debutMinutes = getMinutes(debut);
+  const finMinutes = getMinutes(fin);
+
+  // Si l'heure de fin est plus petite que l'heure de début, c'est le lendemain
+  const isNextDay = finMinutes < debutMinutes;
+
+  return `${formatTime(debut)} - ${formatTime(fin)}${isNextDay ? ' ⁺¹' : ''}`;
+};
+
 // Carte détaillée d'une tournée
 function TourneeCard({ tournee, onClick }: { tournee: Tournee; onClick: () => void }) {
-  const points = (tournee.points || []) as (Point & { produits?: { quantite: number; produit?: { nom: string } }[] })[];
+  // Trier les points par ordre chronologique
+  const points = ((tournee.points || []) as (Point & { produits?: { quantite: number; produit?: { nom: string } }[] })[])
+    .sort((a, b) => a.ordre - b.ordre);
 
   const completedCount = points.filter((p) => p.statut === 'termine').length;
   const totalCount = getPointCount(tournee);
@@ -421,9 +444,7 @@ function TourneeCard({ tournee, onClick }: { tournee: Tournee; onClick: () => vo
                     )}
                     {(pt.creneauDebut || pt.creneauFin) && (
                       <span className="text-xs text-primary-600 font-medium ml-auto flex-shrink-0">
-                        {pt.creneauDebut ? formatTime(pt.creneauDebut) : ''}
-                        {pt.creneauDebut && pt.creneauFin ? ' - ' : ''}
-                        {pt.creneauFin ? formatTime(pt.creneauFin) : ''}
+                        {formatTimeRange(pt.creneauDebut, pt.creneauFin)}
                       </span>
                     )}
                   </div>
