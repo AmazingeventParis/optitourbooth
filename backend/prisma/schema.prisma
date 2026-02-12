@@ -218,7 +218,8 @@ model Tournee {
 
   // Statistiques calculées
   distanceTotaleKm  Float?        @map("distance_totale_km")
-  dureeTotaleMin    Int?          @map("duree_totale_min")
+  dureeTotaleMin    Int?          @map("duree_totale_min")      // Durée totale incluant trajets + temps sur place + attentes
+  dureeTrajetMin    Int?          @map("duree_trajet_min")      // Durée uniquement de trajet (temps de route)
   nombrePoints      Int           @default(0) @map("nombre_points")
 
   // Point de départ (entrepôt/dépôt)

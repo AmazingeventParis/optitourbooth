@@ -87,7 +87,8 @@ export interface Tournee {
   heureFinEstimee?: string;
   heureFinReelle?: string;
   distanceTotaleKm?: number;
-  dureeTotaleMin?: number;
+  dureeTotaleMin?: number;      // Durée totale (trajets + temps sur place + attentes)
+  dureeTrajetMin?: number;       // Durée uniquement de trajet (temps de route)
   nombrePoints: number;
   depotAdresse?: string;
   depotLatitude?: number;

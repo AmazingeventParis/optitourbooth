@@ -24,7 +24,8 @@ interface OptimizedPoint {
 
 interface TourneeStats {
   distanceTotaleKm: number;
-  dureeTotaleMin: number;
+  dureeTotaleMin: number;      // Durée totale (trajets + temps sur place + attentes)
+  dureeTrajetMin: number;       // Durée uniquement de trajet (temps de route)
   nombrePoints: number;
   heureFinEstimee: Date | null;
 }
@@ -70,6 +71,7 @@ export const optimizationService = {
       return {
         distanceTotaleKm: 0,
         dureeTotaleMin: 0,
+        dureeTrajetMin: 0,
         nombrePoints: 0,
         heureFinEstimee: null,
       };
@@ -102,6 +104,7 @@ export const optimizationService = {
       return {
         distanceTotaleKm: 0,
         dureeTotaleMin: totalDureePrevue,
+        dureeTrajetMin: 0,
         nombrePoints: points.length,
         heureFinEstimee: null,
       };
@@ -116,6 +119,7 @@ export const optimizationService = {
       return {
         distanceTotaleKm: 0,
         dureeTotaleMin: totalDureePrevue,
+        dureeTrajetMin: 0,
         nombrePoints: points.length,
         heureFinEstimee: null,
       };
@@ -189,6 +193,7 @@ export const optimizationService = {
     return {
       distanceTotaleKm: Math.round(route.distance / 100) / 10, // Arrondi à 0.1 km
       dureeTotaleMin,
+      dureeTrajetMin,
       nombrePoints: points.length,
       heureFinEstimee,
     };
@@ -806,11 +811,13 @@ export const optimizationService = {
       const updateData: {
         distanceTotaleKm: number;
         dureeTotaleMin: number;
+        dureeTrajetMin: number;
         nombrePoints: number;
         heureFinEstimee?: Date;
       } = {
         distanceTotaleKm: stats.distanceTotaleKm,
         dureeTotaleMin: stats.dureeTotaleMin,
+        dureeTrajetMin: stats.dureeTrajetMin,
         nombrePoints: stats.nombrePoints,
       };
 

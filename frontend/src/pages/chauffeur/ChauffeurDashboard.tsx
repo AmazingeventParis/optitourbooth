@@ -134,7 +134,7 @@ export default function ChauffeurDashboard() {
         for (const t of result.data) {
           if (t.statut === 'terminee' || t.statut === 'en_cours') {
             kmParcourus += t.distanceTotaleKm || 0;
-            tempsRoute += t.dureeTotaleMin || 0;
+            tempsRoute += t.dureeTrajetMin || 0; // Temps de route uniquement (pas temps total)
 
             // Count completed points
             if (t.points) {

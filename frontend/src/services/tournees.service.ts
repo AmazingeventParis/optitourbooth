@@ -69,6 +69,7 @@ interface CreateIncidentData {
 interface TourneeStats {
   distanceTotaleKm: number;
   dureeTotaleMin: number;
+  dureeTrajetMin: number;
   nombrePoints: number;
   heureFinEstimee: string;
 }
