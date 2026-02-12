@@ -1760,7 +1760,7 @@ export default function DailyPlanningPage() {
     };
 
     // Écouter toutes les positions (réponse à positions:getAll)
-    const handleAllPositions = (positions: ChauffeurPosition[]) => {
+    const handleAllPositions = (positions: ChauffeurPosition[] | Record<string, any>) => {
       setAllPositions(positions);
     };
 
