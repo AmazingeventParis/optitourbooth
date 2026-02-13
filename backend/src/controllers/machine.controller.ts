@@ -34,7 +34,7 @@ export const listMachines = async (req: Request, res: Response) => {
       },
     });
 
-    res.json(machines);
+    return res.json(machines);
   } catch (error) {
     console.error('Error listing machines:', error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -63,7 +63,7 @@ export const getMachine = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Machine not found' });
     }
 
-    res.json(machine);
+    return res.json(machine);
   } catch (error) {
     console.error('Error fetching machine:', error);
     res.status(500).json({ error: 'Internal server error' });

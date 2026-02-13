@@ -49,7 +49,7 @@ export const listPreparations = async (req: Request, res: Response) => {
       prisma.preparation.count({ where }),
     ]);
 
-    res.json({
+    return res.json({
       data: preparations,
       pagination: {
         page,
@@ -82,7 +82,7 @@ export const getPreparation = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Preparation not found' });
     }
 
-    res.json(preparation);
+    return res.json(preparation);
   } catch (error) {
     console.error('Error fetching preparation:', error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -144,7 +144,7 @@ export const createPreparation = async (req: Request, res: Response) => {
       },
     });
 
-    res.status(201).json(preparation);
+    return res.status(201).json(preparation);
   } catch (error) {
     console.error('Error creating preparation:', error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -180,7 +180,7 @@ export const updatePreparation = async (req: Request, res: Response) => {
       },
     });
 
-    res.json(preparation);
+    return res.json(preparation);
   } catch (error) {
     console.error('Error updating preparation:', error);
     if ((error as any).code === 'P2025') {
@@ -201,7 +201,7 @@ export const deletePreparation = async (req: Request, res: Response) => {
       where: { id },
     });
 
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
     console.error('Error deleting preparation:', error);
     if ((error as any).code === 'P2025') {
@@ -226,7 +226,7 @@ export const markAsReady = async (req: Request, res: Response) => {
       },
     });
 
-    res.json(preparation);
+    return res.json(preparation);
   } catch (error) {
     console.error('Error marking preparation as ready:', error);
     if ((error as any).code === 'P2025') {
@@ -255,7 +255,7 @@ export const markPhotosUnloaded = async (req: Request, res: Response) => {
       },
     });
 
-    res.json(preparation);
+    return res.json(preparation);
   } catch (error) {
     console.error('Error marking photos as unloaded:', error);
     if ((error as any).code === 'P2025') {
