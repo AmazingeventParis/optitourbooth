@@ -250,7 +250,7 @@ export default function PreparationsPage() {
                     )}
                   >
                     <div className="font-bold text-lg mb-1">{machine.numero}</div>
-                    <Badge variant={statutInfo.badge as any} className="text-xs">
+                    <Badge variant={statutInfo.badge as any}>
                       {statutInfo.label}
                     </Badge>
 

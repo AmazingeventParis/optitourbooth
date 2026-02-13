@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { prisma } from '../config/database';
+import { prisma } from '../config/database.js';
 import { MachineType } from '@prisma/client';
 
 /**
@@ -37,7 +37,7 @@ export const listMachines = async (req: Request, res: Response) => {
     res.json(machines);
   } catch (error) {
     console.error('Error listing machines:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { prisma } from '../config/database';
+import { prisma } from '../config/database.js';
 import { PreparationStatut } from '@prisma/client';
 
 /**
@@ -60,7 +60,7 @@ export const listPreparations = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error listing preparations:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -85,7 +85,7 @@ export const getPreparation = async (req: Request, res: Response) => {
     res.json(preparation);
   } catch (error) {
     console.error('Error fetching preparation:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -147,7 +147,7 @@ export const createPreparation = async (req: Request, res: Response) => {
     res.status(201).json(preparation);
   } catch (error) {
     console.error('Error creating preparation:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -186,7 +186,7 @@ export const updatePreparation = async (req: Request, res: Response) => {
     if ((error as any).code === 'P2025') {
       return res.status(404).json({ error: 'Preparation not found' });
     }
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -207,7 +207,7 @@ export const deletePreparation = async (req: Request, res: Response) => {
     if ((error as any).code === 'P2025') {
       return res.status(404).json({ error: 'Preparation not found' });
     }
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -232,7 +232,7 @@ export const markAsReady = async (req: Request, res: Response) => {
     if ((error as any).code === 'P2025') {
       return res.status(404).json({ error: 'Preparation not found' });
     }
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -261,6 +261,6 @@ export const markPhotosUnloaded = async (req: Request, res: Response) => {
     if ((error as any).code === 'P2025') {
       return res.status(404).json({ error: 'Preparation not found' });
     }
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
