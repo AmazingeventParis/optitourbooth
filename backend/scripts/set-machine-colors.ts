@@ -2,11 +2,11 @@ import { PrismaClient, MachineType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Couleurs par type de machine
+// Couleurs par type de machine (synchronisées avec les produits)
 const MACHINE_COLORS: Record<MachineType, string> = {
-  Vegas: '#6B7280',   // Gris
-  Smakk: '#FBBF24',   // Jaune
-  Ring: '#10B981',    // Vert
+  Vegas: '#616161',   // Gris
+  Smakk: '#F6BF26',   // Jaune
+  Ring: '#8E24AA',    // Violet
 };
 
 async function main() {
