@@ -413,6 +413,50 @@ const result = await tourneesService.list({ limit: 1000, includePoints: true });
 
 1. `fix: change PWA start_url to root to prevent blank screen on mobile`
 2. `fix: include points data in reports for chart display`
+3. `feat: amélioration page préparations - préparateur connecté, filtres archive, recherche intelligente`
+
+---
+
+#### 15. Amélioration de la page préparations
+**Demandes** :
+1. Le nom du préparateur doit être celui de la personne connectée
+2. Compartimenter les archives par type de borne
+3. Moteur de recherche intelligent (numéro ou nom de client)
+4. Bouton "photos non déchargées" cliquable
+
+**Solution** :
+
+**1. Préparateur = utilisateur connecté**
+- Utilisation de `useAuthStore` pour récupérer l'utilisateur connecté
+- Le nom du préparateur est automatiquement `${user.prenom} ${user.nom}`
+- Fonctionne pour les admins ET les préparateurs
+
+**2. Filtres par type de borne dans l'archive**
+- Ajout de boutons : Toutes / Vegas / Smakk / Ring
+- Chaque bouton affiche le nombre d'événements archivés pour ce type
+- Design avec highlight sur le filtre actif
+
+**3. Moteur de recherche intelligent**
+- Champ de recherche en haut de l'archive avec icône loupe
+- Recherche instantanée (filtrage côté client) par :
+  - Numéro de borne (ex: "V12", "SK5")
+  - Nom de client (ex: "Mariage Dupont")
+- Bouton X pour effacer la recherche
+- Compteur de résultats affiché en bas
+
+**4. Badge "photos non déchargées" cliquable**
+- Badge vert "Photos déchargées" : juste affichage (non cliquable)
+- Badge rouge "Photos non déchargées" : **bouton cliquable**
+- Clic → appelle `markPhotosUnloaded(prep.id)`
+- Toast de confirmation + rafraîchissement de l'archive
+- Design : bouton rouge arrondi avec effet hover et active:scale
+
+**Fichier modifié** : `frontend/src/pages/PreparationsPage.tsx`
+
+**Résultat** :
+- ✅ Traçabilité : on sait qui a préparé chaque borne
+- ✅ Archive organisée : filtres par type + recherche = retrouver n'importe quelle borne instantanément
+- ✅ Workflow amélioré : décharger les photos directement depuis l'archive
 
 ---
 
