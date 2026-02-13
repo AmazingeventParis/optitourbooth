@@ -414,6 +414,7 @@ const result = await tourneesService.list({ limit: 1000, includePoints: true });
 1. `fix: change PWA start_url to root to prevent blank screen on mobile`
 2. `fix: include points data in reports for chart display`
 3. `feat: amélioration page préparations - préparateur connecté, filtres archive, recherche intelligente`
+4. `feat: add install PWA button in user menu`
 
 ---
 
@@ -457,6 +458,46 @@ const result = await tourneesService.list({ limit: 1000, includePoints: true });
 - ✅ Traçabilité : on sait qui a préparé chaque borne
 - ✅ Archive organisée : filtres par type + recherche = retrouver n'importe quelle borne instantanément
 - ✅ Workflow amélioré : décharger les photos directement depuis l'archive
+
+---
+
+#### 16. Bouton "Installer l'application" dans le menu
+**Demande** : Ajouter un bouton dans le menu pour simplifier l'installation de la PWA pour les utilisateurs.
+
+**Solution** :
+
+**1. Hook personnalisé `useInstallPWA`**
+- Détecte si l'application est installable (événement `beforeinstallprompt`)
+- Détecte si l'application est déjà installée (`display-mode: standalone`)
+- Gère le prompt d'installation natif du navigateur
+- Retourne l'état d'installation et la fonction pour installer
+
+**2. Bouton dans le menu utilisateur (Sidebar)**
+- Ajout d'un bouton "Installer l'application" dans le dropdown du profil
+- Icône : flèche de téléchargement (ArrowDownTrayIcon)
+- Visible uniquement si :
+  - L'app n'est pas déjà installée
+  - Le navigateur supporte l'installation PWA
+  - L'événement `beforeinstallprompt` a été déclenché
+- Placement : juste au-dessus du bouton "Déconnexion"
+
+**3. Expérience utilisateur**
+- Clic sur le bouton → prompt natif d'installation du navigateur
+- Toast de succès si installation acceptée
+- Toast d'erreur si installation annulée
+- Le bouton disparaît automatiquement après installation
+
+**Fichiers créés** :
+- `frontend/src/hooks/useInstallPWA.ts` (nouveau hook)
+
+**Fichiers modifiés** :
+- `frontend/src/components/layout/Sidebar.tsx`
+
+**Avantages** :
+- ✅ Installation simplifiée : 1 clic au lieu de chercher dans les menus du navigateur
+- ✅ Découvrabilité : les utilisateurs savent maintenant qu'une version PWA existe
+- ✅ UX cohérente : même expérience sur tous les navigateurs supportés
+- ✅ Non intrusif : le bouton n'apparaît que si pertinent
 
 ---
 
