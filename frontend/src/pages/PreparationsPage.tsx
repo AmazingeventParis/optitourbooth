@@ -658,81 +658,83 @@ export default function PreparationsPage() {
             />
           </div>
 
-          {/* Boutons d'action - Toujours visibles si une préparation existe */}
-          {isViewMode && (
-            <div className="border-t border-gray-200 pt-4 space-y-3">
-              {/* Photos déchargées */}
-              <div>
-                <Button
-                  variant={new Date(formData.dateEvenement) < new Date() ? 'primary' : 'secondary'}
-                  className="w-full"
-                  onClick={() => {
-                    const prep = getPreparationForMachine(selectedMachine!);
-                    if (prep) handleMarkPhotosUnloaded(prep.id);
-                  }}
-                  disabled={new Date(formData.dateEvenement) >= new Date() || isSaving}
-                  isLoading={isSaving}
-                >
-                  <CheckCircleIcon className="h-5 w-5 mr-2" />
-                  Photos déchargées
-                </Button>
-                <p className="text-xs text-gray-500 mt-1">
-                  {new Date(formData.dateEvenement) >= new Date()
-                    ? 'Disponible après la date de l\'événement'
-                    : 'Marquer les photos comme déchargées et archiver'}
-                </p>
-              </div>
-
-              {/* Défaut */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Signaler un défaut</label>
-                <textarea
-                  value={defautText}
-                  onChange={(e) => setDefautText(e.target.value)}
-                  rows={2}
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
-                  placeholder="Décrire le défaut..."
-                />
-                <Button
-                  variant="warning"
-                  className="w-full"
-                  onClick={() => {
-                    const prep = getPreparationForMachine(selectedMachine!);
-                    if (prep) handleMarkDefect(prep.id);
-                  }}
-                  disabled={isSaving}
-                  isLoading={isSaving}
-                >
-                  <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
-                  Signaler un défaut
-                </Button>
-              </div>
-
-              {/* Hors service */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mettre hors service</label>
-                <textarea
-                  value={horsServiceText}
-                  onChange={(e) => setHorsServiceText(e.target.value)}
-                  rows={2}
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
-                  placeholder="Raison de la mise hors service..."
-                />
-                <Button
-                  variant="danger"
-                  className="w-full"
-                  onClick={() => {
-                    const prep = getPreparationForMachine(selectedMachine!);
-                    if (prep) handleMarkOutOfService(prep.id);
-                  }}
-                  disabled={isSaving}
-                  isLoading={isSaving}
-                >
-                  Mettre hors service
-                </Button>
-              </div>
+          {/* Boutons d'action - Toujours visibles */}
+          <div className="border-t border-gray-200 pt-4 space-y-3">
+            {/* Photos déchargées */}
+            <div>
+              <Button
+                variant={new Date(formData.dateEvenement) < new Date() && isViewMode ? 'primary' : 'secondary'}
+                className="w-full"
+                onClick={() => {
+                  const prep = getPreparationForMachine(selectedMachine!);
+                  if (prep) handleMarkPhotosUnloaded(prep.id);
+                }}
+                disabled={!isViewMode || new Date(formData.dateEvenement) >= new Date() || isSaving}
+                isLoading={isSaving}
+              >
+                <CheckCircleIcon className="h-5 w-5 mr-2" />
+                Photos déchargées
+              </Button>
+              <p className="text-xs text-gray-500 mt-1">
+                {!isViewMode
+                  ? 'Créez d\'abord la préparation'
+                  : new Date(formData.dateEvenement) >= new Date()
+                  ? 'Disponible après la date de l\'événement'
+                  : 'Marquer les photos comme déchargées et archiver'}
+              </p>
             </div>
-          )}
+
+            {/* Défaut */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Signaler un défaut</label>
+              <textarea
+                value={defautText}
+                onChange={(e) => setDefautText(e.target.value)}
+                rows={2}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
+                placeholder="Décrire le défaut..."
+                disabled={!isViewMode}
+              />
+              <Button
+                variant="warning"
+                className="w-full"
+                onClick={() => {
+                  const prep = getPreparationForMachine(selectedMachine!);
+                  if (prep) handleMarkDefect(prep.id);
+                }}
+                disabled={!isViewMode || isSaving}
+                isLoading={isSaving}
+              >
+                <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
+                Signaler un défaut
+              </Button>
+            </div>
+
+            {/* Hors service */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Mettre hors service</label>
+              <textarea
+                value={horsServiceText}
+                onChange={(e) => setHorsServiceText(e.target.value)}
+                rows={2}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
+                placeholder="Raison de la mise hors service..."
+                disabled={!isViewMode}
+              />
+              <Button
+                variant="danger"
+                className="w-full"
+                onClick={() => {
+                  const prep = getPreparationForMachine(selectedMachine!);
+                  if (prep) handleMarkOutOfService(prep.id);
+                }}
+                disabled={!isViewMode || isSaving}
+                isLoading={isSaving}
+              >
+                Mettre hors service
+              </Button>
+            </div>
+          </div>
 
           <div className="flex gap-3 pt-4">
             <Button variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>
