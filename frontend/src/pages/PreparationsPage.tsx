@@ -544,7 +544,10 @@ export default function PreparationsPage() {
                   {/* Header compact */}
                   <div className="flex items-center gap-3 mb-3">
                     <div
-                      className="p-2 rounded-lg"
+                      className={clsx(
+                        "rounded-lg overflow-hidden flex items-center justify-center",
+                        machinesOfType[0]?.imageUrl ? "w-10 h-10" : "w-10 h-10 p-2"
+                      )}
                       style={{
                         backgroundColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)` : undefined,
                         color: machineColor,
@@ -554,10 +557,10 @@ export default function PreparationsPage() {
                         <img
                           src={machinesOfType[0].imageUrl}
                           alt={config.label}
-                          className="h-6 w-6 object-contain"
+                          className="w-full h-full object-cover"
                         />
                       ) : (
-                        <Icon className="h-6 w-6" />
+                        <Icon className="w-full h-full" />
                       )}
                     </div>
                     <div className="flex-1 text-left">
@@ -611,7 +614,10 @@ export default function PreparationsPage() {
           </Button>
           <div className="flex items-center gap-3">
             <div
-              className="p-3 rounded-lg border-2 relative group cursor-pointer"
+              className={clsx(
+                "rounded-lg border-2 relative group cursor-pointer overflow-hidden",
+                filteredMachines[0]?.imageUrl ? "w-12 h-12" : "w-12 h-12 p-3"
+              )}
               style={{
                 backgroundColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.05)` : undefined,
                 borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : undefined,
@@ -625,16 +631,16 @@ export default function PreparationsPage() {
                   <img
                     src={filteredMachines[0].imageUrl}
                     alt={typeConfig.label}
-                    className="h-6 w-6 object-contain"
+                    className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                  <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <CameraIcon className="h-4 w-4 text-white" />
                   </div>
                 </>
               ) : (
                 <>
-                  <Icon className="h-6 w-6" />
-                  <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                  <Icon className="w-full h-full" />
+                  <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <CameraIcon className="h-4 w-4 text-white" />
                   </div>
                 </>
