@@ -355,6 +355,67 @@ return {
 
 ---
 
+---
+
+## Session du 13 février 2026
+
+### Problèmes résolus
+
+#### 13. PWA affichait un écran blanc sur mobile
+**Problème** : L'application PWA affichait un écran blanc lors de l'ouverture sur mobile.
+
+**Cause** : Le `start_url` dans `manifest.json` pointait vers `/chauffeur`, ce qui causait un échec de redirection pour les utilisateurs non authentifiés ou n'ayant pas le rôle chauffeur.
+
+**Solution** :
+- Changement de `"start_url": "/chauffeur"` à `"start_url": "/"`
+- Le système de routing peut maintenant gérer correctement les redirections selon l'état d'authentification et les rôles
+
+**Fichier modifié** : `frontend/public/manifest.json:5`
+
+**Instructions utilisateur** :
+- Désinstaller l'ancienne version de la PWA du mobile
+- Réinstaller depuis le navigateur
+- L'app s'ouvre maintenant correctement avec la page de login si non connecté
+
+---
+
+#### 14. Courbe vide dans la section rapports
+**Problème** : Dans la page rapports, la courbe "Activité quotidienne" n'affichait aucune donnée (livraisons et ramassages).
+
+**Cause** : Les tournées étaient récupérées sans les points inclus (`includePoints: false` par défaut). Le graphique essayait de compter les livraisons/ramassages mais `t.points` était undefined.
+
+**Analyse** :
+- L'API `/api/tournees` accepte un paramètre `includePoints=true`
+- Si `includePoints` n'est pas passé, l'API retourne seulement `_count.points` mais pas les points eux-mêmes
+- Le calcul du graphique dépendait de `t.points.forEach(...)` pour compter livraisons/ramassages
+- Sans les points, la courbe restait à 0
+
+**Solution** : Passer `includePoints: true` dans l'appel au service tournées
+
+**Fichier modifié** : `frontend/src/pages/RapportsPage.tsx:150`
+
+```typescript
+// AVANT (bug)
+const result = await tourneesService.list({ limit: 1000 });
+
+// APRÈS (fix)
+const result = await tourneesService.list({ limit: 1000, includePoints: true });
+```
+
+**Résultat** :
+- Les tournées sont chargées avec tous leurs points
+- Le graphique peut maintenant calculer correctement les livraisons et ramassages par jour
+- Les données s'affichent correctement dans la courbe
+
+---
+
+### Commits de cette session (13 février 2026)
+
+1. `fix: change PWA start_url to root to prevent blank screen on mobile`
+2. `fix: include points data in reports for chart display`
+
+---
+
 ### Notes techniques
 
 - **PWA** : Progressive Web App installable (Android + iOS)
