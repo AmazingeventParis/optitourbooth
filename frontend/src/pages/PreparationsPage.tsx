@@ -155,7 +155,17 @@ export default function PreparationsPage() {
         notes: formData.notes || undefined,
       });
       success('Préparation créée');
-      setIsModalOpen(false);
+
+      // Réinitialiser le formulaire pour permettre d'en créer une autre
+      setFormData({
+        dateEvenement: '',
+        client: '',
+        preparateur: '',
+        notes: '',
+      });
+      setDefautText('');
+      setHorsServiceText('');
+
       fetchMachines();
     } catch (err) {
       showError('Erreur', (err as Error).message);
@@ -662,18 +672,16 @@ export default function PreparationsPage() {
         title={`${isViewMode ? '' : 'Préparer '}${selectedMachine?.type} ${selectedMachine?.numero}`}
       >
         <div className="space-y-4">
-          {/* Bouton Ajouter un événement - visible en mode visualisation */}
-          {isViewMode && (
-            <div className="pb-4 border-b border-gray-200">
-              <Button
-                variant="primary"
-                className="w-full"
-                onClick={handleAddNewEvent}
-              >
-                + Ajouter un événement
-              </Button>
-            </div>
-          )}
+          {/* Bouton Ajouter un événement - toujours visible */}
+          <div className="pb-4 border-b border-gray-200">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleAddNewEvent}
+            >
+              + Ajouter un événement
+            </Button>
+          </div>
 
           <Input
             label="Date de l'événement"
@@ -833,7 +841,7 @@ export default function PreparationsPage() {
 
           <div className="flex gap-3 pt-4">
             <Button variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>
-              {isViewMode ? 'Fermer' : 'Annuler'}
+              Fermer
             </Button>
             {!isViewMode && (
               <Button className="flex-1" onClick={handleCreatePreparation} isLoading={isSaving}>
