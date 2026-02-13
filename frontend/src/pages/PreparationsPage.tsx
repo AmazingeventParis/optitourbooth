@@ -619,157 +619,131 @@ export default function PreparationsPage() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={isViewMode ? `${selectedMachine?.type} ${selectedMachine?.numero}` : `Préparer ${selectedMachine?.type} ${selectedMachine?.numero}`}
+        title={`${isViewMode ? '' : 'Préparer '}${selectedMachine?.type} ${selectedMachine?.numero}`}
       >
         <div className="space-y-4">
-          {!isViewMode ? (
-            <>
-              {/* Mode Création */}
-              <Input
-                label="Date de l'événement"
-                type="date"
-                value={formData.dateEvenement}
-                onChange={(e) => setFormData({ ...formData, dateEvenement: e.target.value })}
-                required
-              />
-              <Input
-                label="Nom du client"
-                value={formData.client}
-                onChange={(e) => setFormData({ ...formData, client: e.target.value })}
-                placeholder="Nom de l'événement ou du client"
-                required
-              />
-              <Input
-                label="Préparateur"
-                value={formData.preparateur}
-                onChange={(e) => setFormData({ ...formData, preparateur: e.target.value })}
-                placeholder="Nom du préparateur"
-                required
-              />
+          <Input
+            label="Date de l'événement"
+            type="date"
+            value={formData.dateEvenement}
+            onChange={(e) => setFormData({ ...formData, dateEvenement: e.target.value })}
+            required
+            disabled={isViewMode}
+          />
+          <Input
+            label="Nom du client"
+            value={formData.client}
+            onChange={(e) => setFormData({ ...formData, client: e.target.value })}
+            placeholder="Nom de l'événement ou du client"
+            required
+            disabled={isViewMode}
+          />
+          <Input
+            label="Préparateur"
+            value={formData.preparateur}
+            onChange={(e) => setFormData({ ...formData, preparateur: e.target.value })}
+            placeholder="Nom du préparateur"
+            required
+            disabled={isViewMode}
+          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={3}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Notes optionnelles..."
+              disabled={isViewMode}
+            />
+          </div>
+
+          {/* Boutons d'action - Toujours visibles si une préparation existe */}
+          {isViewMode && (
+            <div className="border-t border-gray-200 pt-4 space-y-3">
+              {/* Photos déchargées */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <Button
+                  variant={new Date(formData.dateEvenement) < new Date() ? 'primary' : 'secondary'}
+                  className="w-full"
+                  onClick={() => {
+                    const prep = getPreparationForMachine(selectedMachine!);
+                    if (prep) handleMarkPhotosUnloaded(prep.id);
+                  }}
+                  disabled={new Date(formData.dateEvenement) >= new Date() || isSaving}
+                  isLoading={isSaving}
+                >
+                  <CheckCircleIcon className="h-5 w-5 mr-2" />
+                  Photos déchargées
+                </Button>
+                <p className="text-xs text-gray-500 mt-1">
+                  {new Date(formData.dateEvenement) >= new Date()
+                    ? 'Disponible après la date de l\'événement'
+                    : 'Marquer les photos comme déchargées et archiver'}
+                </p>
+              </div>
+
+              {/* Défaut */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Signaler un défaut</label>
                 <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="Notes optionnelles..."
+                  value={defautText}
+                  onChange={(e) => setDefautText(e.target.value)}
+                  rows={2}
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
+                  placeholder="Décrire le défaut..."
                 />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <Button variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>
-                  Annuler
-                </Button>
-                <Button className="flex-1" onClick={handleCreatePreparation} isLoading={isSaving}>
-                  Créer
-                </Button>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Mode Visualisation */}
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date de l'événement</label>
-                  <p className="text-gray-900">{formData.dateEvenement ? format(parseISO(formData.dateEvenement), 'd MMMM yyyy', { locale: fr }) : '-'}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
-                  <p className="text-gray-900">{formData.client}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Préparateur</label>
-                  <p className="text-gray-900">{formData.preparateur}</p>
-                </div>
-                {formData.notes && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                    <p className="text-gray-900">{formData.notes}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-gray-200 pt-4 mt-4 space-y-3">
-                <h3 className="font-semibold text-gray-900">Actions</h3>
-
-                {/* Photos déchargées */}
-                <div>
-                  <Button
-                    variant={new Date(formData.dateEvenement) < new Date() ? 'primary' : 'secondary'}
-                    className="w-full"
-                    onClick={() => {
-                      const prep = getPreparationForMachine(selectedMachine!);
-                      if (prep) handleMarkPhotosUnloaded(prep.id);
-                    }}
-                    disabled={new Date(formData.dateEvenement) >= new Date() || isSaving}
-                    isLoading={isSaving}
-                  >
-                    <CheckCircleIcon className="h-5 w-5 mr-2" />
-                    Photos déchargées
-                  </Button>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {new Date(formData.dateEvenement) >= new Date()
-                      ? 'Disponible après la date de l\'événement'
-                      : 'Marquer les photos comme déchargées et archiver'}
-                  </p>
-                </div>
-
-                {/* Défaut */}
-                <div>
-                  <textarea
-                    value={defautText}
-                    onChange={(e) => setDefautText(e.target.value)}
-                    rows={2}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
-                    placeholder="Décrire le défaut..."
-                  />
-                  <Button
-                    variant="warning"
-                    className="w-full"
-                    onClick={() => {
-                      const prep = getPreparationForMachine(selectedMachine!);
-                      if (prep) handleMarkDefect(prep.id);
-                    }}
-                    disabled={isSaving}
-                    isLoading={isSaving}
-                  >
-                    <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
-                    Signaler un défaut
-                  </Button>
-                </div>
-
-                {/* Hors service */}
-                <div>
-                  <textarea
-                    value={horsServiceText}
-                    onChange={(e) => setHorsServiceText(e.target.value)}
-                    rows={2}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
-                    placeholder="Raison de la mise hors service..."
-                  />
-                  <Button
-                    variant="danger"
-                    className="w-full"
-                    onClick={() => {
-                      const prep = getPreparationForMachine(selectedMachine!);
-                      if (prep) handleMarkOutOfService(prep.id);
-                    }}
-                    disabled={isSaving}
-                    isLoading={isSaving}
-                  >
-                    Mettre hors service
-                  </Button>
-                </div>
-              </div>
-
-              <div className="pt-4">
-                <Button variant="secondary" className="w-full" onClick={() => setIsModalOpen(false)}>
-                  Fermer
+                <Button
+                  variant="warning"
+                  className="w-full"
+                  onClick={() => {
+                    const prep = getPreparationForMachine(selectedMachine!);
+                    if (prep) handleMarkDefect(prep.id);
+                  }}
+                  disabled={isSaving}
+                  isLoading={isSaving}
+                >
+                  <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
+                  Signaler un défaut
                 </Button>
               </div>
-            </>
+
+              {/* Hors service */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mettre hors service</label>
+                <textarea
+                  value={horsServiceText}
+                  onChange={(e) => setHorsServiceText(e.target.value)}
+                  rows={2}
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
+                  placeholder="Raison de la mise hors service..."
+                />
+                <Button
+                  variant="danger"
+                  className="w-full"
+                  onClick={() => {
+                    const prep = getPreparationForMachine(selectedMachine!);
+                    if (prep) handleMarkOutOfService(prep.id);
+                  }}
+                  disabled={isSaving}
+                  isLoading={isSaving}
+                >
+                  Mettre hors service
+                </Button>
+              </div>
+            </div>
           )}
+
+          <div className="flex gap-3 pt-4">
+            <Button variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>
+              {isViewMode ? 'Fermer' : 'Annuler'}
+            </Button>
+            {!isViewMode && (
+              <Button className="flex-1" onClick={handleCreatePreparation} isLoading={isSaving}>
+                Créer
+              </Button>
+            )}
+          </div>
         </div>
       </Modal>
     </div>
