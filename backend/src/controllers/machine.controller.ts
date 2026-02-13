@@ -77,11 +77,15 @@ export const getMachine = async (req: Request, res: Response) => {
  */
 export const uploadMachineImage = async (req: Request, res: Response) => {
   try {
-    const { type } = req.params;
+    const type = req.params.type as string;
     const file = req.file;
 
     if (!file) {
       return res.status(400).json({ error: 'Aucune image fournie' });
+    }
+
+    if (!type) {
+      return res.status(400).json({ error: 'Type de machine manquant' });
     }
 
     // Vérifier que le type est valide

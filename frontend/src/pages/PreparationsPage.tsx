@@ -69,7 +69,7 @@ export default function PreparationsPage() {
   const [isArchiveMode, setIsArchiveMode] = useState(false);
   const [archivedPreparations, setArchivedPreparations] = useState<Preparation[]>([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const fileInputRef = useState<React.RefObject<HTMLInputElement>>(React.createRef<HTMLInputElement>)[0];
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
   const [formData, setFormData] = useState({
