@@ -2,11 +2,15 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { MachineType } from '@prisma/client';
 import { uploadToCloudinary, isCloudinaryConfigured } from '../config/cloudinary.js';
+import { autoUpdatePreparationStatuses } from './preparation.controller.js';
 
 /**
  * Liste toutes les machines
  */
 export const listMachines = async (req: Request, res: Response) => {
+  // Auto-transition des statuts de préparation selon la date
+  await autoUpdatePreparationStatuses();
+
   try {
     const { type, actif } = req.query;
 

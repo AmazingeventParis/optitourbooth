@@ -5,7 +5,7 @@ import { PreparationStatut } from '@prisma/client';
 /**
  * Auto-transition des statuts de préparation selon la date
  */
-async function autoUpdatePreparationStatuses(): Promise<void> {
+export async function autoUpdatePreparationStatuses(): Promise<void> {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
