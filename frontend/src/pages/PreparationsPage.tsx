@@ -696,7 +696,7 @@ export default function PreparationsPage() {
                 {/* Photos déchargées */}
                 <div>
                   <Button
-                    variant={new Date(formData.dateEvenement) < new Date() ? 'success' : 'secondary'}
+                    variant={new Date(formData.dateEvenement) < new Date() ? 'primary' : 'secondary'}
                     className="w-full"
                     onClick={() => {
                       const prep = getPreparationForMachine(selectedMachine!);
