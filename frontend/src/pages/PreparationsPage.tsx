@@ -14,6 +14,7 @@ import {
   ArrowLeftIcon,
   CameraIcon,
   CpuChipIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -72,13 +73,10 @@ export default function PreparationsPage() {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form state
-  const [formData, setFormData] = useState({
-    dateEvenement: '',
-    client: '',
-    preparateur: '',
-    notes: '',
-  });
+  // Form state - Liste d'événements à créer
+  const [evenements, setEvenements] = useState<Array<{ dateEvenement: string; client: string }>>([
+    { dateEvenement: '', client: '' }
+  ]);
 
   // Action modal state
   const [isViewMode, setIsViewMode] = useState(false);
@@ -117,21 +115,10 @@ export default function PreparationsPage() {
     if (preparation) {
       // Mode visualisation
       setIsViewMode(true);
-      setFormData({
-        dateEvenement: preparation.dateEvenement.split('T')[0],
-        client: preparation.client,
-        preparateur: preparation.preparateur,
-        notes: preparation.notes || '',
-      });
     } else {
       // Mode création
       setIsViewMode(false);
-      setFormData({
-        dateEvenement: '',
-        client: '',
-        preparateur: '',
-        notes: '',
-      });
+      setEvenements([{ dateEvenement: '', client: '' }]);
     }
 
     setDefautText('');
@@ -140,29 +127,35 @@ export default function PreparationsPage() {
   };
 
   const handleCreatePreparation = async () => {
-    if (!selectedMachine || !formData.dateEvenement || !formData.client || !formData.preparateur) {
-      showError('Erreur', 'Veuillez remplir tous les champs obligatoires');
+    if (!selectedMachine) {
+      showError('Erreur', 'Machine non sélectionnée');
+      return;
+    }
+
+    // Vérifier que tous les événements ont date et client
+    const evenementsValides = evenements.filter(e => e.dateEvenement && e.client);
+    if (evenementsValides.length === 0) {
+      showError('Erreur', 'Veuillez remplir au moins une date et un client');
       return;
     }
 
     setIsSaving(true);
     try {
-      await preparationsService.create({
-        machineId: selectedMachine.id,
-        dateEvenement: formData.dateEvenement,
-        client: formData.client,
-        preparateur: formData.preparateur,
-        notes: formData.notes || undefined,
-      });
-      success('Préparation créée');
+      // Créer toutes les préparations
+      for (const evt of evenementsValides) {
+        await preparationsService.create({
+          machineId: selectedMachine.id,
+          dateEvenement: evt.dateEvenement,
+          client: evt.client,
+          preparateur: 'Système', // Valeur par défaut
+          notes: undefined,
+        });
+      }
 
-      // Réinitialiser le formulaire pour permettre d'en créer une autre
-      setFormData({
-        dateEvenement: '',
-        client: '',
-        preparateur: '',
-        notes: '',
-      });
+      success(`${evenementsValides.length} préparation(s) créée(s)`);
+
+      // Réinitialiser pour permettre d'en créer d'autres
+      setEvenements([{ dateEvenement: '', client: '' }]);
       setDefautText('');
       setHorsServiceText('');
 
@@ -300,16 +293,8 @@ export default function PreparationsPage() {
   };
 
   const handleAddNewEvent = () => {
-    // Passer en mode création tout en gardant la machine sélectionnée
-    setIsViewMode(false);
-    setFormData({
-      dateEvenement: '',
-      client: '',
-      preparateur: '',
-      notes: '',
-    });
-    setDefautText('');
-    setHorsServiceText('');
+    // Ajouter un nouvel événement à la liste
+    setEvenements([...evenements, { dateEvenement: '', client: '' }]);
   };
 
   const getPreparationForMachine = (machine: Machine): Preparation | undefined => {
@@ -690,169 +675,180 @@ export default function PreparationsPage() {
         title={`${isViewMode ? '' : 'Préparer '}${selectedMachine?.type} ${selectedMachine?.numero}`}
       >
         <div className="space-y-4">
-          {/* Bouton Ajouter un événement - toujours visible */}
-          <div className="pb-4 border-b border-gray-200">
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={handleAddNewEvent}
-            >
-              + Ajouter un événement
-            </Button>
-          </div>
+          {/* Section événements */}
+          {!isViewMode ? (
+            <>
+              {/* Bouton Ajouter un événement */}
+              <div className="pb-4 border-b border-gray-200">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleAddNewEvent}
+                >
+                  + Ajouter un événement
+                </Button>
+              </div>
 
-          <Input
-            label="Date de l'événement"
-            type="date"
-            value={formData.dateEvenement}
-            onChange={(e) => setFormData({ ...formData, dateEvenement: e.target.value })}
-            required
-            disabled={isViewMode}
-          />
-          <Input
-            label="Nom du client"
-            value={formData.client}
-            onChange={(e) => setFormData({ ...formData, client: e.target.value })}
-            placeholder="Nom de l'événement ou du client"
-            required
-            disabled={isViewMode}
-          />
-          <Input
-            label="Préparateur"
-            value={formData.preparateur}
-            onChange={(e) => setFormData({ ...formData, preparateur: e.target.value })}
-            placeholder="Nom du préparateur"
-            required
-            disabled={isViewMode}
-          />
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="Notes optionnelles..."
-              disabled={isViewMode}
-            />
-          </div>
+              {/* Liste des événements */}
+              {evenements.map((evt, index) => (
+                <div key={index} className="space-y-3 p-4 bg-gray-50 rounded-lg relative">
+                  {evenements.length > 1 && (
+                    <button
+                      onClick={() => setEvenements(evenements.filter((_, i) => i !== index))}
+                      className="absolute top-2 right-2 text-red-500 hover:text-red-700"
+                      type="button"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  )}
+                  <Input
+                    label="Date de l'événement"
+                    type="date"
+                    value={evt.dateEvenement}
+                    onChange={(e) => {
+                      const newEvents = [...evenements];
+                      newEvents[index].dateEvenement = e.target.value;
+                      setEvenements(newEvents);
+                    }}
+                    required
+                  />
+                  <Input
+                    label="Nom du client"
+                    value={evt.client}
+                    onChange={(e) => {
+                      const newEvents = [...evenements];
+                      newEvents[index].client = e.target.value;
+                      setEvenements(newEvents);
+                    }}
+                    placeholder="Nom de l'événement ou du client"
+                    required
+                  />
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              {/* Affichage en mode visualisation */}
+              {(() => {
+                const prep = getPreparationForMachine(selectedMachine!);
+                if (!prep) return null;
+                return (
+                  <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Date de l'événement</label>
+                      <p className="text-sm text-gray-900">{new Date(prep.dateEvenement).toLocaleDateString('fr-FR')}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
+                      <p className="text-sm text-gray-900">{prep.client}</p>
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
+          )}
 
           {/* Boutons d'action - Toujours visibles */}
           <div className="border-t border-gray-200 pt-4 space-y-3">
             {/* Photos déchargées */}
-            <div>
-              <Button
-                variant={new Date(formData.dateEvenement) < new Date() && isViewMode ? 'primary' : 'secondary'}
-                className="w-full"
-                onClick={() => {
+            {isViewMode && (
+              <div>
+                {(() => {
                   const prep = getPreparationForMachine(selectedMachine!);
-                  if (prep) handleMarkPhotosUnloaded(prep.id);
-                }}
-                disabled={!isViewMode || new Date(formData.dateEvenement) >= new Date() || isSaving}
-                isLoading={isSaving}
-              >
-                <CheckCircleIcon className="h-5 w-5 mr-2" />
-                Photos déchargées
-              </Button>
-              <p className="text-xs text-gray-500 mt-1">
-                {!isViewMode
-                  ? 'Créez d\'abord la préparation'
-                  : new Date(formData.dateEvenement) >= new Date()
-                  ? 'Disponible après la date de l\'événement'
-                  : 'Marquer les photos comme déchargées et archiver'}
-              </p>
-            </div>
+                  if (!prep) return null;
+                  const isPastDate = new Date(prep.dateEvenement) < new Date();
+                  return (
+                    <>
+                      <Button
+                        variant={isPastDate ? 'primary' : 'secondary'}
+                        className="w-full"
+                        onClick={() => handleMarkPhotosUnloaded(prep.id)}
+                        disabled={!isPastDate || isSaving}
+                        isLoading={isSaving}
+                      >
+                        <CheckCircleIcon className="h-5 w-5 mr-2" />
+                        Photos déchargées
+                      </Button>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {isPastDate
+                          ? 'Marquer les photos comme déchargées et archiver'
+                          : 'Disponible après la date de l\'événement'}
+                      </p>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
 
-            {/* Défaut */}
+            {/* Champ partagé pour défaut/hors service */}
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Préciser la panne</label>
+              <textarea
+                value={selectedMachine?.aDefaut ? selectedMachine.defaut || '' : (defautText || horsServiceText)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setDefautText(value);
+                  setHorsServiceText(value);
+                }}
+                rows={2}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
+                placeholder="Décrire la panne..."
+                disabled={Boolean(selectedMachine?.aDefaut || (selectedMachine && getMachineStatut(selectedMachine) === 'hors_service'))}
+              />
+
+              {/* Boutons d'action - côte à côte */}
               {selectedMachine?.aDefaut ? (
-                <>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Défaut signalé</label>
-                  <div className="p-3 mb-2 bg-orange-50 border border-orange-200 rounded-lg">
-                    <p className="text-sm text-orange-900">{selectedMachine.defaut}</p>
-                  </div>
-                  <Button
-                    variant="primary"
-                    className="w-full"
-                    onClick={() => {
-                      if (selectedMachine) handleClearDefect(selectedMachine.id);
-                    }}
-                    disabled={isSaving}
-                    isLoading={isSaving}
-                  >
-                    <CheckCircleIcon className="h-5 w-5 mr-2" />
-                    Retirer le défaut
-                  </Button>
-                </>
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={() => {
+                    if (selectedMachine) handleClearDefect(selectedMachine.id);
+                  }}
+                  disabled={isSaving}
+                  isLoading={isSaving}
+                >
+                  <CheckCircleIcon className="h-5 w-5 mr-2" />
+                  Retirer le défaut
+                </Button>
+              ) : selectedMachine && getMachineStatut(selectedMachine) === 'hors_service' ? (
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={() => {
+                    if (selectedMachine) handleRestoreToService(selectedMachine.id);
+                  }}
+                  disabled={isSaving}
+                  isLoading={isSaving}
+                >
+                  <CheckCircleIcon className="h-5 w-5 mr-2" />
+                  Remettre en service
+                </Button>
               ) : (
-                <>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Signaler un défaut</label>
-                  <textarea
-                    value={defautText}
-                    onChange={(e) => setDefautText(e.target.value)}
-                    rows={2}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
-                    placeholder="Décrire le défaut..."
-                  />
+                <div className="flex gap-2">
                   <Button
                     variant="warning"
-                    className="w-full"
+                    className="flex-1"
                     onClick={() => {
                       if (selectedMachine) handleMarkDefect(selectedMachine.id);
                     }}
-                    disabled={isSaving}
+                    disabled={isSaving || !defautText}
                     isLoading={isSaving}
                   >
                     <WrenchScrewdriverIcon className="h-5 w-5 mr-2" />
                     Signaler un défaut
                   </Button>
-                </>
-              )}
-            </div>
-
-            {/* Hors service */}
-            <div>
-              {selectedMachine && getMachineStatut(selectedMachine) === 'hors_service' ? (
-                <>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Machine hors service</label>
-                  <div className="p-3 mb-2 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-900">{getPreparationForMachine(selectedMachine)?.notes || 'Aucune raison spécifiée'}</p>
-                  </div>
-                  <Button
-                    variant="primary"
-                    className="w-full"
-                    onClick={() => {
-                      if (selectedMachine) handleRestoreToService(selectedMachine.id);
-                    }}
-                    disabled={isSaving}
-                    isLoading={isSaving}
-                  >
-                    <CheckCircleIcon className="h-5 w-5 mr-2" />
-                    Remettre en service
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Mettre hors service</label>
-                  <textarea
-                    value={horsServiceText}
-                    onChange={(e) => setHorsServiceText(e.target.value)}
-                    rows={2}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
-                    placeholder="Raison de la mise hors service..."
-                  />
                   <Button
                     variant="danger"
-                    className="w-full"
+                    className="flex-1"
                     onClick={() => {
                       if (selectedMachine) handleMarkOutOfService(selectedMachine.id);
                     }}
-                    disabled={isSaving}
+                    disabled={isSaving || !horsServiceText}
                     isLoading={isSaving}
                   >
                     Mettre hors service
                   </Button>
-                </>
+                </div>
               )}
             </div>
           </div>
