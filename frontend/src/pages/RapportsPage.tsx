@@ -147,7 +147,7 @@ export default function RapportsPage() {
         startDate = subDays(new Date(), parseInt(periode));
       }
 
-      const result = await tourneesService.list({ limit: 1000 });
+      const result = await tourneesService.list({ limit: 1000, includePoints: true });
 
       let filtered = result.data.filter((t) => {
         const tourneeDate = parseISO(t.date);
@@ -370,7 +370,9 @@ export default function RapportsPage() {
 
     // Remplir avec les données
     tournees.forEach((t) => {
-      const key = t.date.split('T')[0];
+      // Parse ISO date correctly
+      const tourneeDate = parseISO(t.date);
+      const key = format(tourneeDate, 'yyyy-MM-dd');
       const existing = map.get(key);
       if (existing) {
         existing.distance += t.distanceTotaleKm || 0;
