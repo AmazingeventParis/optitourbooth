@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware';
 export interface User {
   id: string;
   email: string;
-  roles: Array<'admin' | 'chauffeur' | 'utilisateur'>;
+  roles: Array<'admin' | 'chauffeur' | 'preparateur'>;
   nom: string;
   prenom: string;
   telephone?: string;

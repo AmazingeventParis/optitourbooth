@@ -16,7 +16,7 @@ datasource db {
 enum UserRole {
   admin
   chauffeur
-  utilisateur
+  preparateur
 }
 
 enum TourneeStatut {
@@ -75,12 +75,12 @@ enum PreparationStatut {
 
 // ----- TABLES PRINCIPALES -----
 
-/// Utilisateurs (Administrateurs, Chauffeurs et Utilisateurs)
+/// Utilisateurs (Administrateurs, Chauffeurs et Préparateurs)
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
   passwordHash String     @map("password_hash")
-  roles        UserRole[] @default([utilisateur]) // Un utilisateur peut avoir plusieurs rôles
+  roles        UserRole[] @default([preparateur]) // Un utilisateur peut avoir plusieurs rôles
   nom          String
   prenom       String
   telephone    String?

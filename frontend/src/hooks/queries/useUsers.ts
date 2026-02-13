@@ -60,7 +60,7 @@ interface CreateUserInput {
   password: string;
   nom: string;
   prenom: string;
-  roles: Array<'admin' | 'chauffeur' | 'utilisateur'>;
+  roles: Array<'admin' | 'chauffeur' | 'preparateur'>;
   telephone?: string;
 }
 

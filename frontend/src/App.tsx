@@ -74,8 +74,11 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
   if (isAuthenticated) {
     // Rediriger selon le rôle
-    if (user?.roles.includes('chauffeur') && !user?.roles.includes('admin')) {
+    if (user?.roles.includes('chauffeur') && !user?.roles.includes('admin') && !user?.roles.includes('preparateur')) {
       return <Navigate to="/chauffeur" replace />;
+    }
+    if (user?.roles.includes('preparateur') && !user?.roles.includes('admin') && !user?.roles.includes('chauffeur')) {
+      return <Navigate to="/preparations" replace />;
     }
     return <Navigate to="/" replace />;
   }
@@ -99,8 +102,12 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (user?.roles.includes('chauffeur') && !user?.roles.includes('admin')) {
+  if (user?.roles.includes('chauffeur') && !user?.roles.includes('admin') && !user?.roles.includes('preparateur')) {
     return <Navigate to="/chauffeur" replace />;
+  }
+
+  if (user?.roles.includes('preparateur') && !user?.roles.includes('admin') && !user?.roles.includes('chauffeur')) {
+    return <Navigate to="/preparations" replace />;
   }
 
   return <>{children}</>;
@@ -124,6 +131,30 @@ function ChauffeurRoute({ children }: { children: React.ReactNode }) {
 
   // Les admins et chauffeurs peuvent accéder à l'interface chauffeur
   if (!user?.roles.includes('chauffeur') && !user?.roles.includes('admin')) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// Protection pour les routes préparateur
+function PreparateurRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, user } = useAuthStore();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Les admins et préparateurs peuvent accéder à l'interface préparateur
+  if (!user?.roles.includes('preparateur') && !user?.roles.includes('admin')) {
     return <Navigate to="/" replace />;
   }
 
@@ -179,9 +210,20 @@ function App() {
         <Route path="tournees" element={<LazyPage><TourneesPage /></LazyPage>} />
         <Route path="tournees/:id" element={<LazyPage><TourneeDetailPage /></LazyPage>} />
         <Route path="planning" element={<LazyPage><DailyPlanningPage /></LazyPage>} />
-        <Route path="preparations" element={<LazyPage><PreparationsPage /></LazyPage>} />
         <Route path="historique" element={<LazyPage><TourneesPage /></LazyPage>} />
         <Route path="rapports" element={<LazyPage><RapportsPage /></LazyPage>} />
+      </Route>
+
+      {/* Routes Préparateur */}
+      <Route
+        path="/preparations"
+        element={
+          <PreparateurRoute>
+            <Layout />
+          </PreparateurRoute>
+        }
+      >
+        <Route index element={<LazyPage><PreparationsPage /></LazyPage>} />
       </Route>
 
       {/* Routes Chauffeur */}

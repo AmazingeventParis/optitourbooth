@@ -14,7 +14,7 @@ interface UserFormData {
   password: string;
   nom: string;
   prenom: string;
-  roles: Array<'admin' | 'chauffeur' | 'utilisateur'>;
+  roles: Array<'admin' | 'chauffeur' | 'preparateur'>;
   telephone: string;
   couleur: string;
 }
@@ -40,7 +40,7 @@ const initialFormData: UserFormData = {
   password: '',
   nom: '',
   prenom: '',
-  roles: ['utilisateur'],
+  roles: ['preparateur'],
   telephone: '',
   couleur: '#3B82F6',
 };
@@ -249,7 +249,7 @@ export default function UsersPage() {
         <div className="flex gap-1 flex-wrap">
           {user.roles.map(role => (
             <Badge key={role} variant={role === 'admin' ? 'info' : role === 'chauffeur' ? 'default' : 'warning'}>
-              {role === 'admin' ? 'Admin' : role === 'chauffeur' ? 'Chauffeur' : 'Utilisateur'}
+              {role === 'admin' ? 'Admin' : role === 'chauffeur' ? 'Chauffeur' : 'Préparateur'}
             </Badge>
           ))}
         </div>
@@ -457,7 +457,7 @@ export default function UsersPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Rôles *</label>
             <div className="space-y-2">
               {[
-                { value: 'utilisateur' as const, label: 'Utilisateur' },
+                { value: 'preparateur' as const, label: 'Préparateur' },
                 { value: 'chauffeur' as const, label: 'Chauffeur' },
                 { value: 'admin' as const, label: 'Administrateur' },
               ].map(({ value, label }) => (

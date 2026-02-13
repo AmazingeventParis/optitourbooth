@@ -11,7 +11,7 @@ declare global {
       user?: {
         id: string;
         email: string;
-        roles: Array<'admin' | 'chauffeur' | 'utilisateur'>;
+        roles: Array<'admin' | 'chauffeur' | 'preparateur'>;
         nom: string;
         prenom: string;
       };
@@ -22,7 +22,7 @@ declare global {
 interface JwtPayload {
   userId: string;
   email: string;
-  roles: Array<'admin' | 'chauffeur' | 'utilisateur'>;
+  roles: Array<'admin' | 'chauffeur' | 'preparateur'>;
 }
 
 // Middleware d'authentification
@@ -131,8 +131,27 @@ export function requireChauffeur(
   next();
 }
 
+// Middleware pour vérifier le rôle préparateur
+export function requirePreparateur(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  if (!req.user) {
+    apiResponse.unauthorized(res);
+    return;
+  }
+
+  if (!req.user.roles.includes('preparateur') && !req.user.roles.includes('admin')) {
+    apiResponse.forbidden(res, 'Accès réservé aux préparateurs');
+    return;
+  }
+
+  next();
+}
+
 // Middleware pour vérifier qu'un utilisateur a au moins un des rôles spécifiés
-export function requireRole(...allowedRoles: Array<'admin' | 'chauffeur' | 'utilisateur'>) {
+export function requireRole(...allowedRoles: Array<'admin' | 'chauffeur' | 'preparateur'>) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
       apiResponse.unauthorized(res);
