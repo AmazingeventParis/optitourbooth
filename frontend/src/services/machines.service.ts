@@ -46,10 +46,26 @@ export const machinesService = {
   },
 
   /**
+   * Retire le défaut d'une machine
+   */
+  async clearDefect(id: string): Promise<Machine> {
+    const { data } = await api.delete<Machine>(`/machines/${id}/defect`);
+    return data;
+  },
+
+  /**
    * Marque une machine comme hors service
    */
   async markOutOfService(id: string, raison: string): Promise<any> {
     const { data } = await api.post(`/machines/${id}/out-of-service`, { raison });
+    return data;
+  },
+
+  /**
+   * Remet une machine en service
+   */
+  async restoreToService(id: string): Promise<Machine> {
+    const { data } = await api.post<Machine>(`/machines/${id}/restore-service`);
     return data;
   },
 };

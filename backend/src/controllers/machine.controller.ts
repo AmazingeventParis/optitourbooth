@@ -168,8 +168,12 @@ export const markMachineDefect = async (req: Request, res: Response) => {
  */
 export const markMachineOutOfService = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { raison } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ error: 'ID machine manquant' });
+    }
 
     if (!raison || typeof raison !== 'string') {
       return res.status(400).json({ error: 'Raison requise' });
@@ -193,6 +197,97 @@ export const markMachineOutOfService = async (req: Request, res: Response) => {
     return res.json(preparation);
   } catch (error) {
     console.error('Error marking machine out of service:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * Retire le défaut d'une machine
+ */
+export const clearMachineDefect = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const machine = await prisma.machine.update({
+      where: { id },
+      data: {
+        aDefaut: false,
+        defaut: null,
+      },
+      include: {
+        preparations: {
+          where: {
+            statut: {
+              in: ['en_preparation', 'prete', 'en_cours', 'a_decharger', 'hors_service'],
+            },
+          },
+          orderBy: {
+            dateEvenement: 'desc',
+          },
+          take: 1,
+        },
+      },
+    });
+
+    return res.json(machine);
+  } catch (error) {
+    console.error('Error clearing machine defect:', error);
+    if ((error as any).code === 'P2025') {
+      return res.status(404).json({ error: 'Machine not found' });
+    }
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * Remet une machine en service (archive la préparation hors_service)
+ */
+export const restoreMachineToService = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Trouver la préparation hors_service active de cette machine
+    const preparation = await prisma.preparation.findFirst({
+      where: {
+        machineId: id,
+        statut: 'hors_service',
+      },
+    });
+
+    if (!preparation) {
+      return res.status(404).json({ error: 'Aucune préparation hors service trouvée' });
+    }
+
+    // Archiver la préparation
+    await prisma.preparation.update({
+      where: { id: preparation.id },
+      data: {
+        statut: 'archivee',
+        dateArchivage: new Date(),
+      },
+    });
+
+    // Retourner la machine mise à jour
+    const machine = await prisma.machine.findUnique({
+      where: { id },
+      include: {
+        preparations: {
+          where: {
+            statut: {
+              in: ['en_preparation', 'prete', 'en_cours', 'a_decharger', 'hors_service'],
+            },
+          },
+          orderBy: {
+            dateEvenement: 'desc',
+          },
+          take: 1,
+        },
+      },
+    });
+
+    return res.json(machine);
+  } catch (error) {
+    console.error('Error restoring machine to service:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 };

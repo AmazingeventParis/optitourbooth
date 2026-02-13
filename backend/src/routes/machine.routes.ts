@@ -37,6 +37,8 @@ router.post(
 
 // Actions sur les machines
 router.post('/:id/defect', asyncHandler(machineController.markMachineDefect));
+router.delete('/:id/defect', asyncHandler(machineController.clearMachineDefect));
 router.post('/:id/out-of-service', asyncHandler(machineController.markMachineOutOfService));
+router.post('/:id/restore-service', asyncHandler(machineController.restoreMachineToService));
 
 export default router;

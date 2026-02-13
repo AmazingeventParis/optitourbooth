@@ -242,6 +242,34 @@ export default function PreparationsPage() {
     }
   };
 
+  const handleClearDefect = async (machineId: string) => {
+    setIsSaving(true);
+    try {
+      await machinesService.clearDefect(machineId);
+      success('Défaut retiré');
+      setIsModalOpen(false);
+      fetchMachines();
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRestoreToService = async (machineId: string) => {
+    setIsSaving(true);
+    try {
+      await machinesService.restoreToService(machineId);
+      success('Machine remise en service');
+      setIsModalOpen(false);
+      fetchMachines();
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0 || !selectedType) return;
 
@@ -686,49 +714,95 @@ export default function PreparationsPage() {
 
             {/* Défaut */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Signaler un défaut</label>
-              <textarea
-                value={defautText}
-                onChange={(e) => setDefautText(e.target.value)}
-                rows={2}
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
-                placeholder="Décrire le défaut..."
-              />
-              <Button
-                variant="warning"
-                className="w-full"
-                onClick={() => {
-                  if (selectedMachine) handleMarkDefect(selectedMachine.id);
-                }}
-                disabled={isSaving}
-                isLoading={isSaving}
-              >
-                <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
-                Signaler un défaut
-              </Button>
+              {selectedMachine?.aDefaut ? (
+                <>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Défaut signalé</label>
+                  <div className="p-3 mb-2 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="text-sm text-orange-900">{selectedMachine.defaut}</p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    className="w-full"
+                    onClick={() => {
+                      if (selectedMachine) handleClearDefect(selectedMachine.id);
+                    }}
+                    disabled={isSaving}
+                    isLoading={isSaving}
+                  >
+                    <CheckCircleIcon className="h-5 w-5 mr-2" />
+                    Retirer le défaut
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Signaler un défaut</label>
+                  <textarea
+                    value={defautText}
+                    onChange={(e) => setDefautText(e.target.value)}
+                    rows={2}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
+                    placeholder="Décrire le défaut..."
+                  />
+                  <Button
+                    variant="warning"
+                    className="w-full"
+                    onClick={() => {
+                      if (selectedMachine) handleMarkDefect(selectedMachine.id);
+                    }}
+                    disabled={isSaving}
+                    isLoading={isSaving}
+                  >
+                    <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
+                    Signaler un défaut
+                  </Button>
+                </>
+              )}
             </div>
 
             {/* Hors service */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Mettre hors service</label>
-              <textarea
-                value={horsServiceText}
-                onChange={(e) => setHorsServiceText(e.target.value)}
-                rows={2}
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
-                placeholder="Raison de la mise hors service..."
-              />
-              <Button
-                variant="danger"
-                className="w-full"
-                onClick={() => {
-                  if (selectedMachine) handleMarkOutOfService(selectedMachine.id);
-                }}
-                disabled={isSaving}
-                isLoading={isSaving}
-              >
-                Mettre hors service
-              </Button>
+              {getMachineStatut(selectedMachine!) === 'hors_service' ? (
+                <>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Machine hors service</label>
+                  <div className="p-3 mb-2 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm text-red-900">{getPreparationForMachine(selectedMachine!)?.notes || 'Aucune raison spécifiée'}</p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    className="w-full"
+                    onClick={() => {
+                      if (selectedMachine) handleRestoreToService(selectedMachine.id);
+                    }}
+                    disabled={isSaving}
+                    isLoading={isSaving}
+                  >
+                    <CheckCircleIcon className="h-5 w-5 mr-2" />
+                    Remettre en service
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mettre hors service</label>
+                  <textarea
+                    value={horsServiceText}
+                    onChange={(e) => setHorsServiceText(e.target.value)}
+                    rows={2}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
+                    placeholder="Raison de la mise hors service..."
+                  />
+                  <Button
+                    variant="danger"
+                    className="w-full"
+                    onClick={() => {
+                      if (selectedMachine) handleMarkOutOfService(selectedMachine.id);
+                    }}
+                    disabled={isSaving}
+                    isLoading={isSaving}
+                  >
+                    Mettre hors service
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
