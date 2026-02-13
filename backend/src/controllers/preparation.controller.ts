@@ -13,6 +13,9 @@ async function autoUpdatePreparationStatuses(): Promise<void> {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
+    console.log(`[Auto-Prep] Vérification à ${new Date().toISOString()}`);
+    console.log(`[Auto-Prep] Aujourd'hui (cutoff): ${today.toISOString()}`);
+
     // 1. Passer "prete" → "en_cours" le jour de l'événement
     const readyPreps = await prisma.preparation.findMany({
       where: {
@@ -44,7 +47,11 @@ async function autoUpdatePreparationStatuses(): Promise<void> {
       },
     });
 
+    console.log(`[Auto-Prep] Trouvé ${missedReadyPreps.length} préparation(s) "prete" avec date passée`);
     if (missedReadyPreps.length > 0) {
+      missedReadyPreps.forEach(p => {
+        console.log(`[Auto-Prep]   - ID ${p.id.substring(0, 8)} dateEvenement: ${p.dateEvenement.toISOString()}`);
+      });
       await prisma.preparation.updateMany({
         where: {
           id: { in: missedReadyPreps.map(p => p.id) },
