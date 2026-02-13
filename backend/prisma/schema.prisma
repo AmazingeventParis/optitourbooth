@@ -463,6 +463,7 @@ model Machine {
   id          String      @id @default(uuid())
   type        MachineType // Vegas, Smakk, Ring
   numero      String      // V1, V2, SK1, R1, etc.
+  couleur     String?     // Couleur en hex pour identification visuelle
   actif       Boolean     @default(true)
   notes       String?     @db.Text
 

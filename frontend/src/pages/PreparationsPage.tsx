@@ -17,38 +17,36 @@ import {
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
-const machineTypeConfig: Record<MachineType, {
+const machineTypeBaseConfig: Record<MachineType, {
   label: string;
-  color: string;
-  bgColor: string;
-  borderColor: string;
   icon: React.ComponentType<{ className?: string }>;
   count: number;
 }> = {
   Vegas: {
     label: 'Vegas',
-    color: 'text-primary-600',
-    bgColor: 'bg-primary-50',
-    borderColor: 'border-primary-200 hover:border-primary-400',
     icon: CameraIcon,
     count: 35,
   },
   Smakk: {
     label: 'Smakk',
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50',
-    borderColor: 'border-purple-200 hover:border-purple-400',
     icon: CpuChipIcon,
     count: 20,
   },
   Ring: {
     label: 'Ring',
-    color: 'text-green-600',
-    bgColor: 'bg-green-50',
-    borderColor: 'border-green-200 hover:border-green-400',
     icon: WrenchScrewdriverIcon,
     count: 10,
   },
+};
+
+// Fonction pour convertir hex en RGB
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
 };
 
 const statutConfig: Record<PreparationStatut, { label: string; color: string; badge: string }> = {
@@ -265,30 +263,57 @@ export default function PreparationsPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {Object.entries(machineTypeConfig).map(([type, config]) => {
+          {Object.entries(machineTypeBaseConfig).map(([type, config]) => {
             const Icon = config.icon;
             const machinesOfType = machines.filter((m) => m.type === type);
             const disponibles = machinesOfType.filter((m) => getMachineStatut(m) === 'disponible').length;
             const enPreparation = machinesOfType.filter((m) => ['en_preparation', 'prete', 'en_cours'].includes(getMachineStatut(m))).length;
             const aDecharger = machinesOfType.filter((m) => getMachineStatut(m) === 'a_decharger').length;
 
+            // Récupérer la couleur d'une machine de ce type
+            const machineColor = machinesOfType[0]?.couleur || '#3B82F6';
+            const rgb = hexToRgb(machineColor);
+
             return (
               <button
                 key={type}
                 onClick={() => setSelectedType(type as MachineType)}
-                className={clsx(
-                  'group border-2 rounded-lg transition-all duration-200 hover:shadow-lg',
-                  config.borderColor,
-                  config.bgColor
-                )}
+                className="group border-2 rounded-lg transition-all duration-200 hover:shadow-lg"
+                style={{
+                  backgroundColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.05)` : undefined,
+                  borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : undefined,
+                }}
+                onMouseEnter={(e) => {
+                  if (rgb) {
+                    e.currentTarget.style.borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (rgb) {
+                    e.currentTarget.style.borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)`;
+                  }
+                }}
               >
                 <div className="p-5">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className={clsx('p-2 rounded-lg bg-white border', config.borderColor)}>
-                      <Icon className={clsx('h-8 w-8', config.color)} />
+                    <div
+                      className="p-2 rounded-lg bg-white border"
+                      style={{
+                        borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : undefined,
+                      }}
+                    >
+                      <Icon
+                        className="h-8 w-8"
+                        style={{ color: machineColor }}
+                      />
                     </div>
                     <div className="flex-1 text-left">
-                      <h3 className={clsx('text-xl font-bold', config.color)}>{config.label}</h3>
+                      <h3
+                        className="text-xl font-bold"
+                        style={{ color: machineColor }}
+                      >
+                        {config.label}
+                      </h3>
                       <p className="text-sm text-gray-600">{config.count} machines</p>
                     </div>
                   </div>
@@ -332,8 +357,10 @@ export default function PreparationsPage() {
   }
 
   // Vue des machines du type sélectionné
-  const typeConfig = machineTypeConfig[selectedType];
+  const typeConfig = machineTypeBaseConfig[selectedType];
   const Icon = typeConfig.icon;
+  const machineColor = filteredMachines[0]?.couleur || '#3B82F6';
+  const rgb = hexToRgb(machineColor);
 
   return (
     <div className="space-y-6">
@@ -343,11 +370,25 @@ export default function PreparationsPage() {
             <ArrowLeftIcon className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-3">
-            <div className={clsx('p-3 rounded-lg border-2', typeConfig.bgColor, typeConfig.borderColor)}>
-              <Icon className={clsx('h-6 w-6', typeConfig.color)} />
+            <div
+              className="p-3 rounded-lg border-2"
+              style={{
+                backgroundColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.05)` : undefined,
+                borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : undefined,
+              }}
+            >
+              <Icon
+                className="h-6 w-6"
+                style={{ color: machineColor }}
+              />
             </div>
             <div>
-              <h1 className={clsx('text-2xl font-bold', typeConfig.color)}>{typeConfig.label}</h1>
+              <h1
+                className="text-2xl font-bold"
+                style={{ color: machineColor }}
+              >
+                {typeConfig.label}
+              </h1>
               <p className="text-sm text-gray-500">{filteredMachines.length} machines</p>
             </div>
           </div>
