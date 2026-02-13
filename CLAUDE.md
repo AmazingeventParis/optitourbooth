@@ -415,6 +415,7 @@ const result = await tourneesService.list({ limit: 1000, includePoints: true });
 2. `fix: include points data in reports for chart display`
 3. `feat: amélioration page préparations - préparateur connecté, filtres archive, recherche intelligente`
 4. `feat: add install PWA button in user menu`
+5. `feat: modern compact card design for preparations page`
 
 ---
 
@@ -498,6 +499,53 @@ const result = await tourneesService.list({ limit: 1000, includePoints: true });
 - ✅ Découvrabilité : les utilisateurs savent maintenant qu'une version PWA existe
 - ✅ UX cohérente : même expérience sur tous les navigateurs supportés
 - ✅ Non intrusif : le bouton n'apparaît que si pertinent
+
+---
+
+#### 17. Redesign moderne et compact des cartes de préparation
+**Demande** : Les cartes des modèles de bornes et des numéros de borne étaient trop grosses. Proposer un design plus stylisé et moderne.
+
+**Solution** :
+
+**1. Cartes de type de borne (Vegas, Smakk, Ring)**
+- **Avant** : Grandes cartes avec gradients, borders épais, ombres importantes
+- **Après** :
+  - Design épuré avec fond blanc
+  - Barre d'accent colorée fine en haut
+  - Header compact avec icône et titre
+  - Stats en grille 2x2 au lieu de liste verticale
+  - Labels abrégés : "Dispo", "Prêtes", "Déch.", "H.S."
+  - Padding réduit (p-6 → p-4)
+  - Hover subtil (scale minimal + ombre légère)
+
+**2. Cartes de numéro de borne (V1, V2, SK3...)**
+- **Avant** : 8 colonnes max (xl:grid-cols-8), border-2, padding important
+- **Après** :
+  - **10 colonnes** sur très grand écran (xl:grid-cols-10)
+  - Barre de statut colorée fine en haut (h-0.5)
+  - Badge de statut compact (text-[9px])
+  - Bordures fines adaptées selon le statut
+  - Padding réduit (p-3 → p-2.5)
+  - Gap réduit (gap-3 → gap-2)
+  - Hover doux : translate-y au lieu de scale
+  - Typographie optimisée (text-xl au lieu de text-2xl)
+
+**3. Design moderne unifié**
+- Fond blanc propre sur toutes les cartes
+- Bordures fines et élégantes
+- Transitions rapides (200ms au lieu de 300ms)
+- Couleurs de statut cohérentes
+- Barre d'accent visuelle pour identification rapide
+- Meilleure densité d'information
+
+**Fichier modifié** : `frontend/src/pages/PreparationsPage.tsx`
+
+**Résultat** :
+- ✅ **Plus de bornes affichées** : jusqu'à 10 par ligne sur grand écran
+- ✅ **Design moderne** : épuré, professionnel, cohérent
+- ✅ **Meilleure lisibilité** : informations importantes mises en avant
+- ✅ **Performance visuelle** : animations plus fluides
+- ✅ **Densité optimale** : plus d'infos dans moins d'espace
 
 ---
 
