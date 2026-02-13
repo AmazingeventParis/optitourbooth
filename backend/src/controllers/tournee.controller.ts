@@ -117,16 +117,16 @@ async function getFullTournee(tourneeId: string) {
 // Fonction pour auto-terminer les tournées en cours dont la date est passée
 async function autoFinishPastTournees(): Promise<void> {
   try {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(23, 59, 59, 999);
+    // Aujourd'hui à minuit (00:00:00)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    // Trouver toutes les tournées en_cours dont la date est passée
+    // Trouver toutes les tournées en_cours dont la date est passée (< aujourd'hui)
     const pastTournees = await prisma.tournee.findMany({
       where: {
         statut: 'en_cours',
         date: {
-          lt: yesterday,
+          lt: today,
         },
       },
     });
