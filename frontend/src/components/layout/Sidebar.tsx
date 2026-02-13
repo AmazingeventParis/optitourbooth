@@ -14,9 +14,12 @@ import {
   TruckIcon,
   EyeIcon,
   WrenchScrewdriverIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore, User } from '@/store/authStore';
 import { useChauffeurs } from '@/hooks/queries/useUsers';
+import { useInstallPWA } from '@/hooks/useInstallPWA';
+import { useToast } from '@/hooks/useToast';
 import Avatar from '@/components/ui/Avatar';
 import clsx from 'clsx';
 
@@ -40,8 +43,10 @@ const navigation = [
 function SidebarContent() {
   const { user, logout, startImpersonation } = useAuthStore();
   const navigate = useNavigate();
+  const { success, error: showError } = useToast();
   const [showChauffeurPicker, setShowChauffeurPicker] = useState(false);
   const { data: chauffeurs, isLoading: isLoadingChauffeurs } = useChauffeurs();
+  const { isInstallable, installApp } = useInstallPWA();
 
   const handleLogout = () => {
     logout();
@@ -52,6 +57,15 @@ function SidebarContent() {
     startImpersonation(chauffeur);
     setShowChauffeurPicker(false);
     navigate('/chauffeur');
+  };
+
+  const handleInstallApp = async () => {
+    const installed = await installApp();
+    if (installed) {
+      success('Application installée avec succès !');
+    } else {
+      showError('Erreur', 'L\'installation a été annulée ou a échoué');
+    }
   };
 
   return (
@@ -169,6 +183,25 @@ function SidebarContent() {
                 leaveTo="transform opacity-0 scale-95"
               >
                 <Menu.Items className="absolute bottom-full left-0 right-0 mb-2 rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                  {/* Bouton Installer l'app (affiché uniquement si installable) */}
+                  {isInstallable && (
+                    <Menu.Item>
+                      {({ active }) => (
+                        <button
+                          onClick={handleInstallApp}
+                          className={clsx(
+                            active ? 'bg-gray-100' : '',
+                            'flex w-full items-center px-4 py-2 text-sm text-primary-700'
+                          )}
+                        >
+                          <ArrowDownTrayIcon className="mr-3 h-5 w-5 text-primary-600" />
+                          Installer l'application
+                        </button>
+                      )}
+                    </Menu.Item>
+                  )}
+
+                  {/* Bouton Déconnexion */}
                   <Menu.Item>
                     {({ active }) => (
                       <button
