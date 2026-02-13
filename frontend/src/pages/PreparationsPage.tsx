@@ -11,21 +11,48 @@ import {
   PhotoIcon,
   WrenchScrewdriverIcon,
   ArchiveBoxIcon,
+  ArrowLeftIcon,
+  CameraIcon,
+  CpuChipIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
-const machineTypeConfig: Record<MachineType, { label: string; color: string }> = {
-  Vegas: { label: 'Vegas', color: 'bg-blue-100 border-blue-300' },
-  Smakk: { label: 'Smakk', color: 'bg-purple-100 border-purple-300' },
-  Ring: { label: 'Ring', color: 'bg-green-100 border-green-300' },
+const machineTypeConfig: Record<MachineType, {
+  label: string;
+  color: string;
+  bgGradient: string;
+  icon: React.ComponentType<{ className?: string }>;
+  count: number;
+}> = {
+  Vegas: {
+    label: 'Vegas',
+    color: 'text-blue-600',
+    bgGradient: 'from-blue-500 to-blue-600',
+    icon: CameraIcon,
+    count: 35,
+  },
+  Smakk: {
+    label: 'Smakk',
+    color: 'text-purple-600',
+    bgGradient: 'from-purple-500 to-purple-600',
+    icon: CpuChipIcon,
+    count: 20,
+  },
+  Ring: {
+    label: 'Ring',
+    color: 'text-green-600',
+    bgGradient: 'from-green-500 to-green-600',
+    icon: WrenchScrewdriverIcon,
+    count: 10,
+  },
 };
 
 const statutConfig: Record<PreparationStatut, { label: string; color: string; badge: string }> = {
-  disponible: { label: 'Disponible', color: 'bg-gray-50 border-gray-200', badge: 'default' },
-  en_preparation: { label: 'En préparation', color: 'bg-orange-50 border-orange-300', badge: 'warning' },
-  prete: { label: 'Prête', color: 'bg-green-50 border-green-400', badge: 'success' },
-  en_cours: { label: 'En cours', color: 'bg-blue-50 border-blue-300', badge: 'info' },
-  a_decharger: { label: 'À décharger', color: 'bg-red-50 border-red-400', badge: 'danger' },
+  disponible: { label: 'Disponible', color: 'bg-gray-100 border-gray-300 hover:border-gray-400', badge: 'default' },
+  en_preparation: { label: 'En préparation', color: 'bg-orange-50 border-orange-400 hover:border-orange-500', badge: 'warning' },
+  prete: { label: 'Prête', color: 'bg-green-50 border-green-500 hover:border-green-600', badge: 'success' },
+  en_cours: { label: 'En cours', color: 'bg-blue-50 border-blue-400 hover:border-blue-500', badge: 'info' },
+  a_decharger: { label: 'À décharger', color: 'bg-red-50 border-red-500 hover:border-red-600', badge: 'danger' },
   archivee: { label: 'Archivée', color: 'bg-gray-100 border-gray-300', badge: 'default' },
 };
 
@@ -34,6 +61,7 @@ export default function PreparationsPage() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedType, setSelectedType] = useState<MachineType | null>(null);
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isArchiveMode, setIsArchiveMode] = useState(false);
@@ -158,11 +186,9 @@ export default function PreparationsPage() {
     return prep?.statut || 'disponible';
   };
 
-  const groupedMachines = {
-    Vegas: machines.filter((m) => m.type === 'Vegas'),
-    Smakk: machines.filter((m) => m.type === 'Smakk'),
-    Ring: machines.filter((m) => m.type === 'Ring'),
-  };
+  const filteredMachines = selectedType
+    ? machines.filter((m) => m.type === selectedType)
+    : [];
 
   if (isLoading) {
     return (
@@ -172,15 +198,17 @@ export default function PreparationsPage() {
     );
   }
 
+  // Mode Archive
   if (isArchiveMode) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Archive des événements</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Archive des événements</h1>
           <Button variant="secondary" onClick={() => {
             setIsArchiveMode(false);
             fetchMachines();
           }}>
+            <ArrowLeftIcon className="h-5 w-5 mr-2" />
             Retour
           </Button>
         </div>
@@ -191,14 +219,14 @@ export default function PreparationsPage() {
           ) : (
             <div className="space-y-2">
               {archivedPreparations.map((prep) => (
-                <div key={prep.id} className="p-4 border border-gray-200 rounded-lg">
+                <div key={prep.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold">{prep.client}</p>
-                      <p className="text-sm text-gray-500">
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">{prep.client}</p>
+                      <p className="text-sm text-gray-600">
                         {prep.machine?.type} {prep.machine?.numero} • {format(parseISO(prep.dateEvenement), 'd MMMM yyyy', { locale: fr })}
                       </p>
-                      <p className="text-xs text-gray-400">Préparateur: {prep.preparateur}</p>
+                      <p className="text-xs text-gray-500 mt-1">Préparateur: {prep.preparateur}</p>
                     </div>
                     <Badge variant={prep.photosDechargees ? 'success' : 'danger'}>
                       {prep.photosDechargees ? 'Photos déchargées' : 'Photos non déchargées'}
@@ -213,10 +241,110 @@ export default function PreparationsPage() {
     );
   }
 
+  // Vue de sélection du type (pas de type sélectionné)
+  if (!selectedType) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">Gestion des Préparations</h1>
+          <Button variant="secondary" onClick={() => {
+            setIsArchiveMode(true);
+            fetchArchive();
+          }}>
+            <ArchiveBoxIcon className="h-5 w-5 mr-2" />
+            Archive
+          </Button>
+        </div>
+
+        <div className="text-center mb-8">
+          <p className="text-gray-600">Sélectionnez un type de machine pour gérer les préparations</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {Object.entries(machineTypeConfig).map(([type, config]) => {
+            const Icon = config.icon;
+            const machinesOfType = machines.filter((m) => m.type === type);
+            const disponibles = machinesOfType.filter((m) => getMachineStatut(m) === 'disponible').length;
+            const enPreparation = machinesOfType.filter((m) => ['en_preparation', 'prete', 'en_cours'].includes(getMachineStatut(m))).length;
+            const aDecharger = machinesOfType.filter((m) => getMachineStatut(m) === 'a_decharger').length;
+
+            return (
+              <button
+                key={type}
+                onClick={() => setSelectedType(type as MachineType)}
+                className="group relative overflow-hidden rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-xl"
+              >
+                <div className={clsx(
+                  'absolute inset-0 bg-gradient-to-br opacity-90 group-hover:opacity-100 transition-opacity',
+                  config.bgGradient
+                )} />
+
+                <div className="relative p-8 text-white">
+                  <div className="flex items-center justify-center mb-4">
+                    <Icon className="h-16 w-16" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-2">{config.label}</h3>
+                  <p className="text-white/90 text-lg mb-4">{config.count} machines</p>
+
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center bg-white/20 rounded px-3 py-2">
+                      <span>Disponibles</span>
+                      <span className="font-bold">{disponibles}</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-white/20 rounded px-3 py-2">
+                      <span>En cours</span>
+                      <span className="font-bold">{enPreparation}</span>
+                    </div>
+                    {aDecharger > 0 && (
+                      <div className="flex justify-between items-center bg-red-500/30 rounded px-3 py-2">
+                        <span>À décharger</span>
+                        <span className="font-bold">{aDecharger}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Légende */}
+        <Card className="p-6 bg-gray-50">
+          <h3 className="font-semibold text-gray-900 mb-4">Statuts des machines</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {Object.entries(statutConfig).map(([key, config]) => (
+              <div key={key} className="flex items-center gap-2">
+                <div className={clsx('w-4 h-4 rounded border-2', config.color)} />
+                <span className="text-sm text-gray-700">{config.label}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Vue des machines du type sélectionné
+  const typeConfig = machineTypeConfig[selectedType];
+  const Icon = typeConfig.icon;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Préparations</h1>
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => setSelectedType(null)}>
+            <ArrowLeftIcon className="h-5 w-5" />
+          </Button>
+          <div className="flex items-center gap-3">
+            <div className={clsx('p-3 rounded-lg bg-gradient-to-br', typeConfig.bgGradient)}>
+              <Icon className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{typeConfig.label}</h1>
+              <p className="text-sm text-gray-500">{filteredMachines.length} machines</p>
+            </div>
+          </div>
+        </div>
         <Button variant="secondary" onClick={() => {
           setIsArchiveMode(true);
           fetchArchive();
@@ -226,106 +354,108 @@ export default function PreparationsPage() {
         </Button>
       </div>
 
-      {Object.entries(groupedMachines).map(([type, machinesOfType]) => {
-        const config = machineTypeConfig[type as MachineType];
-        return (
-          <div key={type}>
-            <h2 className="text-lg font-semibold mb-3">{config.label} ({machinesOfType.length})</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-              {machinesOfType.map((machine) => {
-                const statut = getMachineStatut(machine);
-                const preparation = getPreparationForMachine(machine);
-                const statutInfo = statutConfig[statut];
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        {filteredMachines.map((machine) => {
+          const statut = getMachineStatut(machine);
+          const preparation = getPreparationForMachine(machine);
+          const statutInfo = statutConfig[statut];
 
-                return (
-                  <button
-                    key={machine.id}
-                    onClick={() => statut === 'disponible' ? handleOpenModal(machine) : null}
-                    disabled={statut !== 'disponible'}
-                    className={clsx(
-                      'p-4 border-2 rounded-lg transition-all text-left relative',
-                      statutInfo.color,
-                      statut === 'disponible' && 'hover:shadow-md cursor-pointer',
-                      statut !== 'disponible' && 'cursor-default'
+          return (
+            <div
+              key={machine.id}
+              className={clsx(
+                'relative p-4 border-2 rounded-lg transition-all',
+                statutInfo.color,
+                statut === 'disponible' && 'cursor-pointer hover:shadow-lg',
+                statut !== 'disponible' && 'cursor-default'
+              )}
+              onClick={() => statut === 'disponible' ? handleOpenModal(machine) : null}
+            >
+              {/* Numéro de machine */}
+              <div className="text-center mb-2">
+                <div className="font-bold text-2xl text-gray-900">{machine.numero}</div>
+              </div>
+
+              {/* Badge statut */}
+              <div className="flex justify-center mb-3">
+                <Badge variant={statutInfo.badge as any}>
+                  {statutInfo.label}
+                </Badge>
+              </div>
+
+              {/* Infos préparation */}
+              {preparation && (
+                <div className="space-y-2">
+                  <div className="pt-2 border-t border-gray-300">
+                    <p className="text-xs font-semibold text-gray-900 truncate" title={preparation.client}>
+                      {preparation.client}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {format(parseISO(preparation.dateEvenement), 'd MMM', { locale: fr })}
+                    </p>
+                  </div>
+
+                  {/* Actions rapides */}
+                  <div className="flex gap-1">
+                    {statut === 'en_preparation' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAsReady(preparation.id);
+                        }}
+                        className="flex-1 p-1.5 bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:opacity-50"
+                        title="Marquer comme prête"
+                        disabled={isSaving}
+                      >
+                        <CheckCircleIcon className="h-4 w-4 mx-auto" />
+                      </button>
                     )}
-                  >
-                    <div className="font-bold text-lg mb-1">{machine.numero}</div>
-                    <Badge variant={statutInfo.badge as any}>
-                      {statutInfo.label}
-                    </Badge>
-
-                    {preparation && (
-                      <div className="mt-2 pt-2 border-t border-gray-300">
-                        <p className="text-xs font-medium truncate" title={preparation.client}>
-                          {preparation.client}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {format(parseISO(preparation.dateEvenement), 'd MMM', { locale: fr })}
-                        </p>
-
-                        <div className="flex gap-1 mt-2">
-                          {statut === 'en_preparation' && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMarkAsReady(preparation.id);
-                              }}
-                              className="p-1 bg-green-500 text-white rounded hover:bg-green-600"
-                              title="Marquer comme prête"
-                              disabled={isSaving}
-                            >
-                              <CheckCircleIcon className="h-4 w-4" />
-                            </button>
-                          )}
-                          {statut === 'a_decharger' && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMarkPhotosUnloaded(preparation.id);
-                              }}
-                              className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-                              title="Marquer photos déchargées"
-                              disabled={isSaving}
-                            >
-                              <PhotoIcon className="h-4 w-4" />
-                            </button>
-                          )}
-                          {statut === 'prete' && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUpdateStatut(preparation.id, 'en_cours');
-                              }}
-                              className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-                              title="Démarrer événement"
-                              disabled={isSaving}
-                            >
-                              <WrenchScrewdriverIcon className="h-4 w-4" />
-                            </button>
-                          )}
-                          {statut === 'en_cours' && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUpdateStatut(preparation.id, 'a_decharger');
-                              }}
-                              className="p-1 bg-orange-500 text-white rounded hover:bg-orange-600"
-                              title="Retour - À décharger"
-                              disabled={isSaving}
-                            >
-                              <PhotoIcon className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                    {statut === 'a_decharger' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkPhotosUnloaded(preparation.id);
+                        }}
+                        className="flex-1 p-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50"
+                        title="Marquer photos déchargées"
+                        disabled={isSaving}
+                      >
+                        <PhotoIcon className="h-4 w-4 mx-auto" />
+                      </button>
                     )}
-                  </button>
-                );
-              })}
+                    {statut === 'prete' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpdateStatut(preparation.id, 'en_cours');
+                        }}
+                        className="flex-1 p-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50"
+                        title="Démarrer événement"
+                        disabled={isSaving}
+                      >
+                        <WrenchScrewdriverIcon className="h-4 w-4 mx-auto" />
+                      </button>
+                    )}
+                    {statut === 'en_cours' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpdateStatut(preparation.id, 'a_decharger');
+                        }}
+                        className="flex-1 p-1.5 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors disabled:opacity-50"
+                        title="Retour - À décharger"
+                        disabled={isSaving}
+                      >
+                        <PhotoIcon className="h-4 w-4 mx-auto" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
 
       {/* Modal Création Préparation */}
       <Modal
@@ -361,7 +491,7 @@ export default function PreparationsPage() {
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="Notes optionnelles..."
             />
           </div>
