@@ -24,7 +24,7 @@ export const listMachines = async (req: Request, res: Response) => {
         preparations: {
           where: {
             statut: {
-              in: ['en_preparation', 'prete', 'en_cours', 'a_decharger'],
+              in: ['en_preparation', 'prete', 'en_cours', 'a_decharger', 'hors_service'],
             },
           },
           orderBy: {
