@@ -464,6 +464,7 @@ model Machine {
   type        MachineType // Vegas, Smakk, Ring
   numero      String      // V1, V2, SK1, R1, etc.
   couleur     String?     // Couleur en hex pour identification visuelle
+  imageUrl    String?     @map("image_url") // URL de l'image du type de machine
   actif       Boolean     @default(true)
   notes       String?     @db.Text
 

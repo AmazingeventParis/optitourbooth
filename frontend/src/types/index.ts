@@ -218,6 +218,7 @@ export interface Machine {
   type: MachineType;
   numero: string; // V1, V2, SK1, R1, etc.
   couleur?: string; // Couleur en hex (#RRGGBB)
+  imageUrl?: string; // URL de l'image du type de machine
   actif: boolean;
   notes?: string;
   createdAt: string;

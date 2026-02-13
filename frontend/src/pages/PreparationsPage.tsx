@@ -68,6 +68,8 @@ export default function PreparationsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isArchiveMode, setIsArchiveMode] = useState(false);
   const [archivedPreparations, setArchivedPreparations] = useState<Preparation[]>([]);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const fileInputRef = useState<React.RefObject<HTMLInputElement>>(React.createRef<HTMLInputElement>)[0];
 
   // Form state
   const [formData, setFormData] = useState({
@@ -174,6 +176,26 @@ export default function PreparationsPage() {
       showError('Erreur', (err as Error).message);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0 || !selectedType) return;
+
+    const file = e.target.files[0];
+    setIsUploadingImage(true);
+
+    try {
+      const result = await machinesService.uploadImage(selectedType, file);
+      success(result.message);
+      fetchMachines();
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsUploadingImage(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -304,7 +326,15 @@ export default function PreparationsPage() {
                         color: machineColor,
                       }}
                     >
-                      <Icon className="h-8 w-8" />
+                      {machinesOfType[0]?.imageUrl ? (
+                        <img
+                          src={machinesOfType[0].imageUrl}
+                          alt={config.label}
+                          className="h-8 w-8 object-contain"
+                        />
+                      ) : (
+                        <Icon className="h-8 w-8" />
+                      )}
                     </div>
                     <div className="flex-1 text-left">
                       <h3
@@ -361,15 +391,43 @@ export default function PreparationsPage() {
           </Button>
           <div className="flex items-center gap-3">
             <div
-              className="p-3 rounded-lg border-2"
+              className="p-3 rounded-lg border-2 relative group cursor-pointer"
               style={{
                 backgroundColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.05)` : undefined,
                 borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : undefined,
                 color: machineColor,
               }}
+              onClick={() => fileInputRef.current?.click()}
+              title="Cliquer pour changer l'image"
             >
-              <Icon className="h-6 w-6" />
+              {filteredMachines[0]?.imageUrl ? (
+                <>
+                  <img
+                    src={filteredMachines[0].imageUrl}
+                    alt={typeConfig.label}
+                    className="h-6 w-6 object-contain"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                    <CameraIcon className="h-4 w-4 text-white" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Icon className="h-6 w-6" />
+                  <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                    <CameraIcon className="h-4 w-4 text-white" />
+                  </div>
+                </>
+              )}
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+              disabled={isUploadingImage}
+            />
             <div>
               <h1
                 className="text-2xl font-bold"

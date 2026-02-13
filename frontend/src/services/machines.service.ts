@@ -21,4 +21,19 @@ export const machinesService = {
     const { data } = await api.get<Machine>(`/machines/${id}`);
     return data;
   },
+
+  /**
+   * Upload une image pour un type de machine
+   */
+  async uploadImage(type: MachineType, file: File): Promise<{ imageUrl: string; updatedCount: number; message: string }> {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const { data } = await api.post(`/machines/type/${type}/image`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return data;
+  },
 };
