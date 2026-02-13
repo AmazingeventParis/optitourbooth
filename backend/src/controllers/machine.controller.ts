@@ -119,3 +119,80 @@ export const uploadMachineImage = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Erreur lors de l\'upload de l\'image' });
   }
 };
+
+/**
+ * Marque une machine comme ayant un défaut
+ */
+export const markMachineDefect = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { defaut } = req.body;
+
+    if (!defaut || typeof defaut !== 'string') {
+      return res.status(400).json({ error: 'Description du défaut requise' });
+    }
+
+    const machine = await prisma.machine.update({
+      where: { id },
+      data: {
+        aDefaut: true,
+        defaut,
+      },
+      include: {
+        preparations: {
+          where: {
+            statut: {
+              in: ['en_preparation', 'prete', 'en_cours', 'a_decharger', 'hors_service'],
+            },
+          },
+          orderBy: {
+            dateEvenement: 'desc',
+          },
+          take: 1,
+        },
+      },
+    });
+
+    return res.json(machine);
+  } catch (error) {
+    console.error('Error marking machine defect:', error);
+    if ((error as any).code === 'P2025') {
+      return res.status(404).json({ error: 'Machine not found' });
+    }
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * Marque une machine comme hors service
+ */
+export const markMachineOutOfService = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { raison } = req.body;
+
+    if (!raison || typeof raison !== 'string') {
+      return res.status(400).json({ error: 'Raison requise' });
+    }
+
+    // Créer une préparation avec le statut hors_service
+    const preparation = await prisma.preparation.create({
+      data: {
+        machineId: id,
+        dateEvenement: new Date(),
+        client: 'HORS SERVICE',
+        preparateur: 'Système',
+        statut: 'hors_service',
+        notes: raison,
+      },
+      include: {
+        machine: true,
+      },
+    });
+
+    return res.json(preparation);
+  } catch (error) {
+    console.error('Error marking machine out of service:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};

@@ -35,4 +35,8 @@ router.post(
   asyncHandler(machineController.uploadMachineImage)
 );
 
+// Actions sur les machines
+router.post('/:id/defect', asyncHandler(machineController.markMachineDefect));
+router.post('/:id/out-of-service', asyncHandler(machineController.markMachineOutOfService));
+
 export default router;

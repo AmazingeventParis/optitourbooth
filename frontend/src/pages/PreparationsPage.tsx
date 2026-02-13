@@ -204,7 +204,7 @@ export default function PreparationsPage() {
     }
   };
 
-  const handleMarkDefect = async (preparationId: string) => {
+  const handleMarkDefect = async (machineId: string) => {
     if (!defautText.trim()) {
       showError('Erreur', 'Veuillez décrire le défaut');
       return;
@@ -212,7 +212,7 @@ export default function PreparationsPage() {
 
     setIsSaving(true);
     try {
-      await preparationsService.markDefect(preparationId, defautText);
+      await machinesService.markDefect(machineId, defautText);
       success('Défaut signalé');
       setIsModalOpen(false);
       fetchMachines();
@@ -223,7 +223,7 @@ export default function PreparationsPage() {
     }
   };
 
-  const handleMarkOutOfService = async (preparationId: string) => {
+  const handleMarkOutOfService = async (machineId: string) => {
     if (!horsServiceText.trim()) {
       showError('Erreur', 'Veuillez indiquer la raison');
       return;
@@ -231,7 +231,7 @@ export default function PreparationsPage() {
 
     setIsSaving(true);
     try {
-      await preparationsService.markOutOfService(preparationId, horsServiceText);
+      await machinesService.markOutOfService(machineId, horsServiceText);
       success('Machine marquée hors service');
       setIsModalOpen(false);
       fetchMachines();
@@ -693,16 +693,14 @@ export default function PreparationsPage() {
                 rows={2}
                 className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
                 placeholder="Décrire le défaut..."
-                disabled={!isViewMode}
               />
               <Button
                 variant="warning"
                 className="w-full"
                 onClick={() => {
-                  const prep = getPreparationForMachine(selectedMachine!);
-                  if (prep) handleMarkDefect(prep.id);
+                  if (selectedMachine) handleMarkDefect(selectedMachine.id);
                 }}
-                disabled={!isViewMode || isSaving}
+                disabled={isSaving}
                 isLoading={isSaving}
               >
                 <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
@@ -719,16 +717,14 @@ export default function PreparationsPage() {
                 rows={2}
                 className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
                 placeholder="Raison de la mise hors service..."
-                disabled={!isViewMode}
               />
               <Button
                 variant="danger"
                 className="w-full"
                 onClick={() => {
-                  const prep = getPreparationForMachine(selectedMachine!);
-                  if (prep) handleMarkOutOfService(prep.id);
+                  if (selectedMachine) handleMarkOutOfService(selectedMachine.id);
                 }}
-                disabled={!isViewMode || isSaving}
+                disabled={isSaving}
                 isLoading={isSaving}
               >
                 Mettre hors service

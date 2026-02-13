@@ -36,4 +36,20 @@ export const machinesService = {
     });
     return data;
   },
+
+  /**
+   * Marque une machine comme ayant un défaut
+   */
+  async markDefect(id: string, defaut: string): Promise<Machine> {
+    const { data } = await api.post<Machine>(`/machines/${id}/defect`, { defaut });
+    return data;
+  },
+
+  /**
+   * Marque une machine comme hors service
+   */
+  async markOutOfService(id: string, raison: string): Promise<any> {
+    const { data } = await api.post(`/machines/${id}/out-of-service`, { raison });
+    return data;
+  },
 };
