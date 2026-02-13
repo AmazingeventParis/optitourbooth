@@ -114,12 +114,53 @@ async function getFullTournee(tourneeId: string) {
   });
 }
 
+// Fonction pour auto-terminer les tournées en cours dont la date est passée
+async function autoFinishPastTournees(): Promise<void> {
+  try {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(23, 59, 59, 999);
+
+    // Trouver toutes les tournées en_cours dont la date est passée
+    const pastTournees = await prisma.tournee.findMany({
+      where: {
+        statut: 'en_cours',
+        date: {
+          lt: yesterday,
+        },
+      },
+    });
+
+    if (pastTournees.length > 0) {
+      // Mettre à jour en masse
+      await prisma.tournee.updateMany({
+        where: {
+          id: {
+            in: pastTournees.map(t => t.id),
+          },
+        },
+        data: {
+          statut: 'terminee',
+          heureFinReelle: new Date(),
+        },
+      });
+
+      console.log(`[Auto-Finish] ${pastTournees.length} tournée(s) passée(s) automatiquement terminée(s)`);
+    }
+  } catch (error) {
+    console.error('[Auto-Finish] Erreur:', error);
+  }
+}
+
 export const tourneeController = {
   /**
    * GET /api/tournees
    * Liste des tournées avec pagination et filtres
    */
   async list(req: Request, res: Response): Promise<void> {
+    // Auto-terminer les tournées en cours dont la date est passée
+    await autoFinishPastTournees();
+
     const { page, limit, skip } = parsePagination(req.query as { page?: string; limit?: string });
     const { date, dateDebut, dateFin, chauffeurId, statut, includePoints } = req.query as {
       date?: string;

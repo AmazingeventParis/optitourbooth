@@ -549,6 +549,71 @@ const result = await tourneesService.list({ limit: 1000, includePoints: true });
 
 ---
 
+#### 18. Auto-terminaison des tournées passées
+**Demande** : Passer automatiquement les tournées en statut "terminé" le lendemain de leur date.
+
+**Contexte** : Le bouton manuel "Terminer" ne fonctionnait pas toujours car il nécessite que tous les points soient complétés ou annulés.
+
+**Solution** :
+
+**1. Fonction d'auto-terminaison**
+- Fonction `autoFinishPastTournees()` (lignes 118-153 du tournee.controller.ts)
+- Logique :
+  - Calcule la date "hier à 23h59"
+  - Trouve toutes les tournées avec statut `en_cours` et `date < hier`
+  - Les met à jour en masse vers statut `terminee`
+  - Définit `heureFinReelle` à la date actuelle
+  - Log le nombre de tournées terminées automatiquement
+
+**2. Déclenchement automatique**
+- Appelée au début de la méthode `list()` (ligne 162)
+- S'exécute **à chaque fois** qu'on affiche :
+  - Page Planning (`/planning`)
+  - Page Historique (`/historique`)
+  - Liste des tournées (API `/api/tournees`)
+- Performances : opération très rapide (requête SQL indexée)
+
+**3. Bouton manuel "Terminer" - Explication**
+- Le bouton fonctionne correctement mais a des **validations strictes**
+- **Conditions requises** (lignes 1049-1061) :
+  - La tournée doit être en statut `en_cours`
+  - TOUS les points doivent être `termine` ou `annule`
+  - Aucun point ne doit rester en `a_faire` ou `en_cours`
+- **Message d'erreur** si validation échoue :
+  - "X point(s) non terminé(s). Veuillez les compléter ou les annuler."
+  - Affiché correctement via toast rouge dans le frontend
+
+**4. Différence auto vs manuel**
+- **Auto-terminaison** :
+  - Se déclenche automatiquement le lendemain
+  - Ignore la validation des points (termine quand même)
+  - Utilisé pour fermer les journées passées
+- **Terminaison manuelle** :
+  - Déclenchée par le chauffeur ou l'admin
+  - Requiert que TOUS les points soient complétés
+  - Garantit que le travail est vraiment terminé
+
+**Fichier modifié** : `backend/src/controllers/tournee.controller.ts`
+
+**Résultat** :
+- ✅ Tournées passées automatiquement clôturées chaque jour
+- ✅ Historique toujours à jour (plus de tournées "en cours" datant d'hier)
+- ✅ Bouton manuel fonctionne avec validation stricte
+- ✅ Messages d'erreur clairs pour l'utilisateur
+
+---
+
+### Commits de cette session (13 février 2026)
+
+1. `fix: change PWA start_url to root to prevent blank screen on mobile`
+2. `fix: include points data in reports for chart display`
+3. `feat: amélioration page préparations - préparateur connecté, filtres archive, recherche intelligente`
+4. `feat: add install PWA button in user menu`
+5. `feat: modern compact card design for preparations page`
+6. *(auto-finish déjà implémenté dans session précédente)*
+
+---
+
 ### Notes techniques
 
 - **PWA** : Progressive Web App installable (Android + iOS)
@@ -562,3 +627,4 @@ const result = await tourneesService.list({ limit: 1000, includePoints: true });
 - **Routing** : OSRM public ou TomTom avec trafic
 - **Base de données** : PostgreSQL sur Neon
 - **Déploiement** : Render (backend) + Vercel/Netlify (frontend)
+- **Auto-terminaison** : Tournées passées automatiquement terminées à chaque affichage de la liste
