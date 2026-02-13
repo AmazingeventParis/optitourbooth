@@ -349,24 +349,22 @@ export default function PreparationsPage() {
                   </div>
 
                   <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between items-center bg-white/60 rounded px-3 py-1.5">
-                      <span className="text-gray-700">Disponibles</span>
+                    <div className="flex justify-between items-center bg-gray-100 border border-gray-300 rounded px-3 py-1.5">
+                      <span className="text-gray-700 font-medium">Disponibles</span>
                       <span className="font-semibold text-gray-900">{disponibles}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-white/60 rounded px-3 py-1.5">
-                      <span className="text-gray-700">Prêtes</span>
-                      <span className="font-semibold text-gray-900">{pretes}</span>
+                    <div className="flex justify-between items-center bg-green-50 border border-green-400 rounded px-3 py-1.5">
+                      <span className="text-green-700 font-medium">Prêtes</span>
+                      <span className="font-semibold text-green-900">{pretes}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-white/60 rounded px-3 py-1.5">
-                      <span className="text-gray-700">À décharger</span>
-                      <span className="font-semibold text-gray-900">{aDecharger}</span>
+                    <div className="flex justify-between items-center bg-red-50 border border-red-400 rounded px-3 py-1.5">
+                      <span className="text-red-700 font-medium">À décharger</span>
+                      <span className="font-semibold text-red-900">{aDecharger}</span>
                     </div>
-                    {horsService > 0 && (
-                      <div className="flex justify-between items-center bg-gray-200 rounded px-3 py-1.5">
-                        <span className="text-gray-700">Hors service</span>
-                        <span className="font-bold text-gray-900">{horsService}</span>
-                      </div>
-                    )}
+                    <div className="flex justify-between items-center bg-gray-200 border border-gray-500 rounded px-3 py-1.5">
+                      <span className="text-gray-700 font-medium">Hors service</span>
+                      <span className="font-semibold text-gray-900">{horsService}</span>
+                    </div>
                   </div>
                 </div>
               </button>
