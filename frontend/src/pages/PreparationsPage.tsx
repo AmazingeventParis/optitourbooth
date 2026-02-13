@@ -14,6 +14,7 @@ import {
   ArrowLeftIcon,
   CameraIcon,
   CpuChipIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -80,6 +81,11 @@ export default function PreparationsPage() {
     notes: '',
   });
 
+  // Action modal state
+  const [isViewMode, setIsViewMode] = useState(false);
+  const [defautText, setDefautText] = useState('');
+  const [horsServiceText, setHorsServiceText] = useState('');
+
   useEffect(() => {
     fetchMachines();
   }, []);
@@ -107,12 +113,30 @@ export default function PreparationsPage() {
 
   const handleOpenModal = (machine: Machine) => {
     setSelectedMachine(machine);
-    setFormData({
-      dateEvenement: '',
-      client: '',
-      preparateur: '',
-      notes: '',
-    });
+    const preparation = getPreparationForMachine(machine);
+
+    if (preparation) {
+      // Mode visualisation
+      setIsViewMode(true);
+      setFormData({
+        dateEvenement: preparation.dateEvenement.split('T')[0],
+        client: preparation.client,
+        preparateur: preparation.preparateur,
+        notes: preparation.notes || '',
+      });
+    } else {
+      // Mode création
+      setIsViewMode(false);
+      setFormData({
+        dateEvenement: '',
+        client: '',
+        preparateur: '',
+        notes: '',
+      });
+    }
+
+    setDefautText('');
+    setHorsServiceText('');
     setIsModalOpen(true);
   };
 
@@ -172,6 +196,44 @@ export default function PreparationsPage() {
     try {
       await preparationsService.update(preparationId, { statut: newStatut });
       success('Statut mis à jour');
+      fetchMachines();
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleMarkDefect = async (preparationId: string) => {
+    if (!defautText.trim()) {
+      showError('Erreur', 'Veuillez décrire le défaut');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await preparationsService.markDefect(preparationId, defautText);
+      success('Défaut signalé');
+      setIsModalOpen(false);
+      fetchMachines();
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleMarkOutOfService = async (preparationId: string) => {
+    if (!horsServiceText.trim()) {
+      showError('Erreur', 'Veuillez indiquer la raison');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await preparationsService.markOutOfService(preparationId, horsServiceText);
+      success('Machine marquée hors service');
+      setIsModalOpen(false);
       fetchMachines();
     } catch (err) {
       showError('Erreur', (err as Error).message);
@@ -457,16 +519,19 @@ export default function PreparationsPage() {
             <div
               key={machine.id}
               className={clsx(
-                'relative p-3 border-2 rounded-lg transition-all',
-                statutInfo.color,
-                statut === 'disponible' && 'cursor-pointer hover:shadow-lg',
-                statut !== 'disponible' && 'cursor-default'
+                'relative p-3 border-2 rounded-lg transition-all cursor-pointer hover:shadow-lg',
+                statutInfo.color
               )}
-              onClick={() => statut === 'disponible' ? handleOpenModal(machine) : null}
+              onClick={() => handleOpenModal(machine)}
             >
               {/* Numéro de machine */}
               <div className="text-center mb-1.5">
-                <div className="font-bold text-xl text-gray-900">{machine.numero}</div>
+                <div className="flex items-center justify-center gap-1.5">
+                  <span className="font-bold text-xl text-gray-900">{machine.numero}</span>
+                  {machine.aDefaut && (
+                    <ExclamationTriangleIcon className="h-5 w-5 text-orange-500" title={machine.defaut || 'Défaut signalé'} />
+                  )}
+                </div>
               </div>
 
               {/* Badge statut */}
@@ -550,53 +615,161 @@ export default function PreparationsPage() {
         })}
       </div>
 
-      {/* Modal Création Préparation */}
+      {/* Modal Préparation */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={`Préparer ${selectedMachine?.type} ${selectedMachine?.numero}`}
+        title={isViewMode ? `${selectedMachine?.type} ${selectedMachine?.numero}` : `Préparer ${selectedMachine?.type} ${selectedMachine?.numero}`}
       >
         <div className="space-y-4">
-          <Input
-            label="Date de l'événement"
-            type="date"
-            value={formData.dateEvenement}
-            onChange={(e) => setFormData({ ...formData, dateEvenement: e.target.value })}
-            required
-          />
-          <Input
-            label="Nom du client"
-            value={formData.client}
-            onChange={(e) => setFormData({ ...formData, client: e.target.value })}
-            placeholder="Nom de l'événement ou du client"
-            required
-          />
-          <Input
-            label="Préparateur"
-            value={formData.preparateur}
-            onChange={(e) => setFormData({ ...formData, preparateur: e.target.value })}
-            placeholder="Nom du préparateur"
-            required
-          />
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="Notes optionnelles..."
-            />
-          </div>
+          {!isViewMode ? (
+            <>
+              {/* Mode Création */}
+              <Input
+                label="Date de l'événement"
+                type="date"
+                value={formData.dateEvenement}
+                onChange={(e) => setFormData({ ...formData, dateEvenement: e.target.value })}
+                required
+              />
+              <Input
+                label="Nom du client"
+                value={formData.client}
+                onChange={(e) => setFormData({ ...formData, client: e.target.value })}
+                placeholder="Nom de l'événement ou du client"
+                required
+              />
+              <Input
+                label="Préparateur"
+                value={formData.preparateur}
+                onChange={(e) => setFormData({ ...formData, preparateur: e.target.value })}
+                placeholder="Nom du préparateur"
+                required
+              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  rows={3}
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="Notes optionnelles..."
+                />
+              </div>
 
-          <div className="flex gap-3 pt-4">
-            <Button variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>
-              Annuler
-            </Button>
-            <Button className="flex-1" onClick={handleCreatePreparation} isLoading={isSaving}>
-              Créer
-            </Button>
-          </div>
+              <div className="flex gap-3 pt-4">
+                <Button variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>
+                  Annuler
+                </Button>
+                <Button className="flex-1" onClick={handleCreatePreparation} isLoading={isSaving}>
+                  Créer
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Mode Visualisation */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date de l'événement</label>
+                  <p className="text-gray-900">{formData.dateEvenement ? format(parseISO(formData.dateEvenement), 'd MMMM yyyy', { locale: fr }) : '-'}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
+                  <p className="text-gray-900">{formData.client}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Préparateur</label>
+                  <p className="text-gray-900">{formData.preparateur}</p>
+                </div>
+                {formData.notes && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                    <p className="text-gray-900">{formData.notes}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-200 pt-4 mt-4 space-y-3">
+                <h3 className="font-semibold text-gray-900">Actions</h3>
+
+                {/* Photos déchargées */}
+                <div>
+                  <Button
+                    variant={new Date(formData.dateEvenement) < new Date() ? 'success' : 'secondary'}
+                    className="w-full"
+                    onClick={() => {
+                      const prep = getPreparationForMachine(selectedMachine!);
+                      if (prep) handleMarkPhotosUnloaded(prep.id);
+                    }}
+                    disabled={new Date(formData.dateEvenement) >= new Date() || isSaving}
+                    isLoading={isSaving}
+                  >
+                    <CheckCircleIcon className="h-5 w-5 mr-2" />
+                    Photos déchargées
+                  </Button>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {new Date(formData.dateEvenement) >= new Date()
+                      ? 'Disponible après la date de l\'événement'
+                      : 'Marquer les photos comme déchargées et archiver'}
+                  </p>
+                </div>
+
+                {/* Défaut */}
+                <div>
+                  <textarea
+                    value={defautText}
+                    onChange={(e) => setDefautText(e.target.value)}
+                    rows={2}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
+                    placeholder="Décrire le défaut..."
+                  />
+                  <Button
+                    variant="warning"
+                    className="w-full"
+                    onClick={() => {
+                      const prep = getPreparationForMachine(selectedMachine!);
+                      if (prep) handleMarkDefect(prep.id);
+                    }}
+                    disabled={isSaving}
+                    isLoading={isSaving}
+                  >
+                    <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
+                    Signaler un défaut
+                  </Button>
+                </div>
+
+                {/* Hors service */}
+                <div>
+                  <textarea
+                    value={horsServiceText}
+                    onChange={(e) => setHorsServiceText(e.target.value)}
+                    rows={2}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
+                    placeholder="Raison de la mise hors service..."
+                  />
+                  <Button
+                    variant="danger"
+                    className="w-full"
+                    onClick={() => {
+                      const prep = getPreparationForMachine(selectedMachine!);
+                      if (prep) handleMarkOutOfService(prep.id);
+                    }}
+                    disabled={isSaving}
+                    isLoading={isSaving}
+                  >
+                    Mettre hors service
+                  </Button>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <Button variant="secondary" className="w-full" onClick={() => setIsModalOpen(false)}>
+                  Fermer
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>

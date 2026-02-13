@@ -222,6 +222,8 @@ export interface Machine {
   imageUrl?: string; // URL de l'image du type de machine
   actif: boolean;
   notes?: string;
+  aDefaut: boolean; // Indicateur de défaut
+  defaut?: string; // Description du défaut
   createdAt: string;
   updatedAt: string;
   preparations?: Preparation[];

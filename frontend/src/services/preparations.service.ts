@@ -98,4 +98,20 @@ export const preparationsService = {
     const { data} = await api.post<Preparation>(`/preparations/${id}/unload-photos`);
     return data;
   },
+
+  /**
+   * Marque une machine avec un défaut
+   */
+  async markDefect(id: string, defaut: string): Promise<any> {
+    const { data } = await api.post(`/preparations/${id}/defect`, { defaut });
+    return data;
+  },
+
+  /**
+   * Marque une préparation comme hors service
+   */
+  async markOutOfService(id: string, raison: string): Promise<Preparation> {
+    const { data } = await api.post<Preparation>(`/preparations/${id}/out-of-service`, { raison });
+    return data;
+  },
 };

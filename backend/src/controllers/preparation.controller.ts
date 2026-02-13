@@ -264,3 +264,90 @@ export const markPhotosUnloaded = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+/**
+ * Marque une machine avec un défaut
+ */
+export const markMachineDefect = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { defaut } = req.body;
+
+    if (!defaut || typeof defaut !== 'string') {
+      return res.status(400).json({ error: 'Description du défaut requise' });
+    }
+
+    // Récupérer la préparation pour obtenir l'ID de la machine
+    const preparation = await prisma.preparation.findUnique({
+      where: { id },
+      select: { machineId: true },
+    });
+
+    if (!preparation) {
+      return res.status(404).json({ error: 'Preparation not found' });
+    }
+
+    // Mettre à jour la machine avec le défaut
+    const machine = await prisma.machine.update({
+      where: { id: preparation.machineId },
+      data: {
+        aDefaut: true,
+        defaut,
+      },
+      include: {
+        preparations: {
+          where: {
+            statut: {
+              in: ['en_preparation', 'prete', 'en_cours', 'a_decharger'],
+            },
+          },
+          orderBy: {
+            dateEvenement: 'desc',
+          },
+          take: 1,
+        },
+      },
+    });
+
+    return res.json(machine);
+  } catch (error) {
+    console.error('Error marking machine defect:', error);
+    if ((error as any).code === 'P2025') {
+      return res.status(404).json({ error: 'Preparation or machine not found' });
+    }
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * Marque une préparation comme hors service
+ */
+export const markOutOfService = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { raison } = req.body;
+
+    if (!raison || typeof raison !== 'string') {
+      return res.status(400).json({ error: 'Raison requise' });
+    }
+
+    const preparation = await prisma.preparation.update({
+      where: { id },
+      data: {
+        statut: 'hors_service',
+        notes: raison,
+      },
+      include: {
+        machine: true,
+      },
+    });
+
+    return res.json(preparation);
+  } catch (error) {
+    console.error('Error marking out of service:', error);
+    if ((error as any).code === 'P2025') {
+      return res.status(404).json({ error: 'Preparation not found' });
+    }
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};

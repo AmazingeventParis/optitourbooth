@@ -17,5 +17,7 @@ router.delete('/:id', asyncHandler(preparationController.deletePreparation));
 // Actions spécifiques
 router.post('/:id/ready', asyncHandler(preparationController.markAsReady));
 router.post('/:id/unload-photos', asyncHandler(preparationController.markPhotosUnloaded));
+router.post('/:id/defect', asyncHandler(preparationController.markMachineDefect));
+router.post('/:id/out-of-service', asyncHandler(preparationController.markOutOfService));
 
 export default router;

@@ -469,6 +469,10 @@ model Machine {
   actif       Boolean     @default(true)
   notes       String?     @db.Text
 
+  // Gestion des défauts
+  aDefaut     Boolean     @default(false) @map("a_defaut") // Indicateur de défaut
+  defaut      String?     @db.Text // Description du défaut
+
   // Métadonnées
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
