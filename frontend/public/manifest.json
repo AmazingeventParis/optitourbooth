@@ -2,7 +2,7 @@
   "name": "OptiTour - Livraison",
   "short_name": "OptiTour",
   "description": "Assistant de livraison intelligent pour chauffeurs",
-  "start_url": "/chauffeur",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
