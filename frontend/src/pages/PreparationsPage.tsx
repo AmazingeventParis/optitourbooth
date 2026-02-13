@@ -14,7 +14,6 @@ import {
   ArrowLeftIcon,
   CameraIcon,
   CpuChipIcon,
-  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -290,6 +289,19 @@ export default function PreparationsPage() {
     }
   };
 
+  const handleAddNewEvent = () => {
+    // Passer en mode création tout en gardant la machine sélectionnée
+    setIsViewMode(false);
+    setFormData({
+      dateEvenement: '',
+      client: '',
+      preparateur: '',
+      notes: '',
+    });
+    setDefautText('');
+    setHorsServiceText('');
+  };
+
   const getPreparationForMachine = (machine: Machine): Preparation | undefined => {
     return machine.preparations && machine.preparations.length > 0
       ? machine.preparations[0]
@@ -557,7 +569,7 @@ export default function PreparationsPage() {
                 <div className="flex items-center justify-center gap-1.5">
                   <span className="font-bold text-xl text-gray-900">{machine.numero}</span>
                   {machine.aDefaut && (
-                    <ExclamationTriangleIcon className="h-5 w-5 text-orange-500" title={machine.defaut || 'Défaut signalé'} />
+                    <WrenchScrewdriverIcon className="h-5 w-5 text-orange-500" title={machine.defaut || 'Défaut signalé'} />
                   )}
                 </div>
               </div>
@@ -650,6 +662,19 @@ export default function PreparationsPage() {
         title={`${isViewMode ? '' : 'Préparer '}${selectedMachine?.type} ${selectedMachine?.numero}`}
       >
         <div className="space-y-4">
+          {/* Bouton Ajouter un événement - visible en mode visualisation */}
+          {isViewMode && (
+            <div className="pb-4 border-b border-gray-200">
+              <Button
+                variant="primary"
+                className="w-full"
+                onClick={handleAddNewEvent}
+              >
+                + Ajouter un événement
+              </Button>
+            </div>
+          )}
+
           <Input
             label="Date de l'événement"
             type="date"
@@ -752,7 +777,7 @@ export default function PreparationsPage() {
                     disabled={isSaving}
                     isLoading={isSaving}
                   >
-                    <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
+                    <WrenchScrewdriverIcon className="h-5 w-5 mr-2" />
                     Signaler un défaut
                   </Button>
                 </>
