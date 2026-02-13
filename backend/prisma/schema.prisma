@@ -498,7 +498,7 @@ model Preparation {
   preparateur         String
 
   // Statut
-  statut              PreparationStatut @default(en_preparation)
+  statut              PreparationStatut @default(prete)
   photosDechargees    Boolean           @default(false) @map("photos_dechargees")
 
   // Notes

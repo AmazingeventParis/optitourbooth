@@ -3,9 +3,81 @@ import { prisma } from '../config/database.js';
 import { PreparationStatut } from '@prisma/client';
 
 /**
+ * Auto-transition des statuts de préparation selon la date
+ */
+async function autoUpdatePreparationStatuses(): Promise<void> {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // 1. Passer "prete" → "en_cours" le jour de l'événement
+    const readyPreps = await prisma.preparation.findMany({
+      where: {
+        statut: 'prete',
+        dateEvenement: {
+          gte: today,
+          lt: tomorrow,
+        },
+      },
+    });
+
+    if (readyPreps.length > 0) {
+      await prisma.preparation.updateMany({
+        where: {
+          id: { in: readyPreps.map(p => p.id) },
+        },
+        data: { statut: 'en_cours' },
+      });
+      console.log(`[Auto-Prep] ${readyPreps.length} préparation(s) passée(s) en "en_cours"`);
+    }
+
+    // 2. Passer "en_cours" → "a_decharger" le lendemain du dernier événement
+    // Pour chaque machine, trouver la dernière date d'événement
+    const ongoingPreps = await prisma.preparation.findMany({
+      where: { statut: 'en_cours' },
+      include: { machine: true },
+    });
+
+    const prepsByMachine = new Map<string, typeof ongoingPreps>();
+    ongoingPreps.forEach(prep => {
+      const existing = prepsByMachine.get(prep.machineId) || [];
+      existing.push(prep);
+      prepsByMachine.set(prep.machineId, existing);
+    });
+
+    const toUnload: string[] = [];
+    prepsByMachine.forEach((preps, machineId) => {
+      // Trouver la date du dernier événement pour cette machine
+      const lastEventDate = new Date(Math.max(...preps.map(p => p.dateEvenement.getTime())));
+      lastEventDate.setHours(0, 0, 0, 0);
+
+      // Si le dernier événement est passé (< aujourd'hui), passer toutes les preps en "a_decharger"
+      if (lastEventDate < today) {
+        preps.forEach(p => toUnload.push(p.id));
+      }
+    });
+
+    if (toUnload.length > 0) {
+      await prisma.preparation.updateMany({
+        where: { id: { in: toUnload } },
+        data: { statut: 'a_decharger' },
+      });
+      console.log(`[Auto-Prep] ${toUnload.length} préparation(s) passée(s) en "a_decharger"`);
+    }
+  } catch (error) {
+    console.error('[Auto-Prep] Erreur:', error);
+  }
+}
+
+/**
  * Liste toutes les préparations
  */
 export const listPreparations = async (req: Request, res: Response) => {
+  // Auto-transition des statuts selon la date
+  await autoUpdatePreparationStatuses();
   try {
     const { statut, machineId, client, archived } = req.query;
     const page = parseInt(req.query.page as string) || 1;
@@ -129,7 +201,7 @@ export const createPreparation = async (req: Request, res: Response) => {
       });
     }
 
-    // Créer la préparation
+    // Créer la préparation directement en statut "prete"
     const preparation = await prisma.preparation.create({
       data: {
         machineId,
@@ -137,7 +209,7 @@ export const createPreparation = async (req: Request, res: Response) => {
         client,
         preparateur,
         notes,
-        statut: 'en_preparation',
+        statut: 'prete',
       },
       include: {
         machine: true,
