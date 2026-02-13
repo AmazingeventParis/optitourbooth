@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, Button, Modal, Input, Badge } from '@/components/ui';
 import { machinesService } from '@/services/machines.service';
 import { preparationsService } from '@/services/preparations.service';
