@@ -187,9 +187,14 @@ export default function UsersPage() {
   const handleSave = async () => {
     if (!validateForm()) return;
 
+    console.log('=== SAVING USER ===');
+    console.log('Form data:', formData);
+    console.log('Selected user:', selectedUser);
+
     setIsSaving(true);
     try {
       if (selectedUser) {
+        // Mode édition
         const updateData: Record<string, unknown> = {
           email: formData.email,
           nom: formData.nom,
@@ -201,16 +206,23 @@ export default function UsersPage() {
         if (formData.password) {
           updateData.password = formData.password;
         }
-        await usersService.update(selectedUser.id, updateData);
+        console.log('Update data:', updateData);
+        const result = await usersService.update(selectedUser.id, updateData);
+        console.log('Update result:', result);
         success('Utilisateur modifié');
       } else {
-        await usersService.create(formData);
+        // Mode création
+        console.log('Creating user with data:', formData);
+        const result = await usersService.create(formData);
+        console.log('Create result:', result);
         success('Utilisateur créé');
       }
       setIsModalOpen(false);
       fetchUsers();
     } catch (err) {
-      showError('Erreur', (err as Error).message);
+      console.error('Error saving user:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+      showError('Erreur', errorMessage);
     } finally {
       setIsSaving(false);
     }
