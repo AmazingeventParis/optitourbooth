@@ -3,6 +3,7 @@ import { Card, Button, Modal, Input, Badge } from '@/components/ui';
 import { machinesService } from '@/services/machines.service';
 import { preparationsService } from '@/services/preparations.service';
 import { useToast } from '@/hooks/useToast';
+import { useAuthStore } from '@/store/authStore';
 import { Machine, MachineType, Preparation, PreparationStatut } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -15,6 +16,7 @@ import {
   CameraIcon,
   CpuChipIcon,
   XMarkIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -62,6 +64,7 @@ const statutConfig: Record<PreparationStatut, { label: string; color: string; ba
 
 export default function PreparationsPage() {
   const { success, error: showError } = useToast();
+  const { user } = useAuthStore();
   const [machines, setMachines] = useState<Machine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -70,6 +73,8 @@ export default function PreparationsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isArchiveMode, setIsArchiveMode] = useState(false);
   const [archivedPreparations, setArchivedPreparations] = useState<Preparation[]>([]);
+  const [archiveTypeFilter, setArchiveTypeFilter] = useState<MachineType | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -132,6 +137,11 @@ export default function PreparationsPage() {
       return;
     }
 
+    if (!user) {
+      showError('Erreur', 'Utilisateur non connecté');
+      return;
+    }
+
     // Vérifier que tous les événements ont date et client
     const evenementsValides = evenements.filter(e => e.dateEvenement && e.client);
     if (evenementsValides.length === 0) {
@@ -141,13 +151,16 @@ export default function PreparationsPage() {
 
     setIsSaving(true);
     try {
+      // Nom complet du préparateur connecté
+      const preparateur = `${user.prenom} ${user.nom}`;
+
       // Créer toutes les préparations
       for (const evt of evenementsValides) {
         await preparationsService.create({
           machineId: selectedMachine.id,
           dateEvenement: evt.dateEvenement,
           client: evt.client,
-          preparateur: 'Système', // Valeur par défaut
+          preparateur,
           notes: undefined,
         });
       }
@@ -329,12 +342,35 @@ export default function PreparationsPage() {
 
   // Mode Archive
   if (isArchiveMode) {
+    // Filtrer les préparations archivées
+    const filteredArchive = archivedPreparations.filter(prep => {
+      // Filtre par type de borne
+      if (archiveTypeFilter !== 'all' && prep.machine?.type !== archiveTypeFilter) {
+        return false;
+      }
+
+      // Filtre par recherche (numéro de borne ou nom de client)
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const numero = prep.machine?.numero?.toLowerCase() || '';
+        const client = prep.client.toLowerCase();
+
+        if (!numero.includes(query) && !client.includes(query)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Archive des événements</h1>
           <Button variant="secondary" onClick={() => {
             setIsArchiveMode(false);
+            setArchiveTypeFilter('all');
+            setSearchQuery('');
             fetchMachines();
           }}>
             <ArrowLeftIcon className="h-5 w-5 mr-2" />
@@ -342,12 +378,74 @@ export default function PreparationsPage() {
           </Button>
         </div>
 
+        {/* Filtres */}
+        <Card className="p-4">
+          <div className="space-y-4">
+            {/* Recherche intelligente */}
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher par numéro de borne ou nom de client..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+
+            {/* Filtres par type de borne */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setArchiveTypeFilter('all')}
+                className={clsx(
+                  'px-4 py-2 rounded-lg font-medium transition-all',
+                  archiveTypeFilter === 'all'
+                    ? 'bg-primary-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                )}
+              >
+                Toutes ({archivedPreparations.length})
+              </button>
+              {Object.entries(machineTypeBaseConfig).map(([type, config]) => {
+                const count = archivedPreparations.filter(p => p.machine?.type === type).length;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setArchiveTypeFilter(type as MachineType)}
+                    className={clsx(
+                      'px-4 py-2 rounded-lg font-medium transition-all',
+                      archiveTypeFilter === type
+                        ? 'bg-primary-600 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    )}
+                  >
+                    {config.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+
+        {/* Résultats */}
         <Card className="p-6">
-          {archivedPreparations.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">Aucun événement archivé</p>
+          {filteredArchive.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">
+              {searchQuery || archiveTypeFilter !== 'all'
+                ? 'Aucun résultat pour ces critères'
+                : 'Aucun événement archivé'}
+            </p>
           ) : (
             <div className="space-y-2">
-              {archivedPreparations.map((prep) => (
+              {filteredArchive.map((prep) => (
                 <div key={prep.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
@@ -357,15 +455,39 @@ export default function PreparationsPage() {
                       </p>
                       <p className="text-xs text-gray-500 mt-1">Préparateur: {prep.preparateur}</p>
                     </div>
-                    <Badge variant={prep.photosDechargees ? 'success' : 'danger'}>
-                      {prep.photosDechargees ? 'Photos déchargées' : 'Photos non déchargées'}
-                    </Badge>
+                    {prep.photosDechargees ? (
+                      <Badge variant="success">
+                        Photos déchargées
+                      </Badge>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          try {
+                            await preparationsService.markPhotosUnloaded(prep.id);
+                            success('Photos marquées comme déchargées');
+                            fetchArchive();
+                          } catch (err) {
+                            showError('Erreur', (err as Error).message);
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-red-500 text-white text-sm font-medium rounded-full hover:bg-red-600 active:scale-95 transition-all shadow-sm"
+                      >
+                        Photos non déchargées
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
         </Card>
+
+        {/* Résumé des résultats */}
+        {(searchQuery || archiveTypeFilter !== 'all') && (
+          <p className="text-sm text-gray-500 text-center">
+            {filteredArchive.length} résultat{filteredArchive.length > 1 ? 's' : ''} sur {archivedPreparations.length} événement{archivedPreparations.length > 1 ? 's' : ''}
+          </p>
+        )}
       </div>
     );
   }
