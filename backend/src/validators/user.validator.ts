@@ -16,7 +16,7 @@ export const createUserSchema = z.object({
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
       'Le mot de passe doit contenir au moins une minuscule, une majuscule et un chiffre'
     ),
-  role: z.nativeEnum(UserRole),
+  roles: z.array(z.nativeEnum(UserRole)).min(1, 'Au moins un rôle est requis'),
   nom: z.string().min(1, 'Nom requis').max(100),
   prenom: z.string().min(1, 'Prénom requis').max(100),
   telephone: z.string().max(20).optional(),
@@ -41,7 +41,7 @@ export const updateUserSchema = z.object({
       'Le mot de passe doit contenir au moins une minuscule, une majuscule et un chiffre'
     )
     .optional(),
-  role: z.nativeEnum(UserRole).optional(),
+  roles: z.array(z.nativeEnum(UserRole)).min(1, 'Au moins un rôle est requis').optional(),
   nom: z.string().min(1).max(100).optional(),
   prenom: z.string().min(1).max(100).optional(),
   telephone: z.string().max(20).optional().nullable(),
