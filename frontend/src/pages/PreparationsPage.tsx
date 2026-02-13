@@ -511,7 +511,7 @@ export default function PreparationsPage() {
           <p className="text-gray-600">Sélectionnez un type de machine pour gérer les préparations</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
           {Object.entries(machineTypeBaseConfig).map(([type, config]) => {
             const Icon = config.icon;
             const machinesOfType = machines.filter((m) => m.type === type);
@@ -528,39 +528,25 @@ export default function PreparationsPage() {
               <button
                 key={type}
                 onClick={() => setSelectedType(type as MachineType)}
-                className="group relative overflow-hidden rounded-2xl border-2 transition-all duration-300 hover:scale-105 hover:shadow-2xl transform"
+                className="group relative overflow-hidden rounded-xl border transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
                 style={{
-                  backgroundColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)` : undefined,
-                  borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)` : undefined,
-                }}
-                onMouseEnter={(e) => {
-                  if (rgb) {
-                    e.currentTarget.style.borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.7)`;
-                    e.currentTarget.style.boxShadow = `0 20px 40px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.25)`;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (rgb) {
-                    e.currentTarget.style.borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`;
-                    e.currentTarget.style.boxShadow = '';
-                  }
+                  backgroundColor: 'white',
+                  borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : '#E5E7EB',
                 }}
               >
-                {/* Gradient overlay */}
+                {/* Accent bar */}
                 <div
-                  className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300"
-                  style={{
-                    background: rgb ? `linear-gradient(135deg, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3) 0%, transparent 100%)` : undefined,
-                  }}
+                  className="absolute top-0 left-0 right-0 h-1"
+                  style={{ backgroundColor: machineColor }}
                 />
 
-                <div className="relative p-6">
-                  <div className="flex items-center gap-4 mb-4">
+                <div className="relative p-4">
+                  {/* Header compact */}
+                  <div className="flex items-center gap-3 mb-3">
                     <div
-                      className="p-3 rounded-xl bg-white shadow-md transform group-hover:scale-110 transition-transform duration-300"
+                      className="p-2 rounded-lg"
                       style={{
-                        borderWidth: '2px',
-                        borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)` : undefined,
+                        backgroundColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)` : undefined,
                         color: machineColor,
                       }}
                     >
@@ -568,39 +554,37 @@ export default function PreparationsPage() {
                         <img
                           src={machinesOfType[0].imageUrl}
                           alt={config.label}
-                          className="h-8 w-8 object-contain"
+                          className="h-6 w-6 object-contain"
                         />
                       ) : (
-                        <Icon className="h-8 w-8" />
+                        <Icon className="h-6 w-6" />
                       )}
                     </div>
                     <div className="flex-1 text-left">
-                      <h3
-                        className="text-2xl font-bold tracking-tight"
-                        style={{ color: machineColor }}
-                      >
+                      <h3 className="text-lg font-bold" style={{ color: machineColor }}>
                         {config.label}
                       </h3>
-                      <p className="text-sm text-gray-500 font-medium">{config.count} machines</p>
+                      <p className="text-xs text-gray-500">{config.count} machines</p>
                     </div>
                   </div>
 
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center bg-blue-50 border border-blue-300 rounded-lg px-3 py-2 shadow-sm">
-                      <span className="text-blue-700 font-semibold">Disponibles</span>
-                      <span className="font-bold text-blue-900 text-base">{disponibles}</span>
+                  {/* Stats grid compact */}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center justify-between bg-gray-50 rounded px-2 py-1.5">
+                      <span className="text-gray-600">Dispo</span>
+                      <span className="font-bold text-blue-600">{disponibles}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-green-50 border border-green-300 rounded-lg px-3 py-2 shadow-sm">
-                      <span className="text-green-700 font-semibold">Prêtes</span>
-                      <span className="font-bold text-green-900 text-base">{pretes}</span>
+                    <div className="flex items-center justify-between bg-gray-50 rounded px-2 py-1.5">
+                      <span className="text-gray-600">Prêtes</span>
+                      <span className="font-bold text-green-600">{pretes}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-2 shadow-sm">
-                      <span className="text-yellow-700 font-semibold">À décharger</span>
-                      <span className="font-bold text-yellow-900 text-base">{aDecharger}</span>
+                    <div className="flex items-center justify-between bg-gray-50 rounded px-2 py-1.5">
+                      <span className="text-gray-600">Déch.</span>
+                      <span className="font-bold text-yellow-600">{aDecharger}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-red-50 border border-red-300 rounded-lg px-3 py-2 shadow-sm">
-                      <span className="text-red-700 font-semibold">Hors service</span>
-                      <span className="font-bold text-red-900 text-base">{horsService}</span>
+                    <div className="flex items-center justify-between bg-gray-50 rounded px-2 py-1.5">
+                      <span className="text-gray-600">H.S.</span>
+                      <span className="font-bold text-red-600">{horsService}</span>
                     </div>
                   </div>
                 </div>
@@ -684,63 +668,92 @@ export default function PreparationsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2">
         {filteredMachines.map((machine) => {
           const statut = getMachineStatut(machine);
           const preparation = getPreparationForMachine(machine);
           const statutInfo = statutConfig[statut];
 
           return (
-            <div
+            <button
               key={machine.id}
               className={clsx(
-                'relative p-3 border-2 rounded-xl transition-all duration-300 cursor-pointer transform hover:scale-105 hover:shadow-xl',
-                statutInfo.color
+                'relative p-2.5 border rounded-lg transition-all duration-200 cursor-pointer hover:shadow-md hover:-translate-y-0.5',
+                'bg-white',
+                statut === 'disponible' && 'border-gray-200 hover:border-blue-300',
+                statut === 'en_preparation' && 'border-orange-300 hover:border-orange-400',
+                statut === 'prete' && 'border-green-400 hover:border-green-500 shadow-sm',
+                statut === 'en_cours' && 'border-purple-300 hover:border-purple-400',
+                statut === 'a_decharger' && 'border-yellow-400 hover:border-yellow-500',
+                statut === 'hors_service' && 'border-red-400 hover:border-red-500'
               )}
               onClick={() => handleOpenModal(machine)}
             >
+              {/* Barre de couleur statut */}
+              <div
+                className={clsx(
+                  'absolute top-0 left-0 right-0 h-0.5 rounded-t-lg',
+                  statut === 'disponible' && 'bg-blue-400',
+                  statut === 'en_preparation' && 'bg-orange-400',
+                  statut === 'prete' && 'bg-green-500',
+                  statut === 'en_cours' && 'bg-purple-400',
+                  statut === 'a_decharger' && 'bg-yellow-500',
+                  statut === 'hors_service' && 'bg-red-500'
+                )}
+              />
+
               {/* Numéro de machine */}
-              <div className="text-center mb-2">
-                <div className="flex items-center justify-center gap-1.5">
-                  <span className="font-bold text-2xl tracking-tight text-gray-900">{machine.numero}</span>
+              <div className="text-center mb-1.5">
+                <div className="flex items-center justify-center gap-1">
+                  <span className="font-bold text-xl text-gray-900">{machine.numero}</span>
                   {machine.aDefaut && (
-                    <WrenchScrewdriverIcon className="h-4 w-4 text-orange-500 animate-pulse" title={machine.defaut || 'Défaut signalé'} />
+                    <WrenchScrewdriverIcon className="h-3 w-3 text-orange-500 animate-pulse" title={machine.defaut || 'Défaut signalé'} />
                   )}
                 </div>
               </div>
 
-              {/* Badge statut */}
-              <div className="flex justify-center mb-2">
-                <Badge variant={statutInfo.badge as any}>
-                  <span className="text-[10px] font-semibold">{statutInfo.label}</span>
-                </Badge>
+              {/* Badge statut compact */}
+              <div className="flex justify-center mb-1.5">
+                <span
+                  className={clsx(
+                    'text-[9px] font-semibold px-1.5 py-0.5 rounded',
+                    statut === 'disponible' && 'bg-blue-50 text-blue-700',
+                    statut === 'en_preparation' && 'bg-orange-50 text-orange-700',
+                    statut === 'prete' && 'bg-green-50 text-green-700',
+                    statut === 'en_cours' && 'bg-purple-50 text-purple-700',
+                    statut === 'a_decharger' && 'bg-yellow-50 text-yellow-700',
+                    statut === 'hors_service' && 'bg-red-50 text-red-700'
+                  )}
+                >
+                  {statutInfo.label}
+                </span>
               </div>
 
               {/* Infos préparation */}
               {preparation && (
-                <div className="space-y-1.5">
-                  <div className="pt-2 border-t border-gray-200">
-                    <p className="text-[11px] font-bold text-gray-800 truncate leading-tight" title={preparation.client}>
+                <div className="space-y-1">
+                  <div className="pt-1.5 border-t border-gray-100">
+                    <p className="text-[10px] font-bold text-gray-800 truncate leading-tight" title={preparation.client}>
                       {preparation.client}
                     </p>
-                    <p className="text-[10px] text-gray-500 font-medium mt-0.5">
+                    <p className="text-[9px] text-gray-500 mt-0.5">
                       {format(parseISO(preparation.dateEvenement), 'd MMM', { locale: fr })}
                     </p>
                   </div>
 
                   {/* Actions rapides */}
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-1">
                     {statut === 'en_preparation' && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleMarkAsReady(preparation.id);
                         }}
-                        className="flex-1 p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 active:scale-95 transition-all shadow-sm disabled:opacity-50"
+                        className="flex-1 p-1 bg-green-500 text-white rounded hover:bg-green-600 active:scale-95 transition-all disabled:opacity-50"
                         title="Marquer comme prête"
                         disabled={isSaving}
                       >
-                        <CheckCircleIcon className="h-3.5 w-3.5 mx-auto" />
+                        <CheckCircleIcon className="h-3 w-3 mx-auto" />
                       </button>
                     )}
                     {statut === 'a_decharger' && (
@@ -749,11 +762,11 @@ export default function PreparationsPage() {
                           e.stopPropagation();
                           handleMarkPhotosUnloaded(preparation.id);
                         }}
-                        className="flex-1 p-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:scale-95 transition-all shadow-sm disabled:opacity-50"
+                        className="flex-1 p-1 bg-blue-500 text-white rounded hover:bg-blue-600 active:scale-95 transition-all disabled:opacity-50"
                         title="Marquer photos déchargées"
                         disabled={isSaving}
                       >
-                        <PhotoIcon className="h-3.5 w-3.5 mx-auto" />
+                        <PhotoIcon className="h-3 w-3 mx-auto" />
                       </button>
                     )}
                     {statut === 'prete' && (
@@ -762,11 +775,11 @@ export default function PreparationsPage() {
                           e.stopPropagation();
                           handleUpdateStatut(preparation.id, 'en_cours');
                         }}
-                        className="flex-1 p-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:scale-95 transition-all shadow-sm disabled:opacity-50"
+                        className="flex-1 p-1 bg-blue-500 text-white rounded hover:bg-blue-600 active:scale-95 transition-all disabled:opacity-50"
                         title="Démarrer événement"
                         disabled={isSaving}
                       >
-                        <WrenchScrewdriverIcon className="h-4 w-4 mx-auto" />
+                        <WrenchScrewdriverIcon className="h-3.5 w-3.5 mx-auto" />
                       </button>
                     )}
                     {statut === 'en_cours' && (
@@ -775,17 +788,17 @@ export default function PreparationsPage() {
                           e.stopPropagation();
                           handleUpdateStatut(preparation.id, 'a_decharger');
                         }}
-                        className="flex-1 p-1.5 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors disabled:opacity-50"
+                        className="flex-1 p-1 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors disabled:opacity-50"
                         title="Retour - À décharger"
                         disabled={isSaving}
                       >
-                        <PhotoIcon className="h-4 w-4 mx-auto" />
+                        <PhotoIcon className="h-3.5 w-3.5 mx-auto" />
                       </button>
                     )}
                   </div>
                 </div>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
