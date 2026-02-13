@@ -324,7 +324,14 @@ export default function PreparationsPage() {
   };
 
   const filteredMachines = selectedType
-    ? machines.filter((m) => m.type === selectedType)
+    ? machines
+        .filter((m) => m.type === selectedType)
+        .sort((a, b) => {
+          // Extraire le numéro de la chaîne (ex: "V1" -> 1, "SK10" -> 10)
+          const numA = parseInt(a.numero.replace(/\D/g, ''), 10) || 0;
+          const numB = parseInt(b.numero.replace(/\D/g, ''), 10) || 0;
+          return numA - numB;
+        })
     : [];
 
   if (isLoading) {
@@ -397,7 +404,7 @@ export default function PreparationsPage() {
           <p className="text-gray-600">Sélectionnez un type de machine pour gérer les préparations</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {Object.entries(machineTypeBaseConfig).map(([type, config]) => {
             const Icon = config.icon;
             const machinesOfType = machines.filter((m) => m.type === type);
@@ -414,28 +421,39 @@ export default function PreparationsPage() {
               <button
                 key={type}
                 onClick={() => setSelectedType(type as MachineType)}
-                className="group border-2 rounded-lg transition-all duration-200 hover:shadow-lg"
+                className="group relative overflow-hidden rounded-2xl border-2 transition-all duration-300 hover:scale-105 hover:shadow-2xl transform"
                 style={{
-                  backgroundColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.05)` : undefined,
-                  borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : undefined,
+                  backgroundColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)` : undefined,
+                  borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)` : undefined,
                 }}
                 onMouseEnter={(e) => {
                   if (rgb) {
-                    e.currentTarget.style.borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`;
+                    e.currentTarget.style.borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.7)`;
+                    e.currentTarget.style.boxShadow = `0 20px 40px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.25)`;
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (rgb) {
-                    e.currentTarget.style.borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)`;
+                    e.currentTarget.style.borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`;
+                    e.currentTarget.style.boxShadow = '';
                   }
                 }}
               >
-                <div className="p-5">
-                  <div className="flex items-center gap-3 mb-3">
+                {/* Gradient overlay */}
+                <div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300"
+                  style={{
+                    background: rgb ? `linear-gradient(135deg, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3) 0%, transparent 100%)` : undefined,
+                  }}
+                />
+
+                <div className="relative p-6">
+                  <div className="flex items-center gap-4 mb-4">
                     <div
-                      className="p-2 rounded-lg bg-white border"
+                      className="p-3 rounded-xl bg-white shadow-md transform group-hover:scale-110 transition-transform duration-300"
                       style={{
-                        borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : undefined,
+                        borderWidth: '2px',
+                        borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)` : undefined,
                         color: machineColor,
                       }}
                     >
@@ -451,31 +469,31 @@ export default function PreparationsPage() {
                     </div>
                     <div className="flex-1 text-left">
                       <h3
-                        className="text-xl font-bold"
+                        className="text-2xl font-bold tracking-tight"
                         style={{ color: machineColor }}
                       >
                         {config.label}
                       </h3>
-                      <p className="text-sm text-gray-600">{config.count} machines</p>
+                      <p className="text-sm text-gray-500 font-medium">{config.count} machines</p>
                     </div>
                   </div>
 
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between items-center bg-blue-50 border border-blue-400 rounded px-3 py-1.5">
-                      <span className="text-blue-700 font-medium">Disponibles</span>
-                      <span className="font-semibold text-blue-900">{disponibles}</span>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center bg-blue-50 border border-blue-300 rounded-lg px-3 py-2 shadow-sm">
+                      <span className="text-blue-700 font-semibold">Disponibles</span>
+                      <span className="font-bold text-blue-900 text-base">{disponibles}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-green-50 border border-green-400 rounded px-3 py-1.5">
-                      <span className="text-green-700 font-medium">Prêtes</span>
-                      <span className="font-semibold text-green-900">{pretes}</span>
+                    <div className="flex justify-between items-center bg-green-50 border border-green-300 rounded-lg px-3 py-2 shadow-sm">
+                      <span className="text-green-700 font-semibold">Prêtes</span>
+                      <span className="font-bold text-green-900 text-base">{pretes}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-yellow-50 border border-yellow-400 rounded px-3 py-1.5">
-                      <span className="text-yellow-700 font-medium">À décharger</span>
-                      <span className="font-semibold text-yellow-900">{aDecharger}</span>
+                    <div className="flex justify-between items-center bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-2 shadow-sm">
+                      <span className="text-yellow-700 font-semibold">À décharger</span>
+                      <span className="font-bold text-yellow-900 text-base">{aDecharger}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-red-50 border border-red-500 rounded px-3 py-1.5">
-                      <span className="text-red-700 font-medium">Hors service</span>
-                      <span className="font-semibold text-red-900">{horsService}</span>
+                    <div className="flex justify-between items-center bg-red-50 border border-red-300 rounded-lg px-3 py-2 shadow-sm">
+                      <span className="text-red-700 font-semibold">Hors service</span>
+                      <span className="font-bold text-red-900 text-base">{horsService}</span>
                     </div>
                   </div>
                 </div>
@@ -559,7 +577,7 @@ export default function PreparationsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
         {filteredMachines.map((machine) => {
           const statut = getMachineStatut(machine);
           const preparation = getPreparationForMachine(machine);
@@ -569,17 +587,17 @@ export default function PreparationsPage() {
             <div
               key={machine.id}
               className={clsx(
-                'relative p-3 border-2 rounded-lg transition-all cursor-pointer hover:shadow-lg',
+                'relative p-3 border-2 rounded-xl transition-all duration-300 cursor-pointer transform hover:scale-105 hover:shadow-xl',
                 statutInfo.color
               )}
               onClick={() => handleOpenModal(machine)}
             >
               {/* Numéro de machine */}
-              <div className="text-center mb-1.5">
+              <div className="text-center mb-2">
                 <div className="flex items-center justify-center gap-1.5">
-                  <span className="font-bold text-xl text-gray-900">{machine.numero}</span>
+                  <span className="font-bold text-2xl tracking-tight text-gray-900">{machine.numero}</span>
                   {machine.aDefaut && (
-                    <WrenchScrewdriverIcon className="h-5 w-5 text-orange-500" title={machine.defaut || 'Défaut signalé'} />
+                    <WrenchScrewdriverIcon className="h-4 w-4 text-orange-500 animate-pulse" title={machine.defaut || 'Défaut signalé'} />
                   )}
                 </div>
               </div>
@@ -587,35 +605,35 @@ export default function PreparationsPage() {
               {/* Badge statut */}
               <div className="flex justify-center mb-2">
                 <Badge variant={statutInfo.badge as any}>
-                  <span className="text-xs">{statutInfo.label}</span>
+                  <span className="text-[10px] font-semibold">{statutInfo.label}</span>
                 </Badge>
               </div>
 
               {/* Infos préparation */}
               {preparation && (
-                <div className="space-y-2">
-                  <div className="pt-2 border-t border-gray-300">
-                    <p className="text-xs font-semibold text-gray-900 truncate" title={preparation.client}>
+                <div className="space-y-1.5">
+                  <div className="pt-2 border-t border-gray-200">
+                    <p className="text-[11px] font-bold text-gray-800 truncate leading-tight" title={preparation.client}>
                       {preparation.client}
                     </p>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-[10px] text-gray-500 font-medium mt-0.5">
                       {format(parseISO(preparation.dateEvenement), 'd MMM', { locale: fr })}
                     </p>
                   </div>
 
                   {/* Actions rapides */}
-                  <div className="flex gap-1">
+                  <div className="flex gap-1.5">
                     {statut === 'en_preparation' && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleMarkAsReady(preparation.id);
                         }}
-                        className="flex-1 p-1.5 bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:opacity-50"
+                        className="flex-1 p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 active:scale-95 transition-all shadow-sm disabled:opacity-50"
                         title="Marquer comme prête"
                         disabled={isSaving}
                       >
-                        <CheckCircleIcon className="h-4 w-4 mx-auto" />
+                        <CheckCircleIcon className="h-3.5 w-3.5 mx-auto" />
                       </button>
                     )}
                     {statut === 'a_decharger' && (
@@ -624,11 +642,11 @@ export default function PreparationsPage() {
                           e.stopPropagation();
                           handleMarkPhotosUnloaded(preparation.id);
                         }}
-                        className="flex-1 p-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50"
+                        className="flex-1 p-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:scale-95 transition-all shadow-sm disabled:opacity-50"
                         title="Marquer photos déchargées"
                         disabled={isSaving}
                       >
-                        <PhotoIcon className="h-4 w-4 mx-auto" />
+                        <PhotoIcon className="h-3.5 w-3.5 mx-auto" />
                       </button>
                     )}
                     {statut === 'prete' && (
@@ -637,7 +655,7 @@ export default function PreparationsPage() {
                           e.stopPropagation();
                           handleUpdateStatut(preparation.id, 'en_cours');
                         }}
-                        className="flex-1 p-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50"
+                        className="flex-1 p-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:scale-95 transition-all shadow-sm disabled:opacity-50"
                         title="Démarrer événement"
                         disabled={isSaving}
                       >
