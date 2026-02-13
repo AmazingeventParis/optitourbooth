@@ -267,8 +267,9 @@ export default function PreparationsPage() {
             const Icon = config.icon;
             const machinesOfType = machines.filter((m) => m.type === type);
             const disponibles = machinesOfType.filter((m) => getMachineStatut(m) === 'disponible').length;
-            const enPreparation = machinesOfType.filter((m) => ['en_preparation', 'prete', 'en_cours'].includes(getMachineStatut(m))).length;
+            const pretes = machinesOfType.filter((m) => getMachineStatut(m) === 'prete').length;
             const aDecharger = machinesOfType.filter((m) => getMachineStatut(m) === 'a_decharger').length;
+            const horsService = machinesOfType.filter((m) => !m.actif).length;
 
             // Récupérer la couleur d'une machine de ce type
             const machineColor = machinesOfType[0]?.couleur || '#3B82F6';
@@ -300,12 +301,10 @@ export default function PreparationsPage() {
                       className="p-2 rounded-lg bg-white border"
                       style={{
                         borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : undefined,
+                        color: machineColor,
                       }}
                     >
-                      <Icon
-                        className="h-8 w-8"
-                        style={{ color: machineColor }}
-                      />
+                      <Icon className="h-8 w-8" />
                     </div>
                     <div className="flex-1 text-left">
                       <h3
@@ -324,13 +323,17 @@ export default function PreparationsPage() {
                       <span className="font-semibold text-gray-900">{disponibles}</span>
                     </div>
                     <div className="flex justify-between items-center bg-white/60 rounded px-3 py-1.5">
-                      <span className="text-gray-700">En cours</span>
-                      <span className="font-semibold text-gray-900">{enPreparation}</span>
+                      <span className="text-gray-700">Prêtes</span>
+                      <span className="font-semibold text-gray-900">{pretes}</span>
                     </div>
-                    {aDecharger > 0 && (
-                      <div className="flex justify-between items-center bg-red-100 rounded px-3 py-1.5">
-                        <span className="text-red-700">À décharger</span>
-                        <span className="font-bold text-red-900">{aDecharger}</span>
+                    <div className="flex justify-between items-center bg-white/60 rounded px-3 py-1.5">
+                      <span className="text-gray-700">À décharger</span>
+                      <span className="font-semibold text-gray-900">{aDecharger}</span>
+                    </div>
+                    {horsService > 0 && (
+                      <div className="flex justify-between items-center bg-gray-200 rounded px-3 py-1.5">
+                        <span className="text-gray-700">Hors service</span>
+                        <span className="font-bold text-gray-900">{horsService}</span>
                       </div>
                     )}
                   </div>
@@ -339,19 +342,6 @@ export default function PreparationsPage() {
             );
           })}
         </div>
-
-        {/* Légende */}
-        <Card className="p-6 bg-gray-50">
-          <h3 className="font-semibold text-gray-900 mb-4">Statuts des machines</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {Object.entries(statutConfig).map(([key, config]) => (
-              <div key={key} className="flex items-center gap-2">
-                <div className={clsx('w-4 h-4 rounded border-2', config.color)} />
-                <span className="text-sm text-gray-700">{config.label}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
       </div>
     );
   }
@@ -375,12 +365,10 @@ export default function PreparationsPage() {
               style={{
                 backgroundColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.05)` : undefined,
                 borderColor: rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : undefined,
+                color: machineColor,
               }}
             >
-              <Icon
-                className="h-6 w-6"
-                style={{ color: machineColor }}
-              />
+              <Icon className="h-6 w-6" />
             </div>
             <div>
               <h1
