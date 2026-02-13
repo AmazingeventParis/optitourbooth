@@ -172,6 +172,10 @@ export default function PreparationsPage() {
       setDefautText('');
       setHorsServiceText('');
 
+      // Fermer le modal
+      setIsModalOpen(false);
+
+      // Rafraîchir les machines (déclenchera l'auto-transition côté backend)
       fetchMachines();
     } catch (err) {
       showError('Erreur', (err as Error).message);
@@ -206,18 +210,19 @@ export default function PreparationsPage() {
     }
   };
 
-  const handleUpdateStatut = async (preparationId: string, newStatut: PreparationStatut) => {
-    setIsSaving(true);
-    try {
-      await preparationsService.update(preparationId, { statut: newStatut });
-      success('Statut mis à jour');
-      fetchMachines();
-    } catch (err) {
-      showError('Erreur', (err as Error).message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  // handleUpdateStatut supprimé - transitions automatiques maintenant
+  // const handleUpdateStatut = async (preparationId: string, newStatut: PreparationStatut) => {
+  //   setIsSaving(true);
+  //   try {
+  //     await preparationsService.update(preparationId, { statut: newStatut });
+  //     success('Statut mis à jour');
+  //     fetchMachines();
+  //   } catch (err) {
+  //     showError('Erreur', (err as Error).message);
+  //   } finally {
+  //     setIsSaving(false);
+  //   }
+  // };
 
   const handleMarkDefect = async (machineId: string) => {
     if (!defautText.trim()) {
@@ -775,32 +780,9 @@ export default function PreparationsPage() {
                         <PhotoIcon className="h-3 w-3 mx-auto" />
                       </button>
                     )}
-                    {statut === 'prete' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleUpdateStatut(preparation.id, 'en_cours');
-                        }}
-                        className="flex-1 p-1 bg-blue-500 text-white rounded hover:bg-blue-600 active:scale-95 transition-all disabled:opacity-50"
-                        title="Démarrer événement"
-                        disabled={isSaving}
-                      >
-                        <WrenchScrewdriverIcon className="h-3.5 w-3.5 mx-auto" />
-                      </button>
-                    )}
-                    {statut === 'en_cours' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleUpdateStatut(preparation.id, 'a_decharger');
-                        }}
-                        className="flex-1 p-1 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors disabled:opacity-50"
-                        title="Retour - À décharger"
-                        disabled={isSaving}
-                      >
-                        <PhotoIcon className="h-3.5 w-3.5 mx-auto" />
-                      </button>
-                    )}
+                    {/* Boutons manuels supprimés - transitions automatiques */}
+                    {/* - "prete" → "en_cours" : automatique le jour de l'événement */}
+                    {/* - "en_cours" → "a_decharger" : automatique le lendemain du dernier événement */}
                   </div>
                 </div>
               )}
