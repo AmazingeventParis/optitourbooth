@@ -175,6 +175,10 @@ export default function UsersPage() {
     }
     if (!formData.nom) errors.nom = 'Nom requis';
     if (!formData.prenom) errors.prenom = 'Prénom requis';
+    if (!formData.roles || formData.roles.length === 0) {
+      showError('Erreur', 'Veuillez sélectionner au moins un rôle');
+      return false;
+    }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
