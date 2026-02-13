@@ -66,6 +66,6 @@ export const getMachine = async (req: Request, res: Response) => {
     return res.json(machine);
   } catch (error) {
     console.error('Error fetching machine:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
