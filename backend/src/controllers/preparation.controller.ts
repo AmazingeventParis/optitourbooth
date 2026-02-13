@@ -34,7 +34,27 @@ async function autoUpdatePreparationStatuses(): Promise<void> {
       console.log(`[Auto-Prep] ${readyPreps.length} préparation(s) passée(s) en "en_cours"`);
     }
 
-    // 2. Passer "en_cours" → "a_decharger" le lendemain du dernier événement
+    // 2a. Passer "prete" avec date passée → "a_decharger" (si jamais passée en "en_cours")
+    const missedReadyPreps = await prisma.preparation.findMany({
+      where: {
+        statut: 'prete',
+        dateEvenement: {
+          lt: today,
+        },
+      },
+    });
+
+    if (missedReadyPreps.length > 0) {
+      await prisma.preparation.updateMany({
+        where: {
+          id: { in: missedReadyPreps.map(p => p.id) },
+        },
+        data: { statut: 'a_decharger' },
+      });
+      console.log(`[Auto-Prep] ${missedReadyPreps.length} préparation(s) "prete" passée(s) directement en "a_decharger"`);
+    }
+
+    // 2b. Passer "en_cours" → "a_decharger" le lendemain du dernier événement
     // Pour chaque machine, trouver la dernière date d'événement
     const ongoingPreps = await prisma.preparation.findMany({
       where: { statut: 'en_cours' },
@@ -65,7 +85,7 @@ async function autoUpdatePreparationStatuses(): Promise<void> {
         where: { id: { in: toUnload } },
         data: { statut: 'a_decharger' },
       });
-      console.log(`[Auto-Prep] ${toUnload.length} préparation(s) passée(s) en "a_decharger"`);
+      console.log(`[Auto-Prep] ${toUnload.length} préparation(s) "en_cours" passée(s) en "a_decharger"`);
     }
   } catch (error) {
     console.error('[Auto-Prep] Erreur:', error);
