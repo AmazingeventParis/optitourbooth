@@ -14,6 +14,7 @@ import {
   PhoneIcon,
   ArrowTopRightOnSquareIcon,
   CameraIcon,
+  PhotoIcon,
   PencilSquareIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
@@ -63,6 +64,7 @@ export default function ChauffeurPointPage() {
 
   // Photos
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhotos, setUploadingPhotos] = useState<string[]>([]); // Local previews during upload
   const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ id: string; path: string; filename: string }>>([]); // Successfully uploaded photos
 
@@ -147,9 +149,12 @@ export default function ChauffeurPointPage() {
 
     const newFiles = Array.from(files);
 
-    // Reset file input immediately so it can be used again
+    // Reset file inputs immediately so they can be used again
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    if (galleryInputRef.current) {
+      galleryInputRef.current.value = '';
     }
 
     // Show local preview during upload
@@ -385,7 +390,7 @@ export default function ChauffeurPointPage() {
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold">Photos ({(point.photos?.length || 0) + uploadedPhotos.length + uploadingPhotos.length})</h3>
           {isActive && (
-            <>
+            <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -393,7 +398,16 @@ export default function ChauffeurPointPage() {
                 disabled={isSaving}
               >
                 <CameraIcon className="h-4 w-4 mr-1" />
-                {isSaving ? 'Envoi...' : 'Ajouter'}
+                Appareil
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => galleryInputRef.current?.click()}
+                disabled={isSaving}
+              >
+                <PhotoIcon className="h-4 w-4 mr-1" />
+                Galerie
               </Button>
               <input
                 ref={fileInputRef}
@@ -404,7 +418,15 @@ export default function ChauffeurPointPage() {
                 className="hidden"
                 onChange={handlePhotoCapture}
               />
-            </>
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handlePhotoCapture}
+              />
+            </div>
           )}
         </div>
 
