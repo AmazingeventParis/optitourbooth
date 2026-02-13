@@ -55,6 +55,7 @@ const statutConfig: Record<PreparationStatut, { label: string; color: string; ba
   prete: { label: 'Prête', color: 'bg-green-50 border-green-500 hover:border-green-600', badge: 'success' },
   en_cours: { label: 'En cours', color: 'bg-blue-50 border-blue-400 hover:border-blue-500', badge: 'info' },
   a_decharger: { label: 'À décharger', color: 'bg-red-50 border-red-500 hover:border-red-600', badge: 'danger' },
+  hors_service: { label: 'Hors service', color: 'bg-gray-200 border-gray-500', badge: 'default' },
   archivee: { label: 'Archivée', color: 'bg-gray-100 border-gray-300', badge: 'default' },
 };
 
@@ -291,7 +292,7 @@ export default function PreparationsPage() {
             const disponibles = machinesOfType.filter((m) => getMachineStatut(m) === 'disponible').length;
             const pretes = machinesOfType.filter((m) => getMachineStatut(m) === 'prete').length;
             const aDecharger = machinesOfType.filter((m) => getMachineStatut(m) === 'a_decharger').length;
-            const horsService = machinesOfType.filter((m) => !m.actif).length;
+            const horsService = machinesOfType.filter((m) => getMachineStatut(m) === 'hors_service').length;
 
             // Récupérer la couleur d'une machine de ce type
             const machineColor = machinesOfType[0]?.couleur || '#3B82F6';

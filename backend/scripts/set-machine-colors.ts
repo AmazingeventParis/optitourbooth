@@ -4,8 +4,8 @@ const prisma = new PrismaClient();
 
 // Couleurs par type de machine
 const MACHINE_COLORS: Record<MachineType, string> = {
-  Vegas: '#3B82F6',   // Bleu
-  Smakk: '#A855F7',   // Violet
+  Vegas: '#6B7280',   // Gris
+  Smakk: '#FBBF24',   // Jaune
   Ring: '#10B981',    // Vert
 };
 

@@ -211,6 +211,7 @@ export type PreparationStatut =
   | 'prete'         // Prête pour l'événement
   | 'en_cours'      // Événement en cours
   | 'a_decharger'   // Photos à décharger
+  | 'hors_service'  // Machine hors service
   | 'archivee';     // Événement terminé et archivé
 
 export interface Machine {
