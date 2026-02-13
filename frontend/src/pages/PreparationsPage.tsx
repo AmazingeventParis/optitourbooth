@@ -20,28 +20,32 @@ import clsx from 'clsx';
 const machineTypeConfig: Record<MachineType, {
   label: string;
   color: string;
-  bgGradient: string;
+  bgColor: string;
+  borderColor: string;
   icon: React.ComponentType<{ className?: string }>;
   count: number;
 }> = {
   Vegas: {
     label: 'Vegas',
-    color: 'text-blue-600',
-    bgGradient: 'from-blue-500 to-blue-600',
+    color: 'text-primary-600',
+    bgColor: 'bg-primary-50',
+    borderColor: 'border-primary-200 hover:border-primary-400',
     icon: CameraIcon,
     count: 35,
   },
   Smakk: {
     label: 'Smakk',
     color: 'text-purple-600',
-    bgGradient: 'from-purple-500 to-purple-600',
+    bgColor: 'bg-purple-50',
+    borderColor: 'border-purple-200 hover:border-purple-400',
     icon: CpuChipIcon,
     count: 20,
   },
   Ring: {
     label: 'Ring',
     color: 'text-green-600',
-    bgGradient: 'from-green-500 to-green-600',
+    bgColor: 'bg-green-50',
+    borderColor: 'border-green-200 hover:border-green-400',
     icon: WrenchScrewdriverIcon,
     count: 10,
   },
@@ -260,7 +264,7 @@ export default function PreparationsPage() {
           <p className="text-gray-600">Sélectionnez un type de machine pour gérer les préparations</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {Object.entries(machineTypeConfig).map(([type, config]) => {
             const Icon = config.icon;
             const machinesOfType = machines.filter((m) => m.type === type);
@@ -272,33 +276,36 @@ export default function PreparationsPage() {
               <button
                 key={type}
                 onClick={() => setSelectedType(type as MachineType)}
-                className="group relative overflow-hidden rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-xl"
+                className={clsx(
+                  'group border-2 rounded-lg transition-all duration-200 hover:shadow-lg',
+                  config.borderColor,
+                  config.bgColor
+                )}
               >
-                <div className={clsx(
-                  'absolute inset-0 bg-gradient-to-br opacity-90 group-hover:opacity-100 transition-opacity',
-                  config.bgGradient
-                )} />
-
-                <div className="relative p-8 text-white">
-                  <div className="flex items-center justify-center mb-4">
-                    <Icon className="h-16 w-16" />
-                  </div>
-                  <h3 className="text-2xl font-bold mb-2">{config.label}</h3>
-                  <p className="text-white/90 text-lg mb-4">{config.count} machines</p>
-
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center bg-white/20 rounded px-3 py-2">
-                      <span>Disponibles</span>
-                      <span className="font-bold">{disponibles}</span>
+                <div className="p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className={clsx('p-2 rounded-lg bg-white border', config.borderColor)}>
+                      <Icon className={clsx('h-8 w-8', config.color)} />
                     </div>
-                    <div className="flex justify-between items-center bg-white/20 rounded px-3 py-2">
-                      <span>En cours</span>
-                      <span className="font-bold">{enPreparation}</span>
+                    <div className="flex-1 text-left">
+                      <h3 className={clsx('text-xl font-bold', config.color)}>{config.label}</h3>
+                      <p className="text-sm text-gray-600">{config.count} machines</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between items-center bg-white/60 rounded px-3 py-1.5">
+                      <span className="text-gray-700">Disponibles</span>
+                      <span className="font-semibold text-gray-900">{disponibles}</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-white/60 rounded px-3 py-1.5">
+                      <span className="text-gray-700">En cours</span>
+                      <span className="font-semibold text-gray-900">{enPreparation}</span>
                     </div>
                     {aDecharger > 0 && (
-                      <div className="flex justify-between items-center bg-red-500/30 rounded px-3 py-2">
-                        <span>À décharger</span>
-                        <span className="font-bold">{aDecharger}</span>
+                      <div className="flex justify-between items-center bg-red-100 rounded px-3 py-1.5">
+                        <span className="text-red-700">À décharger</span>
+                        <span className="font-bold text-red-900">{aDecharger}</span>
                       </div>
                     )}
                   </div>
@@ -336,11 +343,11 @@ export default function PreparationsPage() {
             <ArrowLeftIcon className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-3">
-            <div className={clsx('p-3 rounded-lg bg-gradient-to-br', typeConfig.bgGradient)}>
-              <Icon className="h-6 w-6 text-white" />
+            <div className={clsx('p-3 rounded-lg border-2', typeConfig.bgColor, typeConfig.borderColor)}>
+              <Icon className={clsx('h-6 w-6', typeConfig.color)} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{typeConfig.label}</h1>
+              <h1 className={clsx('text-2xl font-bold', typeConfig.color)}>{typeConfig.label}</h1>
               <p className="text-sm text-gray-500">{filteredMachines.length} machines</p>
             </div>
           </div>
