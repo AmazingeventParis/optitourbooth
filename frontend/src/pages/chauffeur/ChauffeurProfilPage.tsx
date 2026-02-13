@@ -98,7 +98,7 @@ export default function ChauffeurProfilPage() {
             <h2 className="font-semibold text-lg">
               {user?.prenom} {user?.nom}
             </h2>
-            <p className="text-gray-500 capitalize">{user?.role}</p>
+            <p className="text-gray-500 capitalize">{user?.roles.join(', ')}</p>
           </div>
         </div>
 

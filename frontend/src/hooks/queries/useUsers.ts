@@ -60,7 +60,7 @@ interface CreateUserInput {
   password: string;
   nom: string;
   prenom: string;
-  role: 'admin' | 'chauffeur';
+  roles: Array<'admin' | 'chauffeur' | 'utilisateur'>;
   telephone?: string;
 }
 
@@ -75,7 +75,7 @@ export function useCreateUser() {
     onSuccess: (newUser) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.lists() });
       // Si c'est un chauffeur, invalider aussi la liste des chauffeurs
-      if (newUser.role === 'chauffeur') {
+      if (newUser.roles.includes('chauffeur')) {
         queryClient.invalidateQueries({ queryKey: queryKeys.users.chauffeurs() });
       }
       toast.success('Utilisateur créé');
@@ -117,7 +117,7 @@ export function useUpdateUser() {
     },
     onSuccess: (updatedUser) => {
       // Invalider la liste des chauffeurs si le rôle a changé
-      if (updatedUser.role === 'chauffeur') {
+      if (updatedUser.roles.includes('chauffeur')) {
         queryClient.invalidateQueries({ queryKey: queryKeys.users.chauffeurs() });
       }
       toast.success('Utilisateur mis à jour');

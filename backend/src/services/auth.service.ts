@@ -7,7 +7,7 @@ import { AppError } from '../middlewares/error.middleware.js';
 interface TokenPayload {
   userId: string;
   email: string;
-  role: string;
+  roles: string[];
 }
 
 interface AuthTokens {
@@ -18,7 +18,7 @@ interface AuthTokens {
 interface UserWithoutPassword {
   id: string;
   email: string;
-  role: string;
+  roles: string[];
   nom: string;
   prenom: string;
   telephone: string | null;
@@ -62,7 +62,7 @@ export const authService = {
     const tokens = await this.generateTokens({
       userId: user.id,
       email: user.email,
-      role: user.role,
+      roles: user.roles,
     });
 
     // Retourner l'utilisateur sans le mot de passe
@@ -119,7 +119,7 @@ export const authService = {
     return this.generateTokens({
       userId: user.id,
       email: user.email,
-      role: user.role,
+      roles: user.roles,
     });
   },
 

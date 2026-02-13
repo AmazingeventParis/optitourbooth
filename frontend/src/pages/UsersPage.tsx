@@ -14,7 +14,7 @@ interface UserFormData {
   password: string;
   nom: string;
   prenom: string;
-  role: 'admin' | 'chauffeur';
+  roles: Array<'admin' | 'chauffeur' | 'utilisateur'>;
   telephone: string;
   couleur: string;
 }
@@ -40,7 +40,7 @@ const initialFormData: UserFormData = {
   password: '',
   nom: '',
   prenom: '',
-  role: 'chauffeur',
+  roles: ['utilisateur'],
   telephone: '',
   couleur: '#3B82F6',
 };
@@ -109,7 +109,7 @@ export default function UsersPage() {
       password: '',
       nom: user.nom,
       prenom: user.prenom,
-      role: user.role,
+      roles: user.roles,
       telephone: user.telephone || '',
       couleur: user.couleur || '#3B82F6',
     });
@@ -190,7 +190,7 @@ export default function UsersPage() {
           email: formData.email,
           nom: formData.nom,
           prenom: formData.prenom,
-          role: formData.role,
+          roles: formData.roles,
           telephone: formData.telephone || null,
           couleur: formData.couleur || null,
         };
@@ -244,11 +244,15 @@ export default function UsersPage() {
     },
     {
       key: 'role',
-      header: 'Rôle',
+      header: 'Rôles',
       render: (user) => (
-        <Badge variant={user.role === 'admin' ? 'info' : 'default'}>
-          {user.role === 'admin' ? 'Admin' : 'Chauffeur'}
-        </Badge>
+        <div className="flex gap-1 flex-wrap">
+          {user.roles.map(role => (
+            <Badge key={role} variant={role === 'admin' ? 'info' : role === 'chauffeur' ? 'default' : 'warning'}>
+              {role === 'admin' ? 'Admin' : role === 'chauffeur' ? 'Chauffeur' : 'Utilisateur'}
+            </Badge>
+          ))}
+        </div>
       ),
     },
     {
@@ -449,16 +453,32 @@ export default function UsersPage() {
               <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>
             )}
           </div>
-          <Select
-            label="Rôle"
-            value={formData.role}
-            onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'chauffeur' })}
-            options={[
-              { value: 'chauffeur', label: 'Chauffeur' },
-              { value: 'admin', label: 'Administrateur' },
-            ]}
-            required
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Rôles *</label>
+            <div className="space-y-2">
+              {[
+                { value: 'utilisateur' as const, label: 'Utilisateur' },
+                { value: 'chauffeur' as const, label: 'Chauffeur' },
+                { value: 'admin' as const, label: 'Administrateur' },
+              ].map(({ value, label }) => (
+                <label key={value} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.roles.includes(value)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setFormData({ ...formData, roles: [...formData.roles, value] });
+                      } else {
+                        setFormData({ ...formData, roles: formData.roles.filter(r => r !== value) });
+                      }
+                    }}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
           <Input
             label="Téléphone"
             type="tel"

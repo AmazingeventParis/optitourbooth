@@ -16,6 +16,7 @@ datasource db {
 enum UserRole {
   admin
   chauffeur
+  utilisateur
 }
 
 enum TourneeStatut {
@@ -74,22 +75,22 @@ enum PreparationStatut {
 
 // ----- TABLES PRINCIPALES -----
 
-/// Utilisateurs (Administrateurs et Chauffeurs)
+/// Utilisateurs (Administrateurs, Chauffeurs et Utilisateurs)
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  role         UserRole @default(chauffeur)
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  roles        UserRole[] @default([utilisateur]) // Un utilisateur peut avoir plusieurs rôles
   nom          String
   prenom       String
   telephone    String?
-  couleur      String?  @default("#3B82F6") // Couleur pour identifier le chauffeur
-  avatarUrl    String?  @map("avatar_url")
-  actif        Boolean  @default(true)
+  couleur      String?    @default("#3B82F6") // Couleur pour identifier le chauffeur
+  avatarUrl    String?    @map("avatar_url")
+  actif        Boolean    @default(true)
 
   // Métadonnées
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
   lastLoginAt  DateTime? @map("last_login_at")
 
   // Relations
@@ -97,7 +98,7 @@ model User {
   positions         Position[]
   pushSubscriptions PushSubscription[]
 
-  @@index([role, actif]) // Requêtes fréquentes: chauffeurs actifs
+  @@index([actif]) // Requêtes fréquentes: utilisateurs actifs
   @@map("users")
 }
 

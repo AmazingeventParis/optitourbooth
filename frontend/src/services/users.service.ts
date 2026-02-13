@@ -6,7 +6,7 @@ interface CreateUserData {
   password: string;
   nom: string;
   prenom: string;
-  role: 'admin' | 'chauffeur';
+  roles: Array<'admin' | 'chauffeur' | 'utilisateur'>;
   telephone?: string;
 }
 
@@ -15,7 +15,7 @@ interface UpdateUserData {
   password?: string;
   nom?: string;
   prenom?: string;
-  role?: 'admin' | 'chauffeur';
+  roles?: Array<'admin' | 'chauffeur' | 'utilisateur'>;
   telephone?: string;
   actif?: boolean;
 }
@@ -23,7 +23,7 @@ interface UpdateUserData {
 interface UsersFilters {
   page?: number;
   limit?: number;
-  role?: 'admin' | 'chauffeur';
+  role?: 'admin' | 'chauffeur' | 'utilisateur';  // Keep role for backward compatibility with filter
   actif?: boolean;
   search?: string;
 }

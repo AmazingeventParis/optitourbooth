@@ -74,7 +74,7 @@ export const authController = {
       select: {
         id: true,
         email: true,
-        role: true,
+        roles: true,
         nom: true,
         prenom: true,
         telephone: true,

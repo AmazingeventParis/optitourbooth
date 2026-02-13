@@ -33,7 +33,7 @@ export default function ChauffeurLayout() {
 
   // Check if onboarding is complete (skip for admins impersonating)
   useEffect(() => {
-    if (!isImpersonating && effectiveUser?.role === 'chauffeur') {
+    if (!isImpersonating && effectiveUser?.roles.includes('chauffeur')) {
       const onboardingComplete = localStorage.getItem('chauffeur_onboarding_complete');
       if (!onboardingComplete) {
         navigate('/chauffeur/onboarding', { replace: true });

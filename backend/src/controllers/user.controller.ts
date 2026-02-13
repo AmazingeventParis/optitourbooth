@@ -20,7 +20,7 @@ export const userController = {
 
     // Construire les filtres
     const where: {
-      role?: UserRole;
+      roles?: { has: UserRole };
       actif?: boolean;
       OR?: Array<{
         nom?: { contains: string; mode: 'insensitive' };
@@ -30,7 +30,7 @@ export const userController = {
     } = {};
 
     if (role) {
-      where.role = role;
+      where.roles = { has: role };
     }
 
     if (actif !== undefined) {
@@ -52,7 +52,7 @@ export const userController = {
         select: {
           id: true,
           email: true,
-          role: true,
+          roles: true,
           nom: true,
           prenom: true,
           telephone: true,
@@ -84,7 +84,7 @@ export const userController = {
       select: {
         id: true,
         email: true,
-        role: true,
+        roles: true,
         nom: true,
         prenom: true,
         telephone: true,
@@ -118,7 +118,7 @@ export const userController = {
     const { password, ...userData } = req.body as {
       password: string;
       email: string;
-      role: UserRole;
+      roles: UserRole[];
       nom: string;
       prenom: string;
       telephone?: string;
@@ -147,7 +147,7 @@ export const userController = {
       select: {
         id: true,
         email: true,
-        role: true,
+        roles: true,
         nom: true,
         prenom: true,
         telephone: true,
@@ -170,7 +170,7 @@ export const userController = {
     const { password, ...updateData } = req.body as {
       password?: string;
       email?: string;
-      role?: UserRole;
+      roles?: UserRole[];
       nom?: string;
       prenom?: string;
       telephone?: string | null;
@@ -215,7 +215,7 @@ export const userController = {
       select: {
         id: true,
         email: true,
-        role: true,
+        roles: true,
         nom: true,
         prenom: true,
         telephone: true,
@@ -285,7 +285,7 @@ export const userController = {
   async listChauffeurs(_req: Request, res: Response): Promise<void> {
     const chauffeurs = await prisma.user.findMany({
       where: {
-        role: 'chauffeur',
+        roles: { has: 'chauffeur' },
         actif: true,
       },
       select: {
@@ -356,7 +356,7 @@ export const userController = {
       select: {
         id: true,
         email: true,
-        role: true,
+        roles: true,
         nom: true,
         prenom: true,
         telephone: true,
@@ -407,7 +407,7 @@ export const userController = {
       select: {
         id: true,
         email: true,
-        role: true,
+        roles: true,
         nom: true,
         prenom: true,
         telephone: true,

@@ -74,7 +74,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
   if (isAuthenticated) {
     // Rediriger selon le rôle
-    if (user?.role === 'chauffeur') {
+    if (user?.roles.includes('chauffeur') && !user?.roles.includes('admin')) {
       return <Navigate to="/chauffeur" replace />;
     }
     return <Navigate to="/" replace />;
@@ -99,7 +99,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (user?.role === 'chauffeur') {
+  if (user?.roles.includes('chauffeur') && !user?.roles.includes('admin')) {
     return <Navigate to="/chauffeur" replace />;
   }
 
@@ -122,8 +122,8 @@ function ChauffeurRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  // Les admins peuvent aussi accéder à l'interface chauffeur
-  if (user?.role !== 'chauffeur' && user?.role !== 'admin') {
+  // Les admins et chauffeurs peuvent accéder à l'interface chauffeur
+  if (!user?.roles.includes('chauffeur') && !user?.roles.includes('admin')) {
     return <Navigate to="/" replace />;
   }
 

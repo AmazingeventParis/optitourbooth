@@ -154,7 +154,7 @@ function SidebarContent() {
                     {user?.prenom} {user?.nom}
                   </p>
                   <p className="text-xs text-primary-300 truncate capitalize">
-                    {user?.role}
+                    {user?.roles.join(', ')}
                   </p>
                 </div>
               </Menu.Button>

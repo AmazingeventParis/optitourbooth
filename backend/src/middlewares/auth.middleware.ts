@@ -11,7 +11,7 @@ declare global {
       user?: {
         id: string;
         email: string;
-        role: 'admin' | 'chauffeur';
+        roles: Array<'admin' | 'chauffeur' | 'utilisateur'>;
         nom: string;
         prenom: string;
       };
@@ -22,7 +22,7 @@ declare global {
 interface JwtPayload {
   userId: string;
   email: string;
-  role: 'admin' | 'chauffeur';
+  roles: Array<'admin' | 'chauffeur' | 'utilisateur'>;
 }
 
 // Middleware d'authentification
@@ -60,7 +60,7 @@ export async function authenticate(
       select: {
         id: true,
         email: true,
-        role: true,
+        roles: true,
         nom: true,
         prenom: true,
         actif: true,
@@ -81,7 +81,7 @@ export async function authenticate(
     req.user = {
       id: user.id,
       email: user.email,
-      role: user.role,
+      roles: user.roles,
       nom: user.nom,
       prenom: user.prenom,
     };
@@ -104,7 +104,7 @@ export function requireAdmin(
     return;
   }
 
-  if (req.user.role !== 'admin') {
+  if (!req.user.roles.includes('admin')) {
     apiResponse.forbidden(res, 'Accès réservé aux administrateurs');
     return;
   }
@@ -123,12 +123,30 @@ export function requireChauffeur(
     return;
   }
 
-  if (req.user.role !== 'chauffeur') {
+  if (!req.user.roles.includes('chauffeur')) {
     apiResponse.forbidden(res, 'Accès réservé aux chauffeurs');
     return;
   }
 
   next();
+}
+
+// Middleware pour vérifier qu'un utilisateur a au moins un des rôles spécifiés
+export function requireRole(...allowedRoles: Array<'admin' | 'chauffeur' | 'utilisateur'>) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      apiResponse.unauthorized(res);
+      return;
+    }
+
+    const hasRole = allowedRoles.some(role => req.user!.roles.includes(role));
+    if (!hasRole) {
+      apiResponse.forbidden(res, `Accès réservé aux: ${allowedRoles.join(', ')}`);
+      return;
+    }
+
+    next();
+  };
 }
 
 // Middleware optionnel - n'échoue pas si pas de token
@@ -153,7 +171,7 @@ export async function optionalAuth(
         select: {
           id: true,
           email: true,
-          role: true,
+          roles: true,
           nom: true,
           prenom: true,
           actif: true,
@@ -164,7 +182,7 @@ export async function optionalAuth(
         req.user = {
           id: user.id,
           email: user.email,
-          role: user.role,
+          roles: user.roles,
           nom: user.nom,
           prenom: user.prenom,
         };

@@ -1,6 +1,6 @@
 // Types pour les entités
 
-export type UserRole = 'admin' | 'chauffeur';
+export type UserRole = 'admin' | 'chauffeur' | 'utilisateur';
 export type TourneeStatut = 'brouillon' | 'planifiee' | 'en_cours' | 'terminee' | 'annulee';
 export type PointType = 'livraison' | 'ramassage' | 'livraison_ramassage';
 export type PointStatut = 'a_faire' | 'en_cours' | 'termine' | 'incident' | 'annule';
@@ -10,7 +10,7 @@ export type IncidentStatut = 'ouvert' | 'en_cours' | 'resolu' | 'ferme';
 export interface User {
   id: string;
   email: string;
-  role: UserRole;
+  roles: UserRole[];
   nom: string;
   prenom: string;
   telephone?: string;

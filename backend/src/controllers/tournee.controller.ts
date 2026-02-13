@@ -423,7 +423,7 @@ export const tourneeController = {
       where: { id: data.chauffeurId },
     });
 
-    if (!chauffeur || !chauffeur.actif || chauffeur.role !== 'chauffeur') {
+    if (!chauffeur || !chauffeur.actif || !chauffeur.roles.includes('chauffeur')) {
       apiResponse.badRequest(res, 'Chauffeur invalide ou inactif');
       return;
     }
@@ -540,7 +540,7 @@ export const tourneeController = {
         where: { id: data.chauffeurId },
       });
 
-      if (!chauffeur || !chauffeur.actif || chauffeur.role !== 'chauffeur') {
+      if (!chauffeur || !chauffeur.actif || !chauffeur.roles.includes('chauffeur')) {
         apiResponse.badRequest(res, 'Chauffeur invalide ou inactif');
         return;
       }
@@ -1485,7 +1485,7 @@ export const tourneeController = {
     });
 
     // Fire-and-forget push notification (only if admin is editing)
-    if (req.user?.role === 'admin') {
+    if (req.user?.roles.includes('admin')) {
       notificationService.notifyTourneeUpdated(
         point.tournee.chauffeurId,
         point.tournee.date.toISOString(),

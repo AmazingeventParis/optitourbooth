@@ -119,7 +119,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                     {user?.prenom} {user?.nom}
                   </p>
                   <p className="text-xs text-gray-500 capitalize">
-                    {user?.role}
+                    {user?.roles.join(', ')}
                   </p>
                 </div>
 

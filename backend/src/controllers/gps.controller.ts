@@ -69,7 +69,7 @@ export const gpsController = {
     // Get chauffeurs with their info
     const chauffeurs = await prisma.user.findMany({
       where: {
-        role: 'chauffeur',
+        roles: { has: 'chauffeur' },
         actif: true,
       },
       select: {
