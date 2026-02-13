@@ -50,12 +50,12 @@ const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
 };
 
 const statutConfig: Record<PreparationStatut, { label: string; color: string; badge: string }> = {
-  disponible: { label: 'Disponible', color: 'bg-gray-100 border-gray-300 hover:border-gray-400', badge: 'default' },
+  disponible: { label: 'Disponible', color: 'bg-blue-50 border-blue-400 hover:border-blue-500', badge: 'info' },
   en_preparation: { label: 'En préparation', color: 'bg-orange-50 border-orange-400 hover:border-orange-500', badge: 'warning' },
   prete: { label: 'Prête', color: 'bg-green-50 border-green-500 hover:border-green-600', badge: 'success' },
-  en_cours: { label: 'En cours', color: 'bg-blue-50 border-blue-400 hover:border-blue-500', badge: 'info' },
-  a_decharger: { label: 'À décharger', color: 'bg-red-50 border-red-500 hover:border-red-600', badge: 'danger' },
-  hors_service: { label: 'Hors service', color: 'bg-gray-200 border-gray-500', badge: 'default' },
+  en_cours: { label: 'En cours', color: 'bg-purple-50 border-purple-400 hover:border-purple-500', badge: 'info' },
+  a_decharger: { label: 'À décharger', color: 'bg-yellow-50 border-yellow-400 hover:border-yellow-500', badge: 'warning' },
+  hors_service: { label: 'Hors service', color: 'bg-red-50 border-red-500 hover:border-red-600', badge: 'danger' },
   archivee: { label: 'Archivée', color: 'bg-gray-100 border-gray-300', badge: 'default' },
 };
 
@@ -457,7 +457,7 @@ export default function PreparationsPage() {
             <div
               key={machine.id}
               className={clsx(
-                'relative p-4 border-2 rounded-lg transition-all',
+                'relative p-3 border-2 rounded-lg transition-all',
                 statutInfo.color,
                 statut === 'disponible' && 'cursor-pointer hover:shadow-lg',
                 statut !== 'disponible' && 'cursor-default'
@@ -465,14 +465,14 @@ export default function PreparationsPage() {
               onClick={() => statut === 'disponible' ? handleOpenModal(machine) : null}
             >
               {/* Numéro de machine */}
-              <div className="text-center mb-2">
-                <div className="font-bold text-2xl text-gray-900">{machine.numero}</div>
+              <div className="text-center mb-1.5">
+                <div className="font-bold text-xl text-gray-900">{machine.numero}</div>
               </div>
 
               {/* Badge statut */}
-              <div className="flex justify-center mb-3">
+              <div className="flex justify-center mb-2">
                 <Badge variant={statutInfo.badge as any}>
-                  {statutInfo.label}
+                  <span className="text-xs">{statutInfo.label}</span>
                 </Badge>
               </div>
 
