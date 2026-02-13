@@ -713,7 +713,7 @@ export default function TourneeDetailPage() {
             </div>
 
             {/* Times */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
               <div>
                 <p className="text-xs text-gray-500 mb-1">Créneau</p>
                 <p className="font-medium">
@@ -729,13 +729,7 @@ export default function TourneeDetailPage() {
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-1">Arrivée réelle</p>
-                <p className="font-medium text-green-600">
-                  {selectedPointData.heureArriveeReelle ? formatTime(selectedPointData.heureArriveeReelle) : '-'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Départ réel</p>
+                <p className="text-xs text-gray-500 mb-1">Point validé</p>
                 <p className="font-medium text-green-600">
                   {selectedPointData.heureDepartReelle ? formatTime(selectedPointData.heureDepartReelle) : '-'}
                 </p>
