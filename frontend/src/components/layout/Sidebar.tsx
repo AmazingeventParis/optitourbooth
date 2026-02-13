@@ -13,6 +13,7 @@ import {
   ArrowRightOnRectangleIcon,
   TruckIcon,
   EyeIcon,
+  WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore, User } from '@/store/authStore';
 import { useChauffeurs } from '@/hooks/queries/useUsers';
@@ -28,6 +29,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Planning', href: '/planning', icon: CalendarDaysIcon },
   { name: 'Historique', href: '/historique', icon: ClockIcon },
+  { name: 'Préparations', href: '/preparations', icon: WrenchScrewdriverIcon },
   { name: 'Clients', href: '/clients', icon: UserGroupIcon },
   { name: 'Utilisateurs', href: '/utilisateurs', icon: UsersIcon },
   { name: 'Véhicules', href: '/vehicules', icon: TruckIcon },

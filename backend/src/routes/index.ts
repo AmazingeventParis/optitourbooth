@@ -10,6 +10,8 @@ import tourneeRoutes from './tournee.routes.js';
 import gpsRoutes from './gps.routes.js';
 import vehiculeRoutes from './vehicule.routes.js';
 import notificationRoutes from './notification.routes.js';
+import machineRoutes from './machine.routes.js';
+import preparationRoutes from './preparation.routes.js';
 
 const router = Router();
 
@@ -100,6 +102,19 @@ router.get('/', (_req: Request, res: Response) => {
         subscribe: 'POST /api/notifications/subscribe',
         unsubscribe: 'DELETE /api/notifications/unsubscribe',
       },
+      machines: {
+        list: 'GET /api/machines',
+        get: 'GET /api/machines/:id',
+      },
+      preparations: {
+        list: 'GET /api/preparations',
+        create: 'POST /api/preparations',
+        get: 'GET /api/preparations/:id',
+        update: 'PATCH /api/preparations/:id',
+        delete: 'DELETE /api/preparations/:id',
+        ready: 'POST /api/preparations/:id/ready',
+        unloadPhotos: 'POST /api/preparations/:id/unload-photos',
+      },
     },
   });
 });
@@ -113,5 +128,7 @@ router.use('/tournees', tourneeRoutes);
 router.use('/gps', gpsRoutes);
 router.use('/vehicules', vehiculeRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/machines', machineRoutes);
+router.use('/preparations', preparationRoutes);
 
 export default router;

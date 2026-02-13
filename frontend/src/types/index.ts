@@ -202,3 +202,40 @@ export interface ClientFilters {
   ville?: string;
   actif?: boolean;
 }
+
+// Types pour les machines et préparations
+export type MachineType = 'Vegas' | 'Smakk' | 'Ring';
+export type PreparationStatut =
+  | 'disponible'     // Machine libre
+  | 'en_preparation' // Préparation en cours
+  | 'prete'         // Prête pour l'événement
+  | 'en_cours'      // Événement en cours
+  | 'a_decharger'   // Photos à décharger
+  | 'archivee';     // Événement terminé et archivé
+
+export interface Machine {
+  id: string;
+  type: MachineType;
+  numero: string; // V1, V2, SK1, R1, etc.
+  actif: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  preparations?: Preparation[];
+}
+
+export interface Preparation {
+  id: string;
+  machineId: string;
+  machine?: Machine;
+  dateEvenement: string;
+  client: string;
+  preparateur: string;
+  statut: PreparationStatut;
+  photosDechargees: boolean;
+  notes?: string;
+  datePreparation: string;
+  dateArchivage?: string;
+  createdAt: string;
+  updatedAt: string;
+}

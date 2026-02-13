@@ -56,6 +56,21 @@ enum IncidentStatut {
   ferme
 }
 
+enum MachineType {
+  Vegas
+  Smakk
+  Ring
+}
+
+enum PreparationStatut {
+  disponible       // Machine libre
+  en_preparation   // Préparation en cours
+  prete           // Prête pour l'événement
+  en_cours        // Événement en cours
+  a_decharger     // Photos à décharger
+  archivee        // Événement terminé et archivé
+}
+
 // ----- TABLES PRINCIPALES -----
 
 /// Utilisateurs (Administrateurs et Chauffeurs)
@@ -439,4 +454,63 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+// ----- GESTION DES MACHINES ET PRÉPARATIONS -----
+
+/// Machines photobooth (parc de bornes)
+model Machine {
+  id          String      @id @default(uuid())
+  type        MachineType // Vegas, Smakk, Ring
+  numero      String      // V1, V2, SK1, R1, etc.
+  actif       Boolean     @default(true)
+  notes       String?     @db.Text
+
+  // Métadonnées
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  preparations Preparation[]
+
+  @@unique([type, numero])
+  @@index([type])
+  @@index([actif])
+  @@map("machines")
+}
+
+/// Préparations d'événements
+model Preparation {
+  id                  String            @id @default(uuid())
+  machineId           String            @map("machine_id")
+
+  // Info événement
+  dateEvenement       DateTime          @db.Date @map("date_evenement")
+  client              String
+  preparateur         String
+
+  // Statut
+  statut              PreparationStatut @default(en_preparation)
+  photosDechargees    Boolean           @default(false) @map("photos_dechargees")
+
+  // Notes
+  notes               String?           @db.Text
+
+  // Dates
+  datePreparation     DateTime          @default(now()) @map("date_preparation")
+  dateArchivage       DateTime?         @map("date_archivage")
+
+  // Métadonnées
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  machine             Machine           @relation(fields: [machineId], references: [id])
+
+  @@index([machineId])
+  @@index([statut])
+  @@index([dateEvenement])
+  @@index([client])
+  @@index([statut, dateEvenement]) // Préparations actives par date
+  @@map("preparations")
 }

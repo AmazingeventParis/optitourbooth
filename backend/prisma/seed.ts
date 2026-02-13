@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient, UserRole, MachineType } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -61,8 +61,6 @@ async function main() {
   const produits = [
     {
       nom: 'Photobooth Classic',
-      reference: 'PB-CLASSIC',
-      description: 'Borne photobooth classique avec impression instantanée',
       dureeInstallation: 30,
       dureeDesinstallation: 20,
       poids: 45,
@@ -72,8 +70,6 @@ async function main() {
     },
     {
       nom: 'Photobooth Miroir',
-      reference: 'PB-MIRROR',
-      description: 'Borne photobooth miroir interactif',
       dureeInstallation: 45,
       dureeDesinstallation: 30,
       poids: 65,
@@ -83,8 +79,6 @@ async function main() {
     },
     {
       nom: 'Photobooth 360',
-      reference: 'PB-360',
-      description: 'Plateforme 360° pour vidéos rotatives',
       dureeInstallation: 60,
       dureeDesinstallation: 45,
       poids: 80,
@@ -94,8 +88,6 @@ async function main() {
     },
     {
       nom: 'Photobooth Compact',
-      reference: 'PB-COMPACT',
-      description: 'Borne photobooth compacte et légère',
       dureeInstallation: 20,
       dureeDesinstallation: 15,
       poids: 25,
@@ -107,7 +99,7 @@ async function main() {
 
   for (const produit of produits) {
     const created = await prisma.produit.upsert({
-      where: { reference: produit.reference },
+      where: { nom: produit.nom },
       update: {},
       create: produit,
     });
@@ -313,6 +305,54 @@ async function main() {
     });
     console.log(`✅ Client créé: ${created.nom}`);
   }
+
+  // Créer les machines photobooth
+  console.log('\n🎰 Création des machines...');
+
+  // 35 Vegas (V1 à V35)
+  for (let i = 1; i <= 35; i++) {
+    const numero = `V${i}`;
+    await prisma.machine.upsert({
+      where: { type_numero: { type: MachineType.Vegas, numero } },
+      update: {},
+      create: {
+        type: MachineType.Vegas,
+        numero,
+        actif: true,
+      },
+    });
+  }
+  console.log('✅ 35 machines Vegas créées (V1-V35)');
+
+  // 20 Smakk (SK1 à SK20)
+  for (let i = 1; i <= 20; i++) {
+    const numero = `SK${i}`;
+    await prisma.machine.upsert({
+      where: { type_numero: { type: MachineType.Smakk, numero } },
+      update: {},
+      create: {
+        type: MachineType.Smakk,
+        numero,
+        actif: true,
+      },
+    });
+  }
+  console.log('✅ 20 machines Smakk créées (SK1-SK20)');
+
+  // 10 Ring (R1 à R10)
+  for (let i = 1; i <= 10; i++) {
+    const numero = `R${i}`;
+    await prisma.machine.upsert({
+      where: { type_numero: { type: MachineType.Ring, numero } },
+      update: {},
+      create: {
+        type: MachineType.Ring,
+        numero,
+        actif: true,
+      },
+    });
+  }
+  console.log('✅ 10 machines Ring créées (R1-R10)');
 
   console.log('');
   console.log('🎉 Seeding terminé !');
