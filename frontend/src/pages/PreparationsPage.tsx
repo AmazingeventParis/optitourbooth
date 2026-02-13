@@ -786,11 +786,11 @@ export default function PreparationsPage() {
 
             {/* Hors service */}
             <div>
-              {getMachineStatut(selectedMachine!) === 'hors_service' ? (
+              {selectedMachine && getMachineStatut(selectedMachine) === 'hors_service' ? (
                 <>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Machine hors service</label>
                   <div className="p-3 mb-2 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-900">{getPreparationForMachine(selectedMachine!)?.notes || 'Aucune raison spécifiée'}</p>
+                    <p className="text-sm text-red-900">{getPreparationForMachine(selectedMachine)?.notes || 'Aucune raison spécifiée'}</p>
                   </div>
                   <Button
                     variant="primary"
