@@ -62,6 +62,7 @@ interface GlobalStats {
   pointsIncidents: number;
   distanceTotale: number;
   dureeTotale: number;
+  dureeTrajet: number;      // Temps de roulage uniquement (entre les points)
   carburantEstime: number;
   coutCarburant: number;
   tauxPonctualite: number;
@@ -179,6 +180,7 @@ export default function RapportsPage() {
     let pointsAvecCreneau = 0;
     let distanceTotale = 0;
     let dureeTotale = 0;
+    let dureeTrajet = 0;
     let carburantEstime = 0;
 
     const tourneesTerminees = tournees.filter(t => t.statut === 'terminee').length;
@@ -186,6 +188,7 @@ export default function RapportsPage() {
     tournees.forEach((t) => {
       distanceTotale += t.distanceTotaleKm || 0;
       dureeTotale += t.dureeTotaleMin || 0;
+      dureeTrajet += t.dureeTrajetMin || 0;
 
       // Calcul carburant si le véhicule a une consommation définie
       if (t.vehicule?.consommationL100km && t.distanceTotaleKm) {
@@ -231,6 +234,7 @@ export default function RapportsPage() {
       pointsIncidents,
       distanceTotale,
       dureeTotale,
+      dureeTrajet,
       carburantEstime,
       coutCarburant: carburantEstime * FUEL_PRICE_PER_LITER,
       tauxPonctualite,
@@ -524,7 +528,7 @@ export default function RapportsPage() {
             </div>
           </div>
           <div className="mt-2 text-xs text-purple-500">
-            {Math.floor(globalStats.dureeTotale / 60)}h sur la route
+            {Math.floor(globalStats.dureeTrajet / 60)}h{globalStats.dureeTrajet % 60 > 0 ? (globalStats.dureeTrajet % 60).toFixed(0) + 'min' : ''} sur la route
           </div>
         </Card>
 
