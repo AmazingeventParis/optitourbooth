@@ -18,8 +18,8 @@ const queryClient = new QueryClient({
       retry: 2,
       // Ne pas refetch automatiquement au focus de fenêtre
       refetchOnWindowFocus: false,
-      // Refetch en arrière-plan si les données sont stale
-      refetchOnMount: 'always',
+      // Ne refetch que si les données sont stale (pas à chaque mount)
+      refetchOnMount: false,
     },
     mutations: {
       // Retry 1 fois pour les mutations

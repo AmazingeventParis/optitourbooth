@@ -147,7 +147,9 @@ export default function RapportsPage() {
         startDate = subDays(new Date(), parseInt(periode));
       }
 
-      const result = await tourneesService.list({ limit: 1000, includePoints: true });
+      // Charger sans includePoints=true → backend retourne données minimales pour stats
+      // (type, statut, produits) sans client complet, options, photos = 95% moins de données
+      const result = await tourneesService.list({ limit: 1000 });
 
       let filtered = result.data.filter((t) => {
         const tourneeDate = parseISO(t.date);

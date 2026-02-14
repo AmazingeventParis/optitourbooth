@@ -103,8 +103,6 @@ export async function autoUpdatePreparationStatuses(): Promise<void> {
  * Liste toutes les préparations
  */
 export const listPreparations = async (req: Request, res: Response) => {
-  // Auto-transition des statuts selon la date
-  await autoUpdatePreparationStatuses();
   try {
     const { statut, machineId, client, archived } = req.query;
     const page = parseInt(req.query.page as string) || 1;

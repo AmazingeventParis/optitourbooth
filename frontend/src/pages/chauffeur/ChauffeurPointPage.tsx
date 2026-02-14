@@ -147,7 +147,7 @@ export default function ChauffeurPointPage() {
     const files = e.target.files;
     if (!files || files.length === 0 || !tournee || !point) return;
 
-    const newFiles = Array.from(files);
+    const originalFiles = Array.from(files);
 
     // Reset file inputs immediately so they can be used again
     if (fileInputRef.current) {
@@ -157,9 +157,20 @@ export default function ChauffeurPointPage() {
       galleryInputRef.current.value = '';
     }
 
+    // Compress images before upload (10MB → 1.5MB)
+    setIsSaving(true);
+    let compressedFiles: File[];
+    try {
+      const { compressImages } = await import('@/utils/imageCompression');
+      compressedFiles = await compressImages(originalFiles);
+    } catch (err) {
+      console.error('Compression error:', err);
+      compressedFiles = originalFiles; // Fallback on original if compression fails
+    }
+
     // Show local preview during upload
     const previews: string[] = [];
-    for (const file of newFiles) {
+    for (const file of compressedFiles) {
       const reader = new FileReader();
       const preview = await new Promise<string>((resolve) => {
         reader.onload = (ev) => resolve(ev.target?.result as string);
@@ -170,9 +181,8 @@ export default function ChauffeurPointPage() {
     setUploadingPhotos(previews);
 
     // Upload to server (but always keep photos visible locally)
-    setIsSaving(true);
     try {
-      const result = await tourneesService.uploadPhotos(tournee.id, point.id, newFiles);
+      const result = await tourneesService.uploadPhotos(tournee.id, point.id, compressedFiles);
 
       // Check if upload actually returned photos from server
       const newPhotos = result as Array<{ id: string; path: string; filename: string }>;

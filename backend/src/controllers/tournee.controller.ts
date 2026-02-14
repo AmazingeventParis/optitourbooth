@@ -7,6 +7,9 @@ import { autoDispatchService } from '../services/autodispatch.service.js';
 import { vroomService } from '../services/vroom.service.js';
 import { config } from '../config/index.js';
 import { notificationService } from '../services/notification.service.js';
+import { withCache } from '../utils/cacheWrapper.js';
+import { cacheKeys, cacheTTL } from '../utils/cacheKeys.js';
+import { invalidateTourneesCache } from '../utils/cacheInvalidation.js';
 import {
   CreateTourneeInput,
   UpdateTourneeInput,
@@ -203,11 +206,16 @@ export const tourneeController = {
       where.statut = statut;
     }
 
-    // Exécuter la requête
-    const baseOptions = { where, orderBy: [{ date: 'desc' as const }, { heureDepart: 'asc' as const }], skip, take: limit };
+    // Cache uniquement pour requêtes simples (date exacte, sans includePoints)
+    const canCache = date && !dateDebut && !dateFin && includePoints !== 'true' && page === 1;
+    const cacheKey = canCache ? cacheKeys.tournees.list(date, statut) : null;
 
-    const [tournees, total] = await Promise.all([
-      includePoints === 'true'
+    // Fonction pour exécuter la requête DB
+    const fetchTournees = async () => {
+      const baseOptions = { where, orderBy: [{ date: 'desc' as const }, { heureDepart: 'asc' as const }], skip, take: limit };
+
+      return Promise.all([
+        includePoints === 'true'
         ? prisma.tournee.findMany({
             ...baseOptions,
             include: {
@@ -229,10 +237,40 @@ export const tourneeController = {
               chauffeur: { select: { id: true, nom: true, prenom: true, telephone: true, couleur: true } },
               vehicule: { select: { id: true, nom: true, marque: true, modele: true, immatriculation: true, consommationL100km: true } },
               _count: { select: { points: true } },
+              // Charger les points avec seulement les données minimales pour les stats (pas de client, options, photos)
+              points: {
+                select: {
+                  id: true,
+                  type: true,
+                  statut: true,
+                  creneauDebut: true,
+                  creneauFin: true,
+                  heureArriveeEstimee: true,
+                  // Produits nécessaires pour stats produits (RapportsPage)
+                  produits: {
+                    select: {
+                      quantite: true,
+                      produit: {
+                        select: {
+                          id: true,
+                          nom: true,
+                          couleur: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           }),
-      prisma.tournee.count({ where }),
-    ]);
+        prisma.tournee.count({ where }),
+      ]);
+    };
+
+    // Utiliser le cache si possible
+    const [tournees, total] = canCache && cacheKey
+      ? await withCache(cacheKey, cacheTTL.tourneesList, fetchTournees)
+      : await fetchTournees();
 
     apiResponse.paginated(res, tournees, { page, limit, total });
   },
@@ -554,6 +592,9 @@ export const tourneeController = {
     // Fire-and-forget push notification
     notificationService.notifyTourneeCreated(data.chauffeurId, data.date, 0).catch(console.error);
 
+    // Invalider le cache
+    invalidateTourneesCache(data.date).catch(console.error);
+
     apiResponse.created(res, tournee, 'Tournée créée');
   },
 
@@ -694,6 +735,13 @@ export const tourneeController = {
       notificationService.notifyTourneeUpdated(tournee.chauffeurId, tourneeDate, 'réassignation à un autre chauffeur').catch(console.error);
     }
 
+    // Invalider le cache (ancienne et nouvelle date si changement)
+    const oldDate = tournee.date.toISOString().split('T')[0]!;
+    invalidateTourneesCache(oldDate).catch(console.error);
+    if (data.date && data.date !== oldDate) {
+      invalidateTourneesCache(data.date).catch(console.error);
+    }
+
     apiResponse.success(res, updated, 'Tournée modifiée');
   },
 
@@ -717,6 +765,10 @@ export const tourneeController = {
     await prisma.tournee.delete({
       where: { id },
     });
+
+    // Invalider le cache
+    const tourneeDate = tournee.date.toISOString().split('T')[0]!;
+    invalidateTourneesCache(tourneeDate).catch(console.error);
 
     apiResponse.success(res, null, 'Tournée supprimée');
   },

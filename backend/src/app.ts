@@ -16,6 +16,7 @@ import { disconnectRedis } from './config/redis.js';
 import { initializeSocket } from './config/socket.js';
 import { notFoundHandler, errorHandler } from './middlewares/index.js';
 import routes from './routes/index.js';
+import { autoUpdatePreparationStatuses } from './controllers/preparation.controller.js';
 
 // Créer l'application Express
 const app = express();
@@ -127,6 +128,17 @@ async function startServer(): Promise<void> {
         }, 10 * 60 * 1000);
         console.log(`🏓 Keep-alive enabled: pinging ${url} every 10 min`);
       }
+
+      // CRON: Auto-update preparation statuses every 5 minutes
+      setInterval(async () => {
+        try {
+          await autoUpdatePreparationStatuses();
+          console.log('[CRON] Auto-prep statuses updated');
+        } catch (error) {
+          console.error('[CRON] Auto-prep error:', error);
+        }
+      }, 5 * 60 * 1000); // 5 minutes
+      console.log('⏰ CRON: Auto-prep statuses every 5 min');
     });
   } catch (error) {
     console.error('❌ Erreur au démarrage:', error);

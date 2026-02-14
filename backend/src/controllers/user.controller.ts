@@ -4,6 +4,9 @@ import { authService } from '../services/auth.service.js';
 import { uploadToCloudinary, deleteFromCloudinary, isCloudinaryConfigured } from '../config/cloudinary.js';
 import { apiResponse, parsePagination } from '../utils/index.js';
 import { UserRole } from '@prisma/client';
+import { withCache } from '../utils/cacheWrapper.js';
+import { cacheKeys, cacheTTL } from '../utils/cacheKeys.js';
+import { invalidateChauffeurs } from '../utils/cacheInvalidation.js';
 
 export const userController = {
   /**
@@ -158,6 +161,11 @@ export const userController = {
       },
     });
 
+    // Invalider le cache si c'est un chauffeur
+    if (userData.roles.includes('chauffeur')) {
+      invalidateChauffeurs().catch(console.error);
+    }
+
     apiResponse.created(res, user, 'Utilisateur créé');
   },
 
@@ -227,6 +235,11 @@ export const userController = {
       },
     });
 
+    // Invalider le cache si c'est un chauffeur (ancien ou nouveau rôle)
+    if (user.roles.includes('chauffeur') || updateData.roles?.includes('chauffeur')) {
+      invalidateChauffeurs().catch(console.error);
+    }
+
     apiResponse.success(res, user, 'Utilisateur modifié');
   },
 
@@ -275,6 +288,11 @@ export const userController = {
       where: { id },
     });
 
+    // Invalider le cache si c'était un chauffeur
+    if (user.roles.includes('chauffeur')) {
+      invalidateChauffeurs().catch(console.error);
+    }
+
     apiResponse.success(res, null, 'Utilisateur supprimé');
   },
 
@@ -283,21 +301,27 @@ export const userController = {
    * Liste des chauffeurs actifs (pour les selects)
    */
   async listChauffeurs(_req: Request, res: Response): Promise<void> {
-    const chauffeurs = await prisma.user.findMany({
-      where: {
-        roles: { has: 'chauffeur' },
-        actif: true,
-      },
-      select: {
-        id: true,
-        nom: true,
-        prenom: true,
-        telephone: true,
-        couleur: true,
-        avatarUrl: true,
-      },
-      orderBy: [{ nom: 'asc' }, { prenom: 'asc' }],
-    });
+    const chauffeurs = await withCache(
+      cacheKeys.users.chauffeurs(),
+      cacheTTL.chauffeurs,
+      async () => {
+        return prisma.user.findMany({
+          where: {
+            roles: { has: 'chauffeur' },
+            actif: true,
+          },
+          select: {
+            id: true,
+            nom: true,
+            prenom: true,
+            telephone: true,
+            couleur: true,
+            avatarUrl: true,
+          },
+          orderBy: [{ nom: 'asc' }, { prenom: 'asc' }],
+        });
+      }
+    );
 
     apiResponse.success(res, chauffeurs);
   },

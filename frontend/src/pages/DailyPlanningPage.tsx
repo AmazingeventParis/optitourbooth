@@ -1672,44 +1672,24 @@ export default function DailyPlanningPage() {
     });
   }, [selectedDate, tournees]);
 
-  // Charger les chauffeurs
+  // Charger toutes les données statiques en parallèle (chauffeurs, véhicules, produits)
   useEffect(() => {
-    const loadChauffeurs = async () => {
+    const loadStaticData = async () => {
       try {
-        const result = await usersService.listChauffeurs();
-        setChauffeurs(result);
-      } catch (error) {
-        console.error('Erreur chargement chauffeurs:', error);
-      }
-    };
-    loadChauffeurs();
-  }, []);
+        const [chauffeursResult, vehiculesResult, produitsResult] = await Promise.all([
+          usersService.listChauffeurs(),
+          import('@/services/api').then(({ default: api }) => api.get('/vehicules/actifs')),
+          produitsService.listActifs(),
+        ]);
 
-  // Charger les véhicules
-  useEffect(() => {
-    const loadVehicules = async () => {
-      try {
-        const { default: api } = await import('@/services/api');
-        const response = await api.get('/vehicules/actifs');
-        setVehicules(response.data.data || []);
+        setChauffeurs(chauffeursResult);
+        setVehicules(vehiculesResult.data.data || []);
+        setProduits(produitsResult);
       } catch (error) {
-        console.error('Erreur chargement véhicules:', error);
+        console.error('Erreur chargement données statiques:', error);
       }
     };
-    loadVehicules();
-  }, []);
-
-  // Charger les produits
-  useEffect(() => {
-    const loadProduits = async () => {
-      try {
-        const result = await produitsService.listActifs();
-        setProduits(result);
-      } catch (error) {
-        console.error('Erreur chargement produits:', error);
-      }
-    };
-    loadProduits();
+    loadStaticData();
   }, []);
 
   // Charger les tournées
