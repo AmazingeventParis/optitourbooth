@@ -8,10 +8,10 @@ import { autoUpdatePreparationStatuses } from './preparation.controller.js';
  * Liste toutes les machines
  */
 export const listMachines = async (req: Request, res: Response) => {
-  // Auto-transition des statuts de préparation selon la date
-  await autoUpdatePreparationStatuses();
-
   try {
+    // Auto-transition des statuts de préparation selon la date
+    await autoUpdatePreparationStatuses();
+
     const { type, actif } = req.query;
 
     const where: any = {};
