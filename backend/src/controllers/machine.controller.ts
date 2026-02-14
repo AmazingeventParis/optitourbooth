@@ -182,7 +182,7 @@ export const markMachineOutOfService = async (req: Request, res: Response) => {
     // Créer une préparation avec le statut hors_service
     const preparation = await prisma.preparation.create({
       data: {
-        machineId: id,
+        machineId: id as string,
         dateEvenement: new Date(),
         client: 'HORS SERVICE',
         preparateur: 'Système',
