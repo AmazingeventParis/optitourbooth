@@ -168,6 +168,7 @@ model Client {
   @@index([ville])
   @@index([ville, actif]) // Recherche par ville + clients actifs
   @@index([actif, codePostal]) // Filtrage clients actifs par code postal
+  @@index([nom]) // Recherche par nom
   @@index([societe]) // Recherche par société
   @@map("clients")
 }
@@ -312,7 +313,9 @@ model Point {
 
   @@index([tourneeId])
   @@index([clientId])
+  @@index([clientId, statut]) // Points d'un client par statut
   @@index([statut])
+  @@index([heureArriveeEstimee]) // Tri/filtrage par heure d'arrivée
   @@index([tourneeId, ordre]) // Points d'une tournée triés par ordre
   @@index([tourneeId, statut]) // Points d'une tournée par statut
   @@index([clientId, tourneeId]) // Historique des tournées d'un client
