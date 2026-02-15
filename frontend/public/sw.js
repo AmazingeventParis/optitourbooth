@@ -1,9 +1,11 @@
 // OptiTour Booth - Service Worker for Push Notifications + PWA Install
 
 // Fetch handler - required for PWA install prompt
+// IMPORTANT: Safari requires explicit fetch handling, not empty listener
 self.addEventListener('fetch', (event) => {
   // Network-first strategy: let the browser handle requests normally
-  // This minimal handler satisfies Chrome's PWA installability requirement
+  // Pass through all requests without caching
+  event.respondWith(fetch(event.request));
 });
 
 self.addEventListener('push', (event) => {
