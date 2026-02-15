@@ -60,7 +60,7 @@ services:
   - type: web
     name: optitourbooth-web
     runtime: static
-    buildCommand: pnpm install --ignore-scripts && cd frontend && pnpm run build
+    buildCommand: pnpm install --ignore-scripts && cd frontend && cp .env.production .env && pnpm run build
     staticPublishPath: frontend/dist
     headers:
       - path: /*
