@@ -235,10 +235,6 @@ export default function ChauffeurPointPage() {
     }
   };
 
-  const callClient = (phone: string) => {
-    window.location.href = `tel:${phone}`;
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -345,16 +341,6 @@ export default function ChauffeurPointPage() {
             <ArrowTopRightOnSquareIcon className="h-4 w-4 mr-2" />
             Waze
           </Button>
-          {(point.client?.telephone || point.client?.contactTelephone) && (
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => callClient(point.client?.contactTelephone || point.client?.telephone || '')}
-            >
-              <PhoneIcon className="h-4 w-4 mr-2" />
-              Appeler
-            </Button>
-          )}
         </div>
       </Card>
 

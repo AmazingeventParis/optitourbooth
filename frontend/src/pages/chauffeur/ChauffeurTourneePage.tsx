@@ -18,7 +18,6 @@ import {
   CheckIcon,
   MapIcon,
   ListBulletIcon,
-  PhoneIcon,
   ArrowTopRightOnSquareIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
@@ -167,10 +166,6 @@ export default function ChauffeurTourneePage() {
       );
       window.open(`https://waze.com/ul?q=${address}`, '_blank');
     }
-  }, []);
-
-  const callClient = useCallback((phone: string) => {
-    window.location.href = `tel:${phone}`;
   }, []);
 
   // Mémoisation des points triés
@@ -409,19 +404,6 @@ export default function ChauffeurTourneePage() {
                             <ArrowTopRightOnSquareIcon className="h-4 w-4 mr-1" />
                             Waze
                           </Button>
-                          {(point.client?.telephone || point.client?.contactTelephone) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                callClient(point.client?.contactTelephone || point.client?.telephone || '');
-                              }}
-                            >
-                              <PhoneIcon className="h-4 w-4 mr-1" />
-                              Appeler
-                            </Button>
-                          )}
                         </div>
                       )}
                     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Button, Card, Input, Badge, Modal } from '@/components/ui';
+import { Button, Card, Input, Badge, Modal, PhoneNumbers } from '@/components/ui';
 import DataTable, { Column } from '@/components/ui/DataTable';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { clientsService } from '@/services/clients.service';
@@ -208,7 +208,9 @@ export default function ClientsPage() {
     {
       key: 'telephone',
       header: 'Téléphone',
-      render: (client) => client.telephone || '-',
+      render: (client) => client.telephone ? (
+        <PhoneNumbers phones={client.telephone} variant="compact" size="sm" />
+      ) : '-',
     },
     {
       key: 'actif',

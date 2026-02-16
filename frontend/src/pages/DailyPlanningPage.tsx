@@ -3358,8 +3358,8 @@ export default function DailyPlanningPage() {
                             )}
                             {client?.telephone && (
                               <div>
-                                <div className="text-[10px] text-gray-400">Tél</div>
-                                <div className="text-xs">{client.telephone}</div>
+                                <div className="text-[10px] text-gray-400 mb-1">Tél</div>
+                                <PhoneNumbers phones={client.telephone} variant="badges" size="sm" />
                               </div>
                             )}
                             <div>
