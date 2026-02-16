@@ -73,8 +73,9 @@ function extractPhonesFromSegment(segment: string): string[] {
   }
 
   // Pattern pour numéros français : commence par 0, suivi de 9 chiffres (avec espaces/points/tirets)
-  // Exemple : 06 12 34 56 78 ou 06.12.34.56.78
-  const frenchPattern = /0[\s.\-]?(?:\d[\s.\-]*){9}/g;
+  // Accepte des séparateurs AVANT le 0 (cas : "...98-0798563422")
+  // Exemple : 06 12 34 56 78 ou 06.12.34.56.78 ou -0798563422
+  const frenchPattern = /[\s.\-]*0[\s.\-]?(?:\d[\s.\-]*){9}/g;
   const frenchMatches = segment.match(frenchPattern);
 
   if (frenchMatches) {
