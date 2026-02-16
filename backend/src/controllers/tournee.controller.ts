@@ -1129,6 +1129,40 @@ export const tourneeController = {
   },
 
   /**
+   * POST /api/tournees/:id/reopen
+   * Rouvrir une tournée terminée (fonction d'urgence)
+   */
+  async reopen(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+
+    const tournee = await prisma.tournee.findUnique({
+      where: { id },
+    });
+
+    if (!tournee) {
+      apiResponse.notFound(res, 'Tournée non trouvée');
+      return;
+    }
+
+    if (tournee.statut !== 'terminee') {
+      apiResponse.badRequest(res, 'Seules les tournées terminées peuvent être réouvertes');
+      return;
+    }
+
+    const updated = await prisma.tournee.update({
+      where: { id },
+      data: {
+        statut: 'en_cours',
+        heureFinReelle: null,
+      },
+    });
+
+    console.log(`[REOPEN] Tournée ${id} réouverte (était terminée à tort)`);
+
+    apiResponse.success(res, updated, 'Tournée réouverte');
+  },
+
+  /**
    * GET /api/tournees/:id/route
    * Obtenir l'itinéraire calculé
    */

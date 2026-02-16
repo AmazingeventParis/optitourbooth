@@ -155,6 +155,14 @@ router.post(
   asyncHandler(tourneeController.finish)
 );
 
+// Rouvrir une tournée terminée (admin uniquement - fonction d'urgence)
+router.post(
+  '/:id/reopen',
+  requireAdmin,
+  validate(tourneeIdSchema, 'params'),
+  asyncHandler(tourneeController.reopen)
+);
+
 // Obtenir l'itinéraire calculé
 router.get(
   '/:id/route',
