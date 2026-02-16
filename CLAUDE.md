@@ -1,5 +1,148 @@
 # Historique des sessions Claude - OptiTourBooth
 
+## Session du 16 février 2026
+
+### Parser intelligent de numéros de téléphone
+
+**Objectif** : Permettre la saisie de plusieurs numéros de téléphone dans un seul champ avec détection automatique.
+
+---
+
+#### Problème
+
+Actuellement, il n'est possible d'ajouter qu'un seul numéro de téléphone par contact, que ce soit via :
+- L'import CSV (colonne `TELEPHONE`)
+- La création manuelle d'un point
+- La création/modification d'un client
+
+Les utilisateurs doivent créer manuellement plusieurs champs ou séparer les contacts, ce qui est fastidieux.
+
+---
+
+#### Solution : Parser intelligent
+
+**Création de `backend/src/utils/phoneParser.ts`**
+
+Fonctionnalités :
+- ✅ Détecte automatiquement plusieurs numéros dans une seule chaîne
+- ✅ Support des séparateurs : `,` `;` `/` `\` `|` `_` (et retours à la ligne)
+- ✅ Support des formats internes : espaces, points, tirets (`06 12 34 56 78`, `06.12.34.56.78`, `06-12-34-56-78`)
+- ✅ Support des indicatifs internationaux (`+33`, `+1`, etc.)
+- ✅ Normalisation automatique (ajoute le `0` si 9 chiffres)
+- ✅ Formatage pour l'affichage : `"06 12 34 56 78, 07 98 76 54 32"`
+
+**Exemples d'utilisation** :
+
+```typescript
+// Input
+"06 12 34 56 78, 07 98 76 54 32"
+"0612345678 / 0798765432"
+"06.12.34.56.78; +33123456789"
+
+// Output (stocké en base)
+"06 12 34 56 78, 07 98 76 54 32"
+```
+
+---
+
+#### Intégrations
+
+**1. Import Excel** (`backend/src/services/import.service.ts`)
+- Fonction `normalizePhone()` remplacée par appel à `parsePhoneNumbers()` + `formatPhoneNumbers()`
+- Détection automatique de plusieurs numéros dans la colonne `TELEPHONE`
+
+**2. Création de client** (`backend/src/controllers/client.controller.ts`)
+- Normalisation du champ `contactTelephone` avant `create()`
+- Normalisation avant `update()`
+
+**3. Frontend - Formulaires** :
+
+**DailyPlanningPage** (`frontend/src/pages/DailyPlanningPage.tsx`) :
+- Champs "Téléphone du contact" dans les modals d'ajout/édition de points
+- Ajout d'un helper :
+  ```
+  💡 Vous pouvez saisir plusieurs numéros séparés par , / - ou espace
+  ```
+
+**ClientsPage** (`frontend/src/pages/ClientsPage.tsx`) :
+- Champ "Téléphone du contact" dans le formulaire client
+- Même helper ajouté
+
+---
+
+#### Tests
+
+**Fichier de tests** : `backend/src/utils/phoneParser.test.ts`
+
+18 tests couvrant :
+- ✅ Parse un seul numéro
+- ✅ Parse plusieurs numéros avec différents séparateurs
+- ✅ Support indicatifs internationaux
+- ✅ Normalisation automatique (9 chiffres → 0 ajouté)
+- ✅ Formats internes (espaces, points, tirets)
+- ✅ Formatage pour l'affichage
+- ✅ Gestion des cas vides
+
+**Exécution** :
+```bash
+cd backend
+npx tsx src/utils/phoneParser.test.ts
+# ✨ Tous les tests sont passés!
+```
+
+---
+
+#### Stockage
+
+Les numéros sont stockés dans le champ `contactTelephone` (type `String?`) au format :
+```
+"06 12 34 56 78, 07 98 76 54 32"
+```
+
+**Avantages** :
+- Lisible pour l'utilisateur
+- Facile à parser côté backend/frontend
+- Pas besoin de migration de schéma (reste un `String`)
+- Compact (pas de JSON ni de table relationnelle)
+
+---
+
+#### Fichiers modifiés
+
+**Backend** :
+- ✅ `backend/src/utils/phoneParser.ts` (nouveau)
+- ✅ `backend/src/utils/phoneParser.test.ts` (nouveau)
+- ✅ `backend/src/services/import.service.ts`
+- ✅ `backend/src/controllers/client.controller.ts`
+- ✅ `backend/docs/telephone-parser.md` (documentation)
+
+**Frontend** :
+- ✅ `frontend/src/pages/DailyPlanningPage.tsx`
+- ✅ `frontend/src/pages/ClientsPage.tsx`
+
+---
+
+#### Impact utilisateur
+
+**Avant** :
+- Un seul numéro par contact
+- Saisir `0612345678` uniquement
+
+**Après** :
+- Plusieurs numéros dans un champ
+- Saisir `06 12 34 56 78, 07 98 76 54 32` ou `0612345678 / 0798765432`
+- Détection automatique + formatage propre
+
+**Gain de temps** : ⏱️ Plus besoin de créer plusieurs contacts pour plusieurs numéros !
+
+---
+
+### Commits de cette session (16 février 2026)
+
+1. `feat: intelligent phone number parser with multi-number support`
+
+---
+
 ## Session du 14 février 2026
 
 ### Optimisations Performance - Plan Complet Implémenté

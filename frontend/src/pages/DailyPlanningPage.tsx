@@ -4052,11 +4052,17 @@ export default function DailyPlanningPage() {
               value={editPendingFormData.contactNom || ''}
               onChange={(e) => setEditPendingFormData({ ...editPendingFormData, contactNom: e.target.value })}
             />
-            <Input
-              label="Téléphone du contact"
-              value={editPendingFormData.contactTelephone || ''}
-              onChange={(e) => setEditPendingFormData({ ...editPendingFormData, contactTelephone: e.target.value })}
-            />
+            <div>
+              <Input
+                label="Téléphone du contact"
+                value={editPendingFormData.contactTelephone || ''}
+                onChange={(e) => setEditPendingFormData({ ...editPendingFormData, contactTelephone: e.target.value })}
+                placeholder="06 12 34 56 78"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                💡 Vous pouvez saisir plusieurs numéros séparés par , / - ou espace
+              </p>
+            </div>
           </div>
 
           <div>
@@ -4325,11 +4331,17 @@ export default function DailyPlanningPage() {
               value={addPendingFormData.contactNom || ''}
               onChange={(e) => setAddPendingFormData({ ...addPendingFormData, contactNom: e.target.value })}
             />
-            <Input
-              label="Téléphone du contact"
-              value={addPendingFormData.contactTelephone || ''}
-              onChange={(e) => setAddPendingFormData({ ...addPendingFormData, contactTelephone: e.target.value })}
-            />
+            <div>
+              <Input
+                label="Téléphone du contact"
+                value={addPendingFormData.contactTelephone || ''}
+                onChange={(e) => setAddPendingFormData({ ...addPendingFormData, contactTelephone: e.target.value })}
+                placeholder="06 12 34 56 78"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                💡 Vous pouvez saisir plusieurs numéros séparés par , / - ou espace
+              </p>
+            </div>
           </div>
 
           <div>

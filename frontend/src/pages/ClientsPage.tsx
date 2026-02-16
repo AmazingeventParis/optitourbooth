@@ -369,12 +369,18 @@ export default function ClientsPage() {
                 value={formData.contactNom}
                 onChange={(e) => setFormData({ ...formData, contactNom: e.target.value })}
               />
-              <Input
-                label="Téléphone du contact"
-                type="tel"
-                value={formData.contactTelephone}
-                onChange={(e) => setFormData({ ...formData, contactTelephone: e.target.value })}
-              />
+              <div>
+                <Input
+                  label="Téléphone du contact"
+                  type="tel"
+                  value={formData.contactTelephone}
+                  onChange={(e) => setFormData({ ...formData, contactTelephone: e.target.value })}
+                  placeholder="06 12 34 56 78"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  💡 Vous pouvez saisir plusieurs numéros séparés par , / - ou espace
+                </p>
+              </div>
             </div>
           </div>
 

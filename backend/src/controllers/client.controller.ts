@@ -7,6 +7,7 @@ import {
   UpdateClientInput,
   ClientQueryInput,
 } from '../validators/client.validator.js';
+import { parsePhoneNumbers, formatPhoneNumbers } from '../utils/phoneParser.js';
 
 export const clientController = {
   /**
@@ -158,6 +159,12 @@ export const clientController = {
       }
     }
 
+    // Normaliser les numéros de téléphone (détection automatique de plusieurs numéros)
+    if (clientData.contactTelephone) {
+      const phones = parsePhoneNumbers(clientData.contactTelephone);
+      clientData.contactTelephone = formatPhoneNumbers(phones);
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const client = await prisma.client.create({
       data: clientData as any,
@@ -207,6 +214,12 @@ export const clientController = {
         updateData.latitude = geocoded.latitude;
         updateData.longitude = geocoded.longitude;
       }
+    }
+
+    // Normaliser les numéros de téléphone (détection automatique de plusieurs numéros)
+    if (updateData.contactTelephone !== undefined && updateData.contactTelephone !== null) {
+      const phones = parsePhoneNumbers(updateData.contactTelephone);
+      updateData.contactTelephone = formatPhoneNumbers(phones);
     }
 
     const client = await prisma.client.update({

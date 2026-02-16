@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { prisma } from '../config/database.js';
 import { PointType } from '@prisma/client';
 import { geocodingService } from './geocoding.service.js';
+import { parsePhoneNumbers, formatPhoneNumbers } from '../utils/phoneParser.js';
 
 interface ImportedRow {
   CLIENT: string;
@@ -90,20 +91,21 @@ function normalizeTime(time: string | number | undefined): string | undefined {
   return timeStr;
 }
 
+/**
+ * Parse et formate intelligemment les numéros de téléphone
+ * Détecte automatiquement plusieurs numéros séparés par différents délimiteurs
+ *
+ * @param phone - Chaîne contenant un ou plusieurs numéros
+ * @returns Chaîne formatée avec tous les numéros séparés par ", " ou undefined
+ *
+ * @example
+ * normalizePhone("0612345678") // "06 12 34 56 78"
+ * normalizePhone("06 12 34 56 78, 07 98 76 54 32") // "06 12 34 56 78, 07 98 76 54 32"
+ * normalizePhone("0612345678 / 0798765432") // "06 12 34 56 78, 07 98 76 54 32"
+ */
 function normalizePhone(phone: string | number | undefined): string | undefined {
-  if (!phone) return undefined;
-
-  let phoneStr = String(phone).trim();
-
-  // Supprimer les espaces et caractères non numériques sauf le +
-  phoneStr = phoneStr.replace(/[^\d+]/g, '');
-
-  // Si le numéro commence par un chiffre et fait 9 chiffres, ajouter le 0
-  if (/^\d{9}$/.test(phoneStr)) {
-    phoneStr = '0' + phoneStr;
-  }
-
-  return phoneStr || undefined;
+  const phones = parsePhoneNumbers(phone);
+  return formatPhoneNumbers(phones);
 }
 
 export const importService = {
