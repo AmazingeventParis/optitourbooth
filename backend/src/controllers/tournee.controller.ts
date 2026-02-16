@@ -196,10 +196,10 @@ export const tourneeController = {
     else if (dateDebut || dateFin) {
       where.date = {};
       if (dateDebut) {
-        where.date.gte = new Date(dateDebut);
+        where.date.gte = new Date(dateDebut + 'T00:00:00.000Z'); // Force UTC
       }
       if (dateFin) {
-        where.date.lte = new Date(dateFin);
+        where.date.lte = new Date(dateFin + 'T23:59:59.999Z'); // Force UTC, fin de journée
       }
     }
 
@@ -539,7 +539,7 @@ export const tourneeController = {
       depotLongitude?: number;
       notes?: string;
     } = {
-      date: new Date(data.date),
+      date: new Date(data.date + 'T00:00:00.000Z'), // Force UTC pour éviter problèmes timezone
       chauffeurId: data.chauffeurId,
     };
 
@@ -633,7 +633,7 @@ export const tourneeController = {
       }
 
       // Vérifier la disponibilité
-      const dateToCheck = data.date ? new Date(data.date) : tournee.date;
+      const dateToCheck = data.date ? new Date(data.date + 'T00:00:00.000Z') : tournee.date;
       const existingTournee = await prisma.tournee.findFirst({
         where: {
           chauffeurId: data.chauffeurId,
@@ -652,7 +652,7 @@ export const tourneeController = {
     // Préparer les données de mise à jour
     const updateData: Record<string, unknown> = {};
 
-    if (data.date) updateData.date = new Date(data.date);
+    if (data.date) updateData.date = new Date(data.date + 'T00:00:00.000Z'); // Force UTC
     if (data.chauffeurId) updateData.chauffeurId = data.chauffeurId;
     if (data.vehiculeId !== undefined) updateData.vehiculeId = data.vehiculeId || null;
     if (data.statut) updateData.statut = data.statut;
@@ -663,10 +663,10 @@ export const tourneeController = {
 
     if (data.heureDepart !== undefined) {
       if (data.heureDepart) {
-        const dateRef = data.date ? new Date(data.date) : tournee.date;
+        const dateRef = data.date ? new Date(data.date + 'T00:00:00.000Z') : tournee.date;
         const { hours, minutes } = parseTime(data.heureDepart);
         const heureDepart = new Date(dateRef);
-        heureDepart.setHours(hours, minutes, 0, 0);
+        heureDepart.setUTCHours(hours, minutes, 0, 0); // Force UTC
         updateData.heureDepart = heureDepart;
       } else {
         updateData.heureDepart = null;
@@ -675,10 +675,10 @@ export const tourneeController = {
 
     if (data.heureFinEstimee !== undefined) {
       if (data.heureFinEstimee) {
-        const dateRef = data.date ? new Date(data.date) : tournee.date;
+        const dateRef = data.date ? new Date(data.date + 'T00:00:00.000Z') : tournee.date;
         const { hours, minutes } = parseTime(data.heureFinEstimee);
         const heureFin = new Date(dateRef);
-        heureFin.setHours(hours, minutes, 0, 0);
+        heureFin.setUTCHours(hours, minutes, 0, 0); // Force UTC
         updateData.heureFinEstimee = heureFin;
       } else {
         updateData.heureFinEstimee = null;
@@ -863,7 +863,7 @@ export const tourneeController = {
     const existingTournee = await prisma.tournee.findFirst({
       where: {
         chauffeurId: tournee.chauffeurId,
-        date: new Date(newDate),
+        date: new Date(newDate + 'T00:00:00.000Z'), // Force UTC
         statut: { not: 'annulee' },
       },
     });
@@ -878,13 +878,14 @@ export const tourneeController = {
       // 1. Créer la nouvelle tournée
       const created = await tx.tournee.create({
         data: {
-          date: new Date(newDate),
+          date: new Date(newDate + 'T00:00:00.000Z'), // Force UTC
           chauffeurId: tournee.chauffeurId,
           heureDepart: tournee.heureDepart
-            ? new Date(new Date(newDate).setHours(
-                tournee.heureDepart.getHours(),
-                tournee.heureDepart.getMinutes()
-              ))
+            ? (() => {
+                const d = new Date(newDate + 'T00:00:00.000Z');
+                d.setUTCHours(tournee.heureDepart.getUTCHours(), tournee.heureDepart.getUTCMinutes(), 0, 0);
+                return d;
+              })()
             : null,
           depotAdresse: tournee.depotAdresse,
           depotLatitude: tournee.depotLatitude,
