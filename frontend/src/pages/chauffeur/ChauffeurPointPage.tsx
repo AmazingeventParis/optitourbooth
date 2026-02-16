@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Badge, Button, Modal, Input, Select } from '@/components/ui';
+import { Card, Badge, Button, Modal, Input, Select, PhoneNumbers } from '@/components/ui';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { tourneesService } from '@/services/tournees.service';
 import { useAuthStore } from '@/store/authStore';
@@ -325,15 +325,10 @@ export default function ChauffeurPointPage() {
           {point.client?.contactNom && (
             <div className="flex items-center gap-3">
               <PhoneIcon className="h-5 w-5 text-gray-400" />
-              <div>
-                <p>{point.client.contactNom}</p>
+              <div className="flex-1">
+                <p className="font-medium mb-1">{point.client.contactNom}</p>
                 {point.client.contactTelephone && (
-                  <button
-                    onClick={() => callClient(point.client!.contactTelephone!)}
-                    className="text-primary-600 underline"
-                  >
-                    {point.client.contactTelephone}
-                  </button>
+                  <PhoneNumbers phones={point.client.contactTelephone} variant="links" size="md" />
                 )}
               </div>
             </div>

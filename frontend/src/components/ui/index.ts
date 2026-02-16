@@ -27,3 +27,5 @@ export { default as TimeSelect } from './TimeSelect';
 
 export { default as AddressAutocomplete } from './AddressAutocomplete';
 export type { AddressResult } from './AddressAutocomplete';
+
+export { default as PhoneNumbers } from './PhoneNumbers';

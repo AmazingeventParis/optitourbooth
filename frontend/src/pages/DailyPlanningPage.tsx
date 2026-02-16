@@ -32,7 +32,7 @@ import { produitsService } from '@/services/produits.service';
 import { socketService, ChauffeurPosition } from '@/services/socket.service';
 import { useSocketStore, isPositionStale } from '@/store/socketStore';
 import { useAuthStore } from '@/store/authStore';
-import { Button, Badge, Modal, Input, Select, TimeSelect, AddressAutocomplete } from '@/components/ui';
+import { Button, Badge, Modal, Input, Select, TimeSelect, AddressAutocomplete, PhoneNumbers } from '@/components/ui';
 import type { AddressResult } from '@/components/ui';
 import WheelTimePicker from '@/components/ui/WheelTimePicker';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -3476,9 +3476,9 @@ export default function DailyPlanningPage() {
                               </div>
                             )}
                             {point.contactTelephone && (
-                              <div>
-                                <div className="text-[10px] text-gray-400">Tél</div>
-                                <div className="text-xs">{point.contactTelephone}</div>
+                              <div className="col-span-2">
+                                <div className="text-[10px] text-gray-400 mb-1">Tél</div>
+                                <PhoneNumbers phones={point.contactTelephone} variant="badges" size="sm" />
                               </div>
                             )}
                             {point.produitName && (
