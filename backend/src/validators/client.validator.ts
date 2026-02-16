@@ -9,7 +9,7 @@ export const createClientSchema = z.object({
     .transform((v) => v.toLowerCase().trim())
     .optional()
     .nullable(),
-  telephone: z.string().max(20).optional().nullable(),
+  telephone: z.string().max(200).optional().nullable(), // Augmenté pour supporter plusieurs numéros
   adresse: z.string().min(1, 'Adresse requise'),
   complementAdresse: z.string().optional().nullable(),
   codePostal: z.string().max(10).optional().nullable(),
@@ -19,7 +19,7 @@ export const createClientSchema = z.object({
   longitude: z.number().min(-180).max(180).optional().nullable(),
   instructionsAcces: z.string().optional().nullable(),
   contactNom: z.string().max(100).optional().nullable(),
-  contactTelephone: z.string().max(20).optional().nullable(),
+  contactTelephone: z.string().max(200).optional().nullable(), // Augmenté pour supporter plusieurs numéros
 });
 
 export const updateClientSchema = z.object({
@@ -31,7 +31,7 @@ export const updateClientSchema = z.object({
     .transform((v) => v.toLowerCase().trim())
     .optional()
     .nullable(),
-  telephone: z.string().max(20).optional().nullable(),
+  telephone: z.string().max(200).optional().nullable(), // Augmenté pour supporter plusieurs numéros
   adresse: z.string().min(1).optional(),
   complementAdresse: z.string().optional().nullable(),
   codePostal: z.string().min(1).max(10).optional(),
@@ -41,7 +41,7 @@ export const updateClientSchema = z.object({
   longitude: z.number().min(-180).max(180).optional().nullable(),
   instructionsAcces: z.string().optional().nullable(),
   contactNom: z.string().max(100).optional().nullable(),
-  contactTelephone: z.string().max(20).optional().nullable(),
+  contactTelephone: z.string().max(200).optional().nullable(), // Augmenté pour supporter plusieurs numéros
   actif: z.boolean().optional(),
 });
 
