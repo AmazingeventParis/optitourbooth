@@ -8,49 +8,101 @@
  * Gère les indicatifs internationaux (+33, 0033, etc.)
  * Accepte différents séparateurs : espace, virgule, slash, underscore, etc.
  *
- * Stratégie : détecte les numéros valides avec regex au lieu de splitter par séparateurs
+ * Stratégie : utilise une regex pour détecter les patterns de numéros valides
  *
  * @param input - Chaîne contenant un ou plusieurs numéros de téléphone
  * @returns Tableau de numéros normalisés, ou undefined si aucun numéro trouvé
  *
  * @example
  * parsePhoneNumbers("0612345678") // ["0612345678"]
- * parsePhoneNumbers("06 12 34 56 78, 07 98 76 54 32") // ["0612345678", "0798765432"]
+ * parsePhoneNumbers("06 12 34 56 78 07 98 76 54 32") // ["0612345678", "0798765432"]
+ * parsePhoneNumbers("06.12.34.56.78 07.98.76.54.32") // ["0612345678", "0798765432"]
  * parsePhoneNumbers("+33612345678 / 0798765432") // ["+33612345678", "0798765432"]
- * parsePhoneNumbers("06.12.34.56.78 / 07.98.76.54.32") // ["0612345678", "0798765432"]
  */
 export function parsePhoneNumbers(input: string | number | undefined): string[] | undefined {
   if (!input) return undefined;
 
-  let str = String(input).trim();
+  const str = String(input).trim();
   if (!str) return undefined;
 
   const phones: string[] = [];
 
-  // Pattern pour détecter un numéro de téléphone :
-  // - Commence par + ou 0 ou un chiffre
-  // - Peut contenir des chiffres, espaces, points, tirets
-  // - Au moins 8 chiffres au total
-  // Séparateurs entre numéros : , ; / \ | _ et retours à la ligne
+  // Stratégie : détecter des patterns spécifiques de numéros de téléphone
+  // - Numéros français : 10 chiffres commençant par 0
+  // - Numéros internationaux : + suivi de 8-15 chiffres
+  // - Séparer par espaces, points, tirets dans le numéro
 
-  // Remplacer les séparateurs clairs par un délimiteur unique
-  const separators = [',', ';', '/', '\\', '|', '_', '\n', '\t'];
-  for (const sep of separators) {
-    str = str.split(sep).join('|||');
+  // D'abord, essayer de splitter par des séparateurs clairs (virgule, slash, etc.)
+  const clearSeparators = [',', ';', '/', '\\', '|', '_', '\n', '\t'];
+  let workingStr = str;
+  for (const sep of clearSeparators) {
+    workingStr = workingStr.split(sep).join('§§§');
   }
 
-  // Maintenant splitter par le délimiteur
-  const segments = str.split('|||').map(s => s.trim()).filter(s => s.length > 0);
+  const segments = workingStr.split('§§§').map(s => s.trim()).filter(s => s.length > 0);
 
   for (const segment of segments) {
-    // Essayer de parser le segment comme un numéro
-    const normalized = normalizePhone(segment);
-    if (normalized) {
-      phones.push(normalized);
-    }
+    // Pour chaque segment, extraire les numéros de téléphone
+    const segmentPhones = extractPhonesFromSegment(segment);
+    phones.push(...segmentPhones);
   }
 
   return phones.length > 0 ? phones : undefined;
+}
+
+/**
+ * Extrait les numéros de téléphone d'un segment de texte
+ * Gère les cas où plusieurs numéros sont séparés uniquement par des espaces
+ */
+function extractPhonesFromSegment(segment: string): string[] {
+  const phones: string[] = [];
+
+  // Pattern pour numéros internationaux : +33 suivi de chiffres
+  const intlPattern = /\+\d{1,3}[\s.\-]?(?:\d[\s.\-]*){8,15}/g;
+  const intlMatches = segment.match(intlPattern);
+
+  if (intlMatches) {
+    for (const match of intlMatches) {
+      const normalized = normalizePhone(match);
+      if (normalized) {
+        phones.push(normalized);
+        // Retirer ce numéro du segment pour éviter les doublons
+        segment = segment.replace(match, ' ');
+      }
+    }
+  }
+
+  // Pattern pour numéros français : commence par 0, suivi de 9 chiffres (avec espaces/points/tirets)
+  // Exemple : 06 12 34 56 78 ou 06.12.34.56.78
+  const frenchPattern = /0[\s.\-]?(?:\d[\s.\-]*){9}/g;
+  const frenchMatches = segment.match(frenchPattern);
+
+  if (frenchMatches) {
+    for (const match of frenchMatches) {
+      const normalized = normalizePhone(match);
+      if (normalized) {
+        phones.push(normalized);
+        // Retirer ce numéro du segment
+        segment = segment.replace(match, ' ');
+      }
+    }
+  }
+
+  // Pattern pour numéros à 9 chiffres (sans le 0 initial)
+  // Exemple : 612345678 sera transformé en 0612345678
+  const nineDigitPattern = /(?<!\d)[1-9][\s.\-]?(?:\d[\s.\-]*){8}(?!\d)/g;
+  const nineDigitMatches = segment.match(nineDigitPattern);
+
+  if (nineDigitMatches) {
+    for (const match of nineDigitMatches) {
+      const normalized = normalizePhone(match);
+      if (normalized) {
+        phones.push(normalized);
+      }
+    }
+  }
+
+  return phones;
 }
 
 /**

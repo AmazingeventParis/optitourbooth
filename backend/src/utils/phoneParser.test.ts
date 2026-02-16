@@ -127,4 +127,19 @@ test('Parse et formate ensemble', () => {
   assertEquals(formatted, '06 12 34 56 78, 07 98 76 54 32');
 });
 
+test('Parse deux numéros séparés uniquement par des espaces', () => {
+  const result = parsePhoneNumbers('06 12 34 56 78 07 98 76 54 32');
+  assertEquals(result, ['0612345678', '0798765432']);
+});
+
+test('Parse deux numéros avec points séparés par espace', () => {
+  const result = parsePhoneNumbers('06.12.34.56.78 07.98.76.54.32');
+  assertEquals(result, ['0612345678', '0798765432']);
+});
+
+test('Parse format réaliste utilisateur', () => {
+  const result = parsePhoneNumbers('06 12 34 56 78   07 98 76 54 32');
+  assertEquals(result, ['0612345678', '0798765432']);
+});
+
 console.log('\n✨ Tous les tests sont passés!\n');
