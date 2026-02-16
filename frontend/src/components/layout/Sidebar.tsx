@@ -21,6 +21,7 @@ import { useChauffeurs } from '@/hooks/queries/useUsers';
 import { useInstallPWA } from '@/hooks/useInstallPWA';
 import { useToast } from '@/hooks/useToast';
 import Avatar from '@/components/ui/Avatar';
+import { UserRole } from '@/types';
 import clsx from 'clsx';
 
 interface SidebarProps {
@@ -28,20 +29,30 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
-const navigation = [
-  { name: 'Dashboard', href: '/', icon: HomeIcon },
-  { name: 'Planning', href: '/planning', icon: CalendarDaysIcon },
-  { name: 'Historique', href: '/historique', icon: ClockIcon },
-  { name: 'Préparations', href: '/preparations', icon: WrenchScrewdriverIcon },
-  { name: 'Clients', href: '/clients', icon: UserGroupIcon },
-  { name: 'Utilisateurs', href: '/utilisateurs', icon: UsersIcon },
-  { name: 'Véhicules', href: '/vehicules', icon: TruckIcon },
-  { name: 'Produits', href: '/produits', icon: CubeIcon },
-  { name: 'Rapports', href: '/rapports', icon: ChartBarIcon },
+const navigation: Array<{
+  name: string;
+  href: string;
+  icon: any;
+  roles: UserRole[];
+}> = [
+  { name: 'Dashboard', href: '/', icon: HomeIcon, roles: ['admin'] },
+  { name: 'Planning', href: '/planning', icon: CalendarDaysIcon, roles: ['admin'] },
+  { name: 'Historique', href: '/historique', icon: ClockIcon, roles: ['admin'] },
+  { name: 'Préparations', href: '/preparations', icon: WrenchScrewdriverIcon, roles: ['admin', 'preparateur'] },
+  { name: 'Clients', href: '/clients', icon: UserGroupIcon, roles: ['admin'] },
+  { name: 'Utilisateurs', href: '/utilisateurs', icon: UsersIcon, roles: ['admin'] },
+  { name: 'Véhicules', href: '/vehicules', icon: TruckIcon, roles: ['admin'] },
+  { name: 'Produits', href: '/produits', icon: CubeIcon, roles: ['admin'] },
+  { name: 'Rapports', href: '/rapports', icon: ChartBarIcon, roles: ['admin'] },
 ];
 
 function SidebarContent() {
   const { user, logout, startImpersonation } = useAuthStore();
+
+  // Filtrer les liens selon le rôle de l'utilisateur
+  const filteredNavigation = navigation.filter((item) =>
+    item.roles.some((role) => user?.roles.includes(role))
+  );
   const navigate = useNavigate();
   const { success, error: showError } = useToast();
   const [showChauffeurPicker, setShowChauffeurPicker] = useState(false);
@@ -97,7 +108,7 @@ function SidebarContent() {
         <ul role="list" className="flex flex-1 flex-col gap-y-7">
           <li>
             <ul role="list" className="-mx-2 space-y-1">
-              {navigation.map((item) => (
+              {filteredNavigation.map((item) => (
                 <li key={item.name}>
                   <NavLink
                     to={item.href}
@@ -119,15 +130,16 @@ function SidebarContent() {
                 </li>
               ))}
 
-              {/* Mode Chauffeur */}
-              <li>
-                <button
-                  onClick={() => setShowChauffeurPicker(!showChauffeurPicker)}
-                  className="w-full text-amber-300 hover:text-white hover:bg-primary-800 group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold"
-                >
-                  <EyeIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
-                  Mode Chauffeur
-                </button>
+              {/* Mode Chauffeur (admin uniquement) */}
+              {user?.roles.includes('admin') && (
+                <li>
+                  <button
+                    onClick={() => setShowChauffeurPicker(!showChauffeurPicker)}
+                    className="w-full text-amber-300 hover:text-white hover:bg-primary-800 group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold"
+                  >
+                    <EyeIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                    Mode Chauffeur
+                  </button>
 
                 {/* Chauffeur Picker Dropdown */}
                 {showChauffeurPicker && (
@@ -154,7 +166,8 @@ function SidebarContent() {
                     )}
                   </div>
                 )}
-              </li>
+                </li>
+              )}
             </ul>
           </li>
 
