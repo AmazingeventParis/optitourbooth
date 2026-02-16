@@ -10,6 +10,7 @@ import { notificationService } from '../services/notification.service.js';
 import { withCache } from '../utils/cacheWrapper.js';
 import { cacheKeys, cacheTTL } from '../utils/cacheKeys.js';
 import { invalidateTourneesCache } from '../utils/cacheInvalidation.js';
+import { ensureDateUTC, timeToUTCDateTime } from '../utils/dateUtils.js';
 import {
   CreateTourneeInput,
   UpdateTourneeInput,
@@ -196,10 +197,12 @@ export const tourneeController = {
     else if (dateDebut || dateFin) {
       where.date = {};
       if (dateDebut) {
-        where.date.gte = new Date(dateDebut + 'T00:00:00.000Z'); // Force UTC
+        where.date.gte = ensureDateUTC(dateDebut); // Début de journée UTC
       }
       if (dateFin) {
-        where.date.lte = new Date(dateFin + 'T23:59:59.999Z'); // Force UTC, fin de journée
+        const endDate = ensureDateUTC(dateFin);
+        endDate.setUTCHours(23, 59, 59, 999); // Fin de journée UTC
+        where.date.lte = endDate;
       }
     }
 
@@ -513,7 +516,7 @@ export const tourneeController = {
     }
 
     // Vérifier qu'il n'a pas déjà une tournée ce jour-là
-    const checkDayStart = new Date(data.date + 'T00:00:00.000Z');
+    const checkDayStart = ensureDateUTC(data.date);
     const checkDayEnd = new Date(data.date + 'T23:59:59.999Z');
     const existingTournee = await prisma.tournee.findFirst({
       where: {
@@ -539,7 +542,7 @@ export const tourneeController = {
       depotLongitude?: number;
       notes?: string;
     } = {
-      date: new Date(data.date + 'T00:00:00.000Z'), // Force UTC pour éviter problèmes timezone
+      date: ensureDateUTC(data.date), // Force UTC pour éviter problèmes timezone
       chauffeurId: data.chauffeurId,
     };
 
@@ -633,7 +636,7 @@ export const tourneeController = {
       }
 
       // Vérifier la disponibilité
-      const dateToCheck = data.date ? new Date(data.date + 'T00:00:00.000Z') : tournee.date;
+      const dateToCheck = data.date ? ensureDateUTC(data.date) : tournee.date;
       const existingTournee = await prisma.tournee.findFirst({
         where: {
           chauffeurId: data.chauffeurId,
@@ -652,7 +655,7 @@ export const tourneeController = {
     // Préparer les données de mise à jour
     const updateData: Record<string, unknown> = {};
 
-    if (data.date) updateData.date = new Date(data.date + 'T00:00:00.000Z'); // Force UTC
+    if (data.date) updateData.date = ensureDateUTC(data.date); // Force UTC
     if (data.chauffeurId) updateData.chauffeurId = data.chauffeurId;
     if (data.vehiculeId !== undefined) updateData.vehiculeId = data.vehiculeId || null;
     if (data.statut) updateData.statut = data.statut;
@@ -663,11 +666,8 @@ export const tourneeController = {
 
     if (data.heureDepart !== undefined) {
       if (data.heureDepart) {
-        const dateRef = data.date ? new Date(data.date + 'T00:00:00.000Z') : tournee.date;
-        const { hours, minutes } = parseTime(data.heureDepart);
-        const heureDepart = new Date(dateRef);
-        heureDepart.setUTCHours(hours, minutes, 0, 0); // Force UTC
-        updateData.heureDepart = heureDepart;
+        const dateRef = data.date ? ensureDateUTC(data.date) : tournee.date;
+        updateData.heureDepart = timeToUTCDateTime(data.heureDepart, dateRef);
       } else {
         updateData.heureDepart = null;
       }
@@ -675,11 +675,8 @@ export const tourneeController = {
 
     if (data.heureFinEstimee !== undefined) {
       if (data.heureFinEstimee) {
-        const dateRef = data.date ? new Date(data.date + 'T00:00:00.000Z') : tournee.date;
-        const { hours, minutes } = parseTime(data.heureFinEstimee);
-        const heureFin = new Date(dateRef);
-        heureFin.setUTCHours(hours, minutes, 0, 0); // Force UTC
-        updateData.heureFinEstimee = heureFin;
+        const dateRef = data.date ? ensureDateUTC(data.date) : tournee.date;
+        updateData.heureFinEstimee = timeToUTCDateTime(data.heureFinEstimee, dateRef);
       } else {
         updateData.heureFinEstimee = null;
       }
@@ -863,7 +860,7 @@ export const tourneeController = {
     const existingTournee = await prisma.tournee.findFirst({
       where: {
         chauffeurId: tournee.chauffeurId,
-        date: new Date(newDate + 'T00:00:00.000Z'), // Force UTC
+        date: ensureDateUTC(newDate), // Force UTC
         statut: { not: 'annulee' },
       },
     });
@@ -878,11 +875,11 @@ export const tourneeController = {
       // 1. Créer la nouvelle tournée
       const created = await tx.tournee.create({
         data: {
-          date: new Date(newDate + 'T00:00:00.000Z'), // Force UTC
+          date: ensureDateUTC(newDate), // Force UTC
           chauffeurId: tournee.chauffeurId,
           heureDepart: tournee.heureDepart
             ? (() => {
-                const d = new Date(newDate + 'T00:00:00.000Z');
+                const d = ensureDateUTC(newDate);
                 d.setUTCHours(tournee.heureDepart.getUTCHours(), tournee.heureDepart.getUTCMinutes(), 0, 0);
                 return d;
               })()

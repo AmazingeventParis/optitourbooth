@@ -3,6 +3,7 @@ import { prisma } from '../config/database.js';
 import { PointType } from '@prisma/client';
 import { geocodingService } from './geocoding.service.js';
 import { parsePhoneNumbers, formatPhoneNumbers } from '../utils/phoneParser.js';
+import { timeToUTCDateTime } from '../utils/dateUtils.js';
 
 interface ImportedRow {
   CLIENT: string;
@@ -263,19 +264,10 @@ export const importService = {
 
   /**
    * Convertit une heure HH:MM en DateTime complet basé sur une date de référence
+   * UTILISE timeToUTCDateTime pour garantir UTC
    */
   timeToDateTime(timeStr: string | undefined, referenceDate: Date): Date | undefined {
-    if (!timeStr) return undefined;
-
-    const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
-    if (!match || !match[1] || !match[2]) return undefined;
-
-    const hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-
-    const result = new Date(referenceDate);
-    result.setHours(hours, minutes, 0, 0);
-    return result;
+    return timeToUTCDateTime(timeStr, referenceDate);
   },
 
   /**
