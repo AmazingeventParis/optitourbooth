@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, Select, Button } from '@/components/ui';
 import { tourneesService } from '@/services/tournees.service';
-import { usersService } from '@/services/users.service';
+import { useChauffeurs } from '@/hooks/queries/useUsers';
 import { produitsService } from '@/services/produits.service';
 import { useToast } from '@/hooks/useToast';
-import { Tournee, User, Produit } from '@/types';
+import { Tournee, Produit } from '@/types';
 import { format, subDays, startOfMonth, startOfWeek, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
@@ -104,7 +104,7 @@ interface DailyData {
 export default function RapportsPage() {
   const { error: showError } = useToast();
 
-  const [chauffeurs, setChauffeurs] = useState<User[]>([]);
+  const { data: chauffeurs = [] } = useChauffeurs();
   const [produits, setProduits] = useState<Produit[]>([]);
   const [tournees, setTournees] = useState<Tournee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -114,25 +114,14 @@ export default function RapportsPage() {
   const [chauffeurFilter, setChauffeurFilter] = useState('');
 
   useEffect(() => {
-    fetchInitialData();
+    produitsService.list({ limit: 100 })
+      .then(r => setProduits(r.data))
+      .catch(err => console.error('Erreur chargement produits:', err));
   }, []);
 
   useEffect(() => {
     fetchTournees();
   }, [periode, chauffeurFilter]);
-
-  const fetchInitialData = async () => {
-    try {
-      const [chauffeursResult, produitsResult] = await Promise.all([
-        usersService.listChauffeurs(),
-        produitsService.list({ limit: 100 }),
-      ]);
-      setChauffeurs(chauffeursResult);
-      setProduits(produitsResult.data);
-    } catch (err) {
-      console.error('Erreur chargement données:', err);
-    }
-  };
 
   const fetchTournees = async () => {
     setIsLoading(true);

@@ -230,6 +230,7 @@ export const produitController = {
       orderBy: { nom: 'asc' },
     });
 
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     apiResponse.success(res, produits);
   },
 

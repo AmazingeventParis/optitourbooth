@@ -24,10 +24,10 @@ import {
 } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Tournee, Point, Client, PointProduit, Produit, User, Vehicule, PointType, ChauffeurPositionWithInfo } from '@/types';
+import { Tournee, Point, Client, PointProduit, Produit, Vehicule, PointType, ChauffeurPositionWithInfo } from '@/types';
 import { tourneesService, ImportParsedPoint } from '@/services/tournees.service';
 import { clientsService } from '@/services/clients.service';
-import { usersService } from '@/services/users.service';
+import { useChauffeurs } from '@/hooks/queries/useUsers';
 import { produitsService } from '@/services/produits.service';
 import { socketService, ChauffeurPosition } from '@/services/socket.service';
 import { useSocketStore, isPositionStale } from '@/store/socketStore';
@@ -1418,7 +1418,7 @@ export default function DailyPlanningPage() {
     return format(today, 'yyyy-MM-dd');
   });
   const [tournees, setTournees] = useState<Tournee[]>([]);
-  const [chauffeurs, setChauffeurs] = useState<User[]>([]);
+  const { data: chauffeurs = [] } = useChauffeurs();
   const [vehicules, setVehicules] = useState<Vehicule[]>([]);
   const [produits, setProduits] = useState<Produit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1672,17 +1672,15 @@ export default function DailyPlanningPage() {
     });
   }, [selectedDate, tournees]);
 
-  // Charger toutes les données statiques en parallèle (chauffeurs, véhicules, produits)
+  // Charger données statiques en parallèle (véhicules, produits - chauffeurs via React Query)
   useEffect(() => {
     const loadStaticData = async () => {
       try {
-        const [chauffeursResult, vehiculesResult, produitsResult] = await Promise.all([
-          usersService.listChauffeurs(),
+        const [vehiculesResult, produitsResult] = await Promise.all([
           import('@/services/api').then(({ default: api }) => api.get('/vehicules/actifs')),
           produitsService.listActifs(),
         ]);
 
-        setChauffeurs(chauffeursResult);
         setVehicules(vehiculesResult.data.data || []);
         setProduits(produitsResult);
       } catch (error) {
