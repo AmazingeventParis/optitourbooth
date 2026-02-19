@@ -26,6 +26,9 @@ RUN npx tsc -p tsconfig.build.json
 # ---- Stage 2 : Production ----
 FROM node:20-alpine
 
+# Required by Prisma query engine (detects OpenSSL 3.x, avoids libssl.so.1.1 error)
+RUN apk add --no-cache openssl
+
 RUN npm install -g pnpm@9
 
 WORKDIR /app
