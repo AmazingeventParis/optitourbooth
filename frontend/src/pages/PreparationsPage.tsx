@@ -750,8 +750,8 @@ export default function PreparationsPage() {
                     statut === 'hors_service' && 'bg-red-50 text-red-700'
                   )}
                 >
-                  {statut === 'prete' && preparation?.preparateur
-                    ? `préparée par ${preparation.preparateur}`
+                  {statut === 'prete' && preparation
+                    ? `préparée par ${preparation.preparateur || '?'}`
                     : statutInfo.label}
                 </span>
               </div>

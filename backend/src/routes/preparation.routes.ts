@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import * as preparationController from '../controllers/preparation.controller.js';
-import { authenticate, requireAdmin } from '../middlewares/auth.middleware.js';
+import { authenticate, requirePreparateur } from '../middlewares/auth.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
 
-// Toutes les routes nécessitent une authentification admin
-router.use(authenticate, requireAdmin);
+// Toutes les routes nécessitent une authentification admin ou préparateur
+router.use(authenticate, requirePreparateur);
 
 router.get('/', asyncHandler(preparationController.listPreparations));
 router.get('/:id', asyncHandler(preparationController.getPreparation));
