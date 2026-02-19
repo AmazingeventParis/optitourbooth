@@ -40,10 +40,11 @@ RUN pnpm install --prod
 RUN prisma generate
 
 COPY --from=builder /app/dist ./dist/
+COPY start.sh ./
 
-RUN mkdir -p uploads
+RUN mkdir -p uploads && chmod +x start.sh
 
 EXPOSE 3000
 
-# Sync schema (idempotent) then start the app
-CMD ["sh", "-c", "prisma db push && node dist/app.js"]
+# start.sh: prisma db push + seed if empty + node dist/app.js
+CMD ["./start.sh"]
