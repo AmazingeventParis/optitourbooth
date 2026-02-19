@@ -13,7 +13,7 @@ WORKDIR /app
 COPY package.json ./
 COPY prisma ./prisma/
 
-RUN pnpm install
+RUN NODE_ENV=development pnpm install
 
 RUN npx prisma generate
 
