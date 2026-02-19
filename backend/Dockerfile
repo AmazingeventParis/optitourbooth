@@ -34,7 +34,7 @@ COPY package.json ./
 COPY prisma ./prisma/
 
 RUN pnpm install --prod
-RUN npx prisma generate
+RUN npx -y prisma@5 generate
 
 COPY --from=builder /app/dist ./dist/
 
