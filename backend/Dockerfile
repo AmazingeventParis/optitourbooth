@@ -45,5 +45,5 @@ RUN mkdir -p uploads
 
 EXPOSE 3000
 
-# Run migrations then start the app
-CMD ["sh", "-c", "prisma migrate deploy && node dist/app.js"]
+# Sync schema (idempotent) then start the app
+CMD ["sh", "-c", "prisma db push && node dist/app.js"]
