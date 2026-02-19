@@ -14,7 +14,7 @@ services:
     runtime: node
     plan: free
     rootDir: backend
-    buildCommand: pnpm install && npx prisma generate && pnpm run build
+    buildCommand: npm install -g pnpm@9 && pnpm install && npx prisma generate && pnpm run build
     startCommand: npx prisma db push --skip-generate && pnpm run start
     healthCheckPath: /api/health
     envVars:
@@ -22,6 +22,8 @@ services:
         value: production
       - key: PORT
         value: 3000
+      - key: NODE_VERSION
+        value: 20.18.0
       # Base de données - Utiliser Neon existant ou Render PostgreSQL
       - key: DATABASE_URL
         sync: false # À configurer avec votre URL Neon ou Render DB
@@ -60,7 +62,7 @@ services:
   - type: web
     name: optitourbooth-web
     runtime: static
-    buildCommand: pnpm install --ignore-scripts && cd frontend && cp .env.production .env && pnpm run build
+    buildCommand: npm install -g pnpm@9 && pnpm install --ignore-scripts && cd frontend && cp .env.production .env && pnpm run build
     staticPublishPath: frontend/dist
     headers:
       - path: /*
@@ -72,6 +74,8 @@ services:
         source: /*
         destination: /index.html
     envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
       # URL de l'API - À configurer après déploiement de l'API
       - key: VITE_API_URL
         sync: false
