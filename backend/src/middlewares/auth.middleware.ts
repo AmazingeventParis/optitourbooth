@@ -123,7 +123,7 @@ export function requireChauffeur(
     return;
   }
 
-  if (!req.user.roles.includes('chauffeur')) {
+  if (!req.user.roles.includes('chauffeur') && !req.user.roles.includes('admin')) {
     apiResponse.forbidden(res, 'Accès réservé aux chauffeurs');
     return;
   }

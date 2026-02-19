@@ -307,7 +307,10 @@ export const userController = {
       async () => {
         return prisma.user.findMany({
           where: {
-            roles: { has: 'chauffeur' },
+            OR: [
+              { roles: { has: 'chauffeur' } },
+              { roles: { has: 'admin' } },
+            ],
             actif: true,
           },
           select: {

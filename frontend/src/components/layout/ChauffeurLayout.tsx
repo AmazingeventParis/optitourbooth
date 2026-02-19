@@ -267,7 +267,7 @@ export default function ChauffeurLayout() {
           </div>
 
           {/* Bouton mode Préparateur pour les chauffeurs ayant aussi ce rôle */}
-          {!isImpersonating && user?.roles.includes('preparateur') && (
+          {!isImpersonating && (user?.roles.includes('preparateur') || user?.roles.includes('admin')) && (
             <button
               onClick={() => navigate('/preparations')}
               className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-primary-700 hover:bg-primary-500 transition-colors text-xs text-white"

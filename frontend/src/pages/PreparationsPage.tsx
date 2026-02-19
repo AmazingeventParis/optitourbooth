@@ -151,8 +151,8 @@ export default function PreparationsPage() {
 
     setIsSaving(true);
     try {
-      // Nom complet du préparateur connecté
-      const preparateur = `${user.prenom} ${user.nom}`;
+      // Prénom du préparateur connecté
+      const preparateur = user.prenom;
 
       // Créer toutes les préparations
       for (const evt of evenementsValides) {
@@ -472,7 +472,7 @@ export default function PreparationsPage() {
                       <p className="text-sm text-gray-600">
                         {prep.machine?.type} {prep.machine?.numero} • {format(parseISO(prep.dateEvenement), 'd MMMM yyyy', { locale: fr })}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">Préparateur: {prep.preparateur}</p>
+                      <p className="text-xs text-gray-500 mt-1">Préparateur: {prep.preparateur?.split(' ')[0]}</p>
                     </div>
                     {prep.photosDechargees ? (
                       <Badge variant="success">
@@ -751,7 +751,7 @@ export default function PreparationsPage() {
                   )}
                 >
                   {statut === 'prete' && preparation
-                    ? `préparée par ${preparation.preparateur || '?'}`
+                    ? `préparée par ${preparation.preparateur?.split(' ')[0] || '?'}`
                     : statutInfo.label}
                 </span>
               </div>
