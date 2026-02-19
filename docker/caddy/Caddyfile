@@ -1,0 +1,48 @@
+# ============================================================
+# Caddyfile — OptiTour Booth
+# Reverse proxy + SSL automatique (Let's Encrypt)
+# DOMAIN est injecté via l'env var ${DOMAIN} dans docker-compose
+# ============================================================
+
+{$DOMAIN} {
+
+    # ---- API REST → backend Express ----
+    handle /api/* {
+        reverse_proxy backend:3000
+    }
+
+    # ---- Socket.io (WebSocket) → backend ----
+    handle /socket.io/* {
+        reverse_proxy backend:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+        }
+    }
+
+    # ---- Uploads statiques (si servis par le backend) ----
+    handle /uploads/* {
+        reverse_proxy backend:3000
+    }
+
+    # ---- Frontend React (nginx) ----
+    handle {
+        reverse_proxy frontend:80
+    }
+
+    # Headers sécurité
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+
+    # Logs
+    log {
+        output file /var/log/caddy/optitourbooth.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+    }
+}

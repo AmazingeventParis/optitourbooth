@@ -1,0 +1,57 @@
+# ============================================================
+# Dockerfile.backend — OptiTour Booth API (Express + Prisma)
+# Build context : repo root
+# ============================================================
+
+# ---- Stage 1 : Build ----
+FROM node:20-alpine AS builder
+
+RUN npm install -g pnpm@9
+
+WORKDIR /app
+
+# Workspace metadata (lockfile au root)
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY backend/package.json ./backend/
+
+# Installer toutes les dépendances (dev incluses pour TypeScript)
+RUN pnpm install --filter backend --frozen-lockfile
+
+# Prisma schema
+COPY backend/prisma ./backend/prisma/
+RUN pnpm --filter backend exec prisma generate
+
+# Sources TypeScript
+COPY backend/src ./backend/src/
+COPY backend/tsconfig.json ./backend/
+
+# Compiler
+RUN pnpm --filter backend build
+
+# ---- Stage 2 : Production ----
+FROM node:20-alpine
+
+RUN npm install -g pnpm@9
+
+WORKDIR /app
+
+# Workspace pour l'install production
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY backend/package.json ./backend/
+COPY backend/prisma ./backend/prisma/
+
+# Dépendances production uniquement
+RUN pnpm install --filter backend --frozen-lockfile --prod
+RUN pnpm --filter backend exec prisma generate
+
+# Artefacts compilés
+COPY --from=builder /app/backend/dist ./backend/dist/
+
+# Dossier uploads persistant
+RUN mkdir -p /app/backend/uploads
+
+WORKDIR /app/backend
+
+EXPOSE 3000
+
+CMD ["node", "dist/app.js"]
