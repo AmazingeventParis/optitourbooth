@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button, Card, Input, Select, Badge, Modal, TimeSelect } from '@/components/ui';
 import DataTable, { Column } from '@/components/ui/DataTable';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { tourneesService } from '@/services/tournees.service';
-import { usersService } from '@/services/users.service';
+import { useChauffeurs } from '@/hooks/queries/useUsers';
 import { useToast } from '@/hooks/useToast';
-import { Tournee, User, PaginationMeta, TourneeStatut } from '@/types';
-import { format, parseISO } from 'date-fns';
+import { Tournee, PaginationMeta, TourneeStatut } from '@/types';
+import { format, parseISO, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { formatTime } from '@/utils/format';
 import {
@@ -76,19 +76,28 @@ const getStatutBadge = (statut: TourneeStatut) => {
 
 export default function TourneesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isHistorique = location.pathname === '/historique';
   const { success, error: showError } = useToast();
 
+  const { data: chauffeurs = [] } = useChauffeurs();
   const [tournees, setTournees] = useState<Tournee[]>([]);
-  const [chauffeurs, setChauffeurs] = useState<User[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const sevenDaysAgo = format(subDays(new Date(), 6), 'yyyy-MM-dd');
+
+  // Historique uses date range; Tournées uses single date
+  const [dateDebutFilter, setDateDebutFilter] = useState(isHistorique ? sevenDaysAgo : '');
+  const [dateFinFilter, setDateFinFilter] = useState(isHistorique ? today : '');
   const [dateFilter, setDateFilter] = useState('');
   const [chauffeurFilter, setChauffeurFilter] = useState('');
   const [statutFilter, setStatutFilter] = useState('');
 
-  // Debounce des filtres pour éviter les appels API excessifs
+  const debouncedDateDebut = useDebounce(dateDebutFilter, 300);
+  const debouncedDateFin = useDebounce(dateFinFilter, 300);
   const debouncedDateFilter = useDebounce(dateFilter, 300);
   const debouncedChauffeurFilter = useDebounce(chauffeurFilter, 300);
   const debouncedStatutFilter = useDebounce(statutFilter, 300);
@@ -103,7 +112,6 @@ export default function TourneesPage() {
   const [formErrors, setFormErrors] = useState<Partial<TourneeFormData>>({});
   const [isSaving, setIsSaving] = useState(false);
 
-  // Mémoisation des options de chauffeurs pour éviter les recréations
   const chauffeurOptions = useMemo(() => [
     { value: '', label: 'Tous les chauffeurs' },
     ...chauffeurs.map((c) => ({
@@ -124,7 +132,12 @@ export default function TourneesPage() {
     setIsLoading(true);
     try {
       const filters: Record<string, unknown> = { page, limit: 20 };
-      if (debouncedDateFilter) filters.date = debouncedDateFilter;
+      if (isHistorique) {
+        if (debouncedDateDebut) filters.dateDebut = debouncedDateDebut;
+        if (debouncedDateFin) filters.dateFin = debouncedDateFin;
+      } else {
+        if (debouncedDateFilter) filters.date = debouncedDateFilter;
+      }
       if (debouncedChauffeurFilter) filters.chauffeurId = debouncedChauffeurFilter;
       if (debouncedStatutFilter) filters.statut = debouncedStatutFilter;
 
@@ -136,20 +149,10 @@ export default function TourneesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [debouncedDateFilter, debouncedChauffeurFilter, debouncedStatutFilter, showError]);
-
-  const fetchChauffeurs = async () => {
-    try {
-      const result = await usersService.listChauffeurs();
-      setChauffeurs(result);
-    } catch (err) {
-      console.error('Erreur chargement chauffeurs:', err);
-    }
-  };
+  }, [isHistorique, debouncedDateDebut, debouncedDateFin, debouncedDateFilter, debouncedChauffeurFilter, debouncedStatutFilter, showError]);
 
   useEffect(() => {
     fetchTournees();
-    fetchChauffeurs();
   }, [fetchTournees]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -240,7 +243,6 @@ export default function TourneesPage() {
     }
   };
 
-  // Mémoisation des colonnes pour éviter les re-renders de DataTable
   const columns: Column<Tournee>[] = useMemo(() => [
     {
       key: 'date',
@@ -373,23 +375,55 @@ export default function TourneesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tournées</h1>
-          <p className="text-gray-500">Planifiez et gérez vos tournées de livraison</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isHistorique ? 'Historique' : 'Tournées'}
+          </h1>
+          <p className="text-gray-500">
+            {isHistorique
+              ? 'Consultez les tournées passées par période'
+              : 'Planifiez et gérez vos tournées de livraison'}
+          </p>
         </div>
-        <Button onClick={openCreateModal}>
-          <PlusIcon className="h-5 w-5 mr-2" />
-          Nouvelle tournée
-        </Button>
+        {!isHistorique && (
+          <Button onClick={openCreateModal}>
+            <PlusIcon className="h-5 w-5 mr-2" />
+            Nouvelle tournée
+          </Button>
+        )}
       </div>
 
       <Card>
-        <form onSubmit={handleSearch} className="flex gap-4 mb-6 flex-wrap">
-          <Input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="w-40"
-          />
+        <form onSubmit={handleSearch} className="flex gap-3 mb-6 flex-wrap items-end">
+          {isHistorique ? (
+            /* Date range picker for historique */
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                label="Du"
+                value={dateDebutFilter}
+                onChange={(e) => setDateDebutFilter(e.target.value)}
+                className="w-40"
+                max={dateFinFilter || today}
+              />
+              <Input
+                type="date"
+                label="Au"
+                value={dateFinFilter}
+                onChange={(e) => setDateFinFilter(e.target.value)}
+                className="w-40"
+                min={dateDebutFilter}
+                max={today}
+              />
+            </div>
+          ) : (
+            /* Single date filter for tournées */
+            <Input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="w-40"
+            />
+          )}
           <Select
             value={chauffeurFilter}
             onChange={(e) => setChauffeurFilter(e.target.value)}
@@ -403,7 +437,27 @@ export default function TourneesPage() {
           <Button type="submit" variant="secondary">
             <MagnifyingGlassIcon className="h-5 w-5" />
           </Button>
+          {isHistorique && (
+            <button
+              type="button"
+              onClick={() => {
+                setDateDebutFilter(sevenDaysAgo);
+                setDateFinFilter(today);
+                setChauffeurFilter('');
+                setStatutFilter('');
+              }}
+              className="text-sm text-primary-600 hover:text-primary-700 underline"
+            >
+              7 derniers jours
+            </button>
+          )}
         </form>
+
+        {isHistorique && (
+          <p className="text-xs text-gray-400 mb-4">
+            {meta.total} tournée{meta.total !== 1 ? 's' : ''} sur la période sélectionnée
+          </p>
+        )}
 
         <DataTable
           columns={columns}
