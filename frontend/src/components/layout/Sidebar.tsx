@@ -130,6 +130,19 @@ function SidebarContent() {
                 </li>
               ))}
 
+              {/* Interface Chauffeur (pour utilisateurs avec rôle chauffeur sans admin) */}
+              {user?.roles.includes('chauffeur') && !user?.roles.includes('admin') && (
+                <li>
+                  <button
+                    onClick={() => navigate('/chauffeur')}
+                    className="w-full text-primary-200 hover:text-white hover:bg-primary-800 group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold"
+                  >
+                    <TruckIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                    Interface Chauffeur
+                  </button>
+                </li>
+              )}
+
               {/* Mode Chauffeur (admin uniquement) */}
               {user?.roles.includes('admin') && (
                 <li>

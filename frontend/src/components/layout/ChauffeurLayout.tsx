@@ -21,11 +21,12 @@ import {
   ShieldCheckIcon,
   EyeIcon,
   ExclamationTriangleIcon,
+  WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
 export default function ChauffeurLayout() {
-  const { token, logout, stopImpersonation, impersonatedChauffeur } = useAuthStore();
+  const { token, logout, stopImpersonation, impersonatedChauffeur, user } = useAuthStore();
   const { effectiveUser, isImpersonating } = useEffectiveUser();
   const { clearTournee } = useChauffeurStore();
   const { isConnected, setConnected } = useSocketStore();
@@ -264,6 +265,18 @@ export default function ChauffeurLayout() {
               {gpsError ? 'GPS erreur' : isTracking ? 'GPS' : 'GPS off'}
             </span>
           </div>
+
+          {/* Bouton mode Préparateur pour les chauffeurs ayant aussi ce rôle */}
+          {!isImpersonating && user?.roles.includes('preparateur') && (
+            <button
+              onClick={() => navigate('/preparations')}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-primary-700 hover:bg-primary-500 transition-colors text-xs text-white"
+              title="Passer en mode Préparateur"
+            >
+              <WrenchScrewdriverIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Préparateur</span>
+            </button>
+          )}
 
           <button
             onClick={handleLogout}
