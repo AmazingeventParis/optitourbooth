@@ -727,7 +727,7 @@ export default function PreparationsPage() {
               <div className="flex justify-center mb-1.5">
                 <span
                   className={clsx(
-                    'text-[9px] font-semibold px-1.5 py-0.5 rounded',
+                    'text-[9px] font-semibold px-1.5 py-0.5 rounded text-center leading-tight',
                     statut === 'disponible' && 'bg-blue-50 text-blue-700',
                     statut === 'en_preparation' && 'bg-orange-50 text-orange-700',
                     statut === 'prete' && 'bg-green-50 text-green-700',
@@ -736,7 +736,9 @@ export default function PreparationsPage() {
                     statut === 'hors_service' && 'bg-red-50 text-red-700'
                   )}
                 >
-                  {statutInfo.label}
+                  {statut === 'prete' && preparation?.preparateur
+                    ? `préparée par ${preparation.preparateur}`
+                    : statutInfo.label}
                 </span>
               </div>
 
