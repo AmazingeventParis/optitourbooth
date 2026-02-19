@@ -783,19 +783,6 @@ export default function PreparationsPage() {
                         <CheckCircleIcon className="h-3 w-3 mx-auto" />
                       </button>
                     )}
-                    {statut === 'prete' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCancelPreparation(preparation.id);
-                        }}
-                        className="flex-1 p-1 bg-red-500 text-white rounded hover:bg-red-600 active:scale-95 transition-all disabled:opacity-50"
-                        title="Annuler la préparation"
-                        disabled={isSaving}
-                      >
-                        <XMarkIcon className="h-3 w-3 mx-auto" />
-                      </button>
-                    )}
                     {statut === 'a_decharger' && (
                       <button
                         onClick={(e) => {
