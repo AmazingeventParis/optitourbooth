@@ -1,5 +1,70 @@
 # Historique des sessions Claude - OptiTourBooth
 
+## Session du 19 février 2026
+
+### Déploiement sur Coolify (swipego.app)
+
+**Objectif** : Déployer OptiTour Booth sur le serveur 217.182.89.133 via Coolify, séparé et indépendant de Focus Racer.
+
+---
+
+#### Infrastructure
+
+- **Serveur** : 217.182.89.133 (Coolify installé, Traefik, wildcard DNS `*.swipego.app`)
+- **Coolify API** : `http://217.182.89.133:8000` (token dans `C:\Users\shoot\OneDrive\Bureau\CLAUDE.md`)
+- **Backend** : https://optitourbooth-api.swipego.app (UUID: `kgsgo448os84csgso4o88cwo`)
+- **Frontend** : https://optitourbooth.swipego.app (UUID: `hooooowo888gwocoksc8c4gk`)
+- **PostgreSQL** : UUID `bswkc044ws8ccg4sswg8w8ss`
+- **Redis** : UUID `soo88cgkwsowkkoc8g40k8co`
+
+#### Fichiers créés/modifiés pour le déploiement
+
+**Backend** :
+- `backend/Dockerfile` - Build context `/backend`, multi-stage, standalone sans workspace
+- `backend/tsconfig.build.json` - Désactive `declaration/declarationMap` (fix TS2742 avec pnpm standalone)
+- `backend/start.sh` - Script démarrage : `prisma db push` + seed si vide + `node dist/app.js`
+- `backend/prisma/schema.prisma` - Ajout `postgresqlExtensions` + `unaccent` pour la recherche
+- `backend/prisma/seed.ts` - Fix : `role` → `roles: ['admin']` (schéma changé)
+
+**Frontend** :
+- `frontend/Dockerfile` - Build context `/frontend`, Vite → nginx
+- `frontend/nginx.conf` - SPA avec gzip et cache statique
+- `frontend/.env.production` - URLs vers `optitourbooth-api.swipego.app`
+
+#### Problèmes rencontrés et solutions
+
+| Problème | Solution |
+|----------|----------|
+| `NODE_ENV=production` injecté par Coolify → pnpm skip devDeps | `RUN NODE_ENV=development pnpm install` dans builder |
+| `TS2742` type non portable avec pnpm standalone | `tsconfig.build.json` avec `declaration: false` |
+| `npx prisma generate` télécharge Prisma 7.x | `npm install -g prisma@5` dans prod stage |
+| `libssl.so.1.1` manquant sur Alpine | `apk add --no-cache openssl` (détecte OpenSSL 3.x) |
+| Migration manquante (pas de baseline) | `prisma db push` au lieu de `migrate deploy` |
+| Extension `unaccent` manquante pour la recherche | `previewFeatures = ["postgresqlExtensions"]` + `extensions = [unaccent]` dans schema |
+| Seed échoue : `role` vs `roles` | Seed mis à jour : `roles: ['admin']` tableau |
+
+#### Comptes créés par le seed
+
+```
+Admin principal : vincent.pixerelle@gmail.com / testtesT1!
+Admin test      : admin@shootnbox.fr / admin123
+Chauffeur test  : chauffeur@shootnbox.fr / chauffeur123
+```
+
+#### Workflow de déploiement Coolify
+
+```
+git push origin master
+→ Coolify API : POST /api/v1/deploy?uuid=APP_UUID&force=true
+→ Build Docker depuis base_directory (backend/ ou frontend/)
+→ Container démarré avec start.sh
+→ prisma db push (idempotent, crée/met à jour le schéma)
+→ Seed si aucun utilisateur
+→ node dist/app.js
+```
+
+---
+
 ## Session du 16 février 2026
 
 ### Parser intelligent de numéros de téléphone
