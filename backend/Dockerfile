@@ -29,7 +29,7 @@ FROM node:20-alpine
 # Required by Prisma query engine (detects OpenSSL 3.x, avoids libssl.so.1.1 error)
 RUN apk add --no-cache openssl
 
-RUN npm install -g pnpm@9
+RUN npm install -g pnpm@9 prisma@5
 
 WORKDIR /app
 
@@ -37,7 +37,7 @@ COPY package.json ./
 COPY prisma ./prisma/
 
 RUN pnpm install --prod
-RUN npx -y prisma@5 generate
+RUN prisma generate
 
 COPY --from=builder /app/dist ./dist/
 
@@ -45,4 +45,5 @@ RUN mkdir -p uploads
 
 EXPOSE 3000
 
-CMD ["node", "dist/app.js"]
+# Run migrations then start the app
+CMD ["sh", "-c", "prisma migrate deploy && node dist/app.js"]
