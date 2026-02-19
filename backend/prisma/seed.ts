@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, MachineType } from '@prisma/client';
+import { PrismaClient, MachineType } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -14,7 +14,7 @@ async function main() {
     create: {
       email: 'vincent.pixerelle@gmail.com',
       passwordHash: vincentPassword,
-      role: UserRole.admin,
+      roles: ['admin'],
       nom: 'Pixerelle',
       prenom: 'Vincent',
       telephone: '0600000000',
@@ -31,7 +31,7 @@ async function main() {
     create: {
       email: 'admin@shootnbox.fr',
       passwordHash: adminPassword,
-      role: UserRole.admin,
+      roles: ['admin'],
       nom: 'Admin',
       prenom: 'Shootnbox',
       telephone: '0600000001',
@@ -48,7 +48,7 @@ async function main() {
     create: {
       email: 'chauffeur@shootnbox.fr',
       passwordHash: chauffeurPassword,
-      role: UserRole.chauffeur,
+      roles: ['chauffeur'],
       nom: 'Dupont',
       prenom: 'Jean',
       telephone: '0611111111',
