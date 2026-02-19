@@ -1,8 +1,15 @@
 version: '3.8'
 
 # ============================================================
-# OptiTour Booth — Production
-# Usage : docker-compose -f docker-compose.production.yml up -d
+# OptiTour Booth — Production (indépendant)
+#
+# Prérequis : Traefik gateway installé (scripts/setup-traefik.sh)
+# Usage     : docker compose -f docker-compose.production.yml up -d
+#
+# Ce projet est 100% isolé :
+#   - Réseau interne optitourbooth_network (postgres, redis, vroom, backend, frontend)
+#   - Seul le service 'frontend' et 'backend' rejoignent le réseau 'proxy' (Traefik)
+#   - Aucune dépendance vis-à-vis des autres projets
 # ============================================================
 
 services:
@@ -25,9 +32,9 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - optitourbooth_network
+      - internal   # Isolé — pas accessible depuis l'extérieur
 
-  # ---- Redis (cache + Socket.io adapter) ----
+  # ---- Redis ----
   redis:
     image: redis:7-alpine
     container_name: optitourbooth_redis
@@ -41,9 +48,9 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - optitourbooth_network
+      - internal   # Isolé
 
-  # ---- VROOM (optimisation de tournées) ----
+  # ---- VROOM (optimisation tournées) ----
   vroom:
     image: vroomvrp/vroom-docker:v1.14.0
     container_name: optitourbooth_vroom
@@ -60,7 +67,7 @@ services:
       retries: 3
       start_period: 15s
     networks:
-      - optitourbooth_network
+      - internal   # Isolé
 
   # ---- Backend Express API ----
   backend:
@@ -97,7 +104,19 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - optitourbooth_network
+      - internal   # Accès postgres/redis/vroom
+      - proxy      # Accès Traefik (routes /api, /socket.io, /uploads)
+    labels:
+      - "traefik.enable=true"
+      # Router API (priorité haute)
+      - "traefik.http.routers.optitourbooth-api.rule=Host(`${DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`) || PathPrefix(`/uploads`))"
+      - "traefik.http.routers.optitourbooth-api.entrypoints=websecure"
+      - "traefik.http.routers.optitourbooth-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.optitourbooth-api.priority=20"
+      - "traefik.http.services.optitourbooth-api.loadbalancer.server.port=3000"
+      # WebSocket sticky (Socket.io)
+      - "traefik.http.services.optitourbooth-api.loadbalancer.sticky.cookie=true"
+      - "traefik.http.services.optitourbooth-api.loadbalancer.sticky.cookie.name=optitourbooth_sticky"
 
   # ---- Frontend React (nginx) ----
   frontend:
@@ -112,29 +131,16 @@ services:
     depends_on:
       - backend
     networks:
-      - optitourbooth_network
-
-  # ---- Caddy (reverse proxy + SSL automatique) ----
-  caddy:
-    image: caddy:2-alpine
-    container_name: optitourbooth_caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    environment:
-      DOMAIN: ${DOMAIN}
-    volumes:
-      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-      - caddy_logs:/var/log/caddy
-    depends_on:
-      - backend
-      - frontend
-    networks:
-      - optitourbooth_network
+      - internal   # Pas strictement nécessaire mais utile pour la cohérence
+      - proxy      # Accès Traefik (route /* )
+    labels:
+      - "traefik.enable=true"
+      # Router frontend (priorité basse — catch-all)
+      - "traefik.http.routers.optitourbooth-web.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.optitourbooth-web.entrypoints=websecure"
+      - "traefik.http.routers.optitourbooth-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.optitourbooth-web.priority=10"
+      - "traefik.http.services.optitourbooth-web.loadbalancer.server.port=80"
 
 volumes:
   postgres_data:
@@ -143,14 +149,14 @@ volumes:
     name: optitourbooth_redis_data
   uploads_data:
     name: optitourbooth_uploads_data
-  caddy_data:
-    name: optitourbooth_caddy_data
-  caddy_config:
-    name: optitourbooth_caddy_config
-  caddy_logs:
-    name: optitourbooth_caddy_logs
 
 networks:
-  optitourbooth_network:
-    name: optitourbooth_network
+  internal:
+    # Réseau strictement privé au projet OptiTour
+    name: optitourbooth_internal
     driver: bridge
+    internal: true   # Pas d'accès internet direct depuis ce réseau
+  proxy:
+    # Réseau partagé avec Traefik — externe (créé par setup-traefik.sh)
+    name: proxy
+    external: true
