@@ -29,13 +29,18 @@ const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const p = new PrismaClient();
 (async () => {
+  const allUsers = await p.user.findMany({ select: { email: true, roles: true } });
+  console.log('[RESET] Users in DB: ' + allUsers.map(u => u.email + '(' + u.roles.join(',') + ')').join(', '));
   const hash = await bcrypt.hash(process.env.RESET_ADMIN_PASSWORD, 12);
   const emails = (process.env.RESET_ADMIN_EMAILS || 'vincent.pixerelle@gmail.com').split(',').map(e => e.trim());
+  console.log('[RESET] Targeting emails: ' + emails.join(', '));
   for (const email of emails) {
     const user = await p.user.findUnique({ where: { email } });
     if (user) {
       await p.user.update({ where: { email }, data: { passwordHash: hash, roles: ['admin'] } });
       console.log('[RESET] OK: ' + email);
+    } else {
+      console.log('[RESET] NOT FOUND: ' + email);
     }
   }
   await p.\$disconnect();
