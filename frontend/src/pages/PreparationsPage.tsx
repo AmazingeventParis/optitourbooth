@@ -210,6 +210,20 @@ export default function PreparationsPage() {
     }
   };
 
+  const handleCancelPreparation = async (preparationId: string) => {
+    setIsSaving(true);
+    try {
+      await preparationsService.delete(preparationId);
+      success('Préparation annulée — borne remise disponible');
+      setIsModalOpen(false);
+      fetchMachines();
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // handleUpdateStatut supprimé - transitions automatiques maintenant
   // const handleUpdateStatut = async (preparationId: string, newStatut: PreparationStatut) => {
   //   setIsSaving(true);
@@ -769,6 +783,19 @@ export default function PreparationsPage() {
                         <CheckCircleIcon className="h-3 w-3 mx-auto" />
                       </button>
                     )}
+                    {statut === 'prete' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCancelPreparation(preparation.id);
+                        }}
+                        className="flex-1 p-1 bg-red-500 text-white rounded hover:bg-red-600 active:scale-95 transition-all disabled:opacity-50"
+                        title="Annuler la préparation"
+                        disabled={isSaving}
+                      >
+                        <XMarkIcon className="h-3 w-3 mx-auto" />
+                      </button>
+                    )}
                     {statut === 'a_decharger' && (
                       <button
                         onClick={(e) => {
@@ -875,6 +902,28 @@ export default function PreparationsPage() {
 
           {/* Boutons d'action - Toujours visibles */}
           <div className="border-t border-gray-200 pt-4 space-y-3">
+            {/* Annuler la préparation (statut prête uniquement) */}
+            {isViewMode && selectedMachine && getMachineStatut(selectedMachine) === 'prete' && (
+              <div>
+                {(() => {
+                  const prep = getPreparationForMachine(selectedMachine!);
+                  if (!prep) return null;
+                  return (
+                    <Button
+                      variant="danger"
+                      className="w-full"
+                      onClick={() => handleCancelPreparation(prep.id)}
+                      disabled={isSaving}
+                      isLoading={isSaving}
+                    >
+                      <XMarkIcon className="h-5 w-5 mr-2" />
+                      Annuler la préparation
+                    </Button>
+                  );
+                })()}
+              </div>
+            )}
+
             {/* Photos déchargées */}
             {isViewMode && (
               <div>
