@@ -1,3 +1,5 @@
+> **IMPORTANT** : Lis `project-state.md` au demarrage pour comprendre l'etat complet du projet.
+
 # Historique des sessions Claude - OptiTourBooth
 
 ## Session du 19 février 2026
