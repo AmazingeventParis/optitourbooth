@@ -1,131 +1,135 @@
-# OptiTourBooth - Etat du Projet
+# OptiTourBooth - Etat du projet
 
-## Vue d'ensemble
-Systeme de gestion de flotte et optimisation de tournees pour livraison/ramassage de photobooths (Shootnbox).
+> Derniere mise a jour : 20 fevrier 2026
 
-- **API** : https://optitourbooth-api.swipego.app (UUID: `kgsgo448os84csgso4o88cwo`)
-- **Web** : https://optitourbooth.swipego.app (UUID: `hooooowo888gwocoksc8c4gk`)
-- **Repo API** : https://github.com/AmazingeventParis/optitourbooth
-- **Repo Web** : https://github.com/Pixoupix/optitourbooth
-- **Status** : Deploye et fonctionnel
+## Statut global : ~75-80% termine
 
-## Stack
+Le coeur du projet est fonctionnel et deploye en production sur Coolify.
+
+---
+
+## Ce qui est FAIT et fonctionnel
 
 ### Backend
-- Node.js 20 + Express + TypeScript
-- Prisma 5 + PostgreSQL 16 + PostGIS
-- Redis 7 (cache), Socket.io 4.7 (temps reel)
-- JWT (access + refresh tokens)
-- Cloudinary + Sharp (images), PDFKit (PDF)
-- Zod (validation), Multer (upload), XLSX (import Excel)
-- Web-push (VAPID)
+- **API Express + TypeScript** : 60+ endpoints, 10 controllers
+- **Base de donnees** : PostgreSQL 16 + PostGIS, 15 modeles Prisma
+- **Auth** : JWT + refresh tokens, roles multiples (admin/chauffeur/preparateur)
+- **Temps reel** : Socket.io (positions chauffeurs, mises a jour statuts)
+- **Cache** : Redis avec TTL et invalidation
+- **Upload photos** : Cloudinary
+- **Optimisation** : VROOM pour calcul de tournees optimales
+- **Routing** : OSRM (directions, matrices)
+- **Geocodage** : Nominatim
+- **Auto-dispatch** : Attribution intelligente des points aux chauffeurs
+- **Import Excel** : Parsing et import batch de points
+- **Web Push** : Notifications navigateur via VAPID
+- **Trafic** : TomTom (optionnel)
 
-### Frontend
-- React 18 + Vite 5 + TypeScript + Tailwind 3
-- Zustand (state), React Query 5 (data fetching)
-- Leaflet + React-Leaflet (cartes)
-- dnd-kit (drag & drop), Recharts (graphiques)
-- React Hook Form + Zod
-- React Router v6, PWA installable
+### Frontend Admin
+- **Dashboard** : KPIs, tracking live des chauffeurs sur carte
+- **Planning journalier** : Drag-and-drop, multi-tournees, calendrier, import Excel, optimisation VROOM
+- **Tournees** : Liste, detail, gestion des points, incidents
+- **Clients** : CRUD avec autocompletion adresse et geocodage
+- **Produits** : Gestion types de photobooth + options
+- **Utilisateurs** : Gestion multi-roles
+- **Vehicules** : Gestion flotte avec consommation carburant
+- **Preparations** : Workflow de preparation des machines (bornes)
+- **Rapports** : Analytics avec graphiques (distances, durees, couts, incidents)
 
-### Routing/Optimisation
-- OSRM (calcul routes)
-- VROOM (optimisation avec fenetres horaires)
-- Nominatim (geocodage)
-- TomTom (trafic predictif, optionnel)
+### Frontend Chauffeur (PWA)
+- **Dashboard** : Stats semaine, livraison en cours, prompts PWA
+- **Page point** : Details livraison, upload photo, capture signature, rapport incident
+- **Page tournee** : Vue d'ensemble, liste points, carte navigation
+- **Agenda** : Calendrier des tournees assignees
+- **Profil** : Parametres, avatar
+- **Onboarding** : Setup GPS, notifications, installation PWA
 
-## Roles
-- **admin** : Dashboard complet, planning, rapports
-- **chauffeur** : Interface mobile, GPS, signatures
-- **preparateur** : Gestion equipement
+### Deploiement
+- Docker multi-stage (Alpine) sur Coolify
+- Auto-seed au premier deploiement
+- Health checks configures
+- Gestion des variables d'environnement
 
-## DB (modeles principaux)
-- User (roles: admin/chauffeur/preparateur)
-- Vehicule (immatriculation, capacite, conso)
-- Client (adresse + lat/lng, contact, acces)
-- Produit (Vegas/Smakk/Ring + options, durees install)
-- Tournee (statut: brouillon/planifiee/en_cours/terminee/annulee)
-- Point (livraison/ramassage, fenetres horaires, signatures, photos)
-- Machine (inventaire equipement, defauts)
-- Preparation (lifecycle: disponible → prete → en_cours → archivee)
-- Incident (types: client_absent, adresse_incorrecte, etc.)
-- Position (GPS tracking, indexe par chauffeur+timestamp)
-- PushSubscription, RefreshToken
+---
 
-## Structure
-```
-backend/
-  src/
-    controllers/  - auth, user, client, produit, tournee, gps, vehicule, machine, preparation
-    services/     - auth, osrm, vroom, tomtom, geocoding, notification, import, autodispatch
-    routes/       - REST routes
-    config/       - database, redis, socket, cloudinary
-    middlewares/  - auth JWT, validation Zod, error handler
-  prisma/schema.prisma + seed.ts
+## Ce qui reste a faire
 
-frontend/
-  src/
-    pages/        - Dashboard, Users, Vehicules, Clients, Produits, Tournees, Planning, Rapports
-    pages/chauffeur/ - ChauffeurDashboard, ChauffeurTournee, ChauffeurPoint, ChauffeurAgenda
-    components/   - layout, map (RouteMap, MultiTourneeMap), tournee, ui
-    hooks/        - queries (React Query), useGPSTracking, useInstallPWA
-    store/        - authStore, chauffeurStore, socketStore (Zustand)
-    services/     - api, auth, users, clients, tournees, gps, machines, preparations, socket
-```
+### Priorite haute
 
-## Socket.io (temps reel)
-- position:update (chauffeur → serveur → admins)
-- point:status-change, incident:report
-- tournee:update, notification
-- Rooms: user:{id}, admins, chauffeurs, tournee:{id}
+#### 1. Tests automatises
+- Seulement 2 fichiers de test (dateUtils, phoneParser)
+- Aucun test d'integration, E2E, ni composants frontend
+- Critique pour la fiabilite en production
 
-## Fonctionnalites cles
-- Import Excel (clients + points + auto-geocodage)
-- Auto-dispatch (repartition equitable des points)
-- Optimisation VROOM (fenetres horaires + durees service)
-- GPS temps reel avec Socket.io
-- PWA installable (Android + iOS)
-- Multi-phone parser
-- Stats separees: temps trajet vs temps sur site
-- Gestion equipement (lifecycle photobooth)
-- Incidents (photo + description)
-- Web Push notifications
-- Admin impersonation (tester interface chauffeur)
-- Auto-terminaison tournees passees (CRON 5min)
-- Redis cache (routes 15min, chauffeurs 1h)
+#### 2. Refactoring des gros fichiers
+- `frontend/src/pages/DailyPlanningPage.tsx` : 4485 lignes
+- `backend/src/controllers/tournee.controller.ts` : 2190 lignes
+- `frontend/src/pages/TourneeDetailPage.tsx` : 1257 lignes
 
-## Comptes test
-- Admin: vincent.pixerelle@gmail.com / testtesT1!
-- Admin: admin@shootnbox.fr / admin123
-- Chauffeur: chauffeur@shootnbox.fr / chauffeur123
+#### 3. Gestion des photos - incomplet
+- Pas de galerie/vignettes dans l'UI chauffeur
+- Pas de suppression de photos
+- Pas de categorisation (avant/apres/incident/preuve)
+- Photos non affichees cote admin pour review
 
-## Env vars (backend)
-- DATABASE_URL, NODE_ENV, PORT
-- JWT_SECRET, JWT_REFRESH_SECRET
-- CORS_ORIGIN (URL frontend)
-- REDIS_URL, OSRM_URL, NOMINATIM_URL, VROOM_URL
-- VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
-- TOMTOM_API_KEY (optionnel)
+#### 4. Exports & rapports
+- Pas d'export Excel/CSV des tournees
+- Pas de generation PDF (bons de livraison, rapports)
+- Pas d'export itineraire pour GPS
 
-## Env vars (frontend)
-- VITE_API_URL, VITE_SOCKET_URL
+### Priorite moyenne
 
-## Problemes resolus
-- Timezone UTC: new Date("YYYY-MM-DD") en France donne jour precedent → ensureDateUTC()
-- Auto-dispatch: spread operator copiait objet → retourner reference
-- PWA blank: start_url etait "/chauffeur" → change en "/"
-- Coolify NODE_ENV: force NODE_ENV=development dans builder
-- TypeScript TS2742: tsconfig.build.json avec declaration: false
-- libssl.so.1.1: Alpine 3.18+ → apk add openssl
+#### 5. Notifications - lacunes
+- Web Push ok
+- Manque : notifications in-app, SMS, email
+- Pas d'historique ni de regles personnalisables
 
-## Deploy
-```bash
-# API (repo AmazingeventParis)
-git push origin master
-curl -s -X GET "https://coolify.swipego.app/api/v1/deploy?uuid=kgsgo448os84csgso4o88cwo&force=true" \
-  -H "Authorization: Bearer 1|FNcssp3CipkrPNVSQyv3IboYwGsP8sjPskoBG3ux98e5a576"
+#### 6. Optimisation mobile chauffeur
+- Interface PWA existante mais peu testee sur vrais devices
+- UX a ameliorer sur les grosses pages
 
-# Web (repo Pixoupix - push separe)
-curl -s -X GET "https://coolify.swipego.app/api/v1/deploy?uuid=hooooowo888gwocoksc8c4gk&force=true" \
-  -H "Authorization: Bearer 1|FNcssp3CipkrPNVSQyv3IboYwGsP8sjPskoBG3ux98e5a576"
-```
+#### 7. Planification avancee des tournees
+- VROOM basique fonctionne
+- Manque : multi-jours, contraintes capacite vehicule, competences chauffeur, equilibrage de charge, optimisation carburant
+
+### Priorite basse
+
+#### 8. Portail client
+- Aucune interface client (suivi livraison, notification a la completion)
+
+#### 9. Audit & conformite
+- Pas de log d'audit des modifications
+- Pas de workflow RGPD (export/suppression donnees)
+
+#### 10. Gestion machines - incomplet
+- CRUD basique ok
+- Manque : planning maintenance, suivi defauts, historique location
+
+---
+
+## Problemes connus resolus
+
+| Probleme | Solution |
+|----------|----------|
+| Timezone UTC (dates decalees en France) | `ensureDateUTC()` dans `backend/src/utils/dateUtils.ts` |
+| Auto-dispatch spread operator | Retourner reference au lieu de copie |
+| PWA blank screen | start_url "/" au lieu de "/chauffeur" |
+| Coolify skip devDeps | `NODE_ENV=development` dans builder Docker |
+| TypeScript TS2742 | `tsconfig.build.json` avec `declaration: false` |
+| libssl.so.1.1 manquant | `apk add openssl` sur Alpine |
+| Redis cache stale data | Cache desactive pour liste tournees |
+| Roles migration | Passage de `role` (string) a `roles` (array) |
+
+---
+
+## Stats du codebase
+
+| Metrique | Valeur |
+|----------|--------|
+| Controllers backend | 10 fichiers |
+| Pages frontend | 15 pages |
+| Services backend | 10 services |
+| Services frontend | 12 services |
+| Modeles base de donnees | 15 entites |
+| Endpoints API | 60+ |
+| Fichiers de test | 2 (utilitaires uniquement) |
