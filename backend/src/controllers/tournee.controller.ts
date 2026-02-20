@@ -214,9 +214,9 @@ export const tourneeController = {
       where.statut = statut;
     }
 
-    // Cache uniquement pour requêtes simples (date exacte, sans includePoints)
-    const canCache = date && !dateDebut && !dateFin && includePoints !== 'true' && page === 1;
-    const cacheKey = canCache ? cacheKeys.tournees.list(date, statut) : null;
+    // Cache désactivé pour les tournées (causait des données stales)
+    const canCache = false;
+    const cacheKey: string | null = null;
 
     // Fonction pour exécuter la requête DB
     const fetchTournees = async () => {

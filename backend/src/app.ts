@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import { config, connectDatabase, disconnectDatabase } from './config/index.js';
-import { disconnectRedis } from './config/redis.js';
+import { disconnectRedis, redis } from './config/redis.js';
 import { initializeSocket } from './config/socket.js';
 import { notFoundHandler, errorHandler } from './middlewares/index.js';
 import routes from './routes/index.js';
@@ -103,6 +103,17 @@ async function startServer(): Promise<void> {
   try {
     // Connexion à la base de données
     await connectDatabase();
+
+    // Flush Redis tournees cache (fix stale data)
+    try {
+      const keys = await redis.keys('tournees:*');
+      if (keys.length > 0) {
+        await redis.del(...keys);
+        console.log(`🧹 Flushed ${keys.length} stale tournees cache keys`);
+      }
+    } catch {
+      // Redis might not be connected yet
+    }
 
     // Initialiser Socket.io
     initializeSocket(httpServer);
