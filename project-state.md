@@ -133,3 +133,10 @@ Le coeur du projet est fonctionnel et deploye en production sur Coolify.
 | Modeles base de donnees | 15 entites |
 | Endpoints API | 60+ |
 | Fichiers de test | 2 (utilitaires uniquement) |
+
+---
+
+## Notes de communication
+
+- L'utilisateur principal communique en francais informel ("cc" = "coucou", salut decontracte)
+- Repondre de maniere directe et informelle, pas de formalisme excessif

@@ -22,7 +22,9 @@ import {
   EyeIcon,
   ExclamationTriangleIcon,
   WrenchScrewdriverIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
+import { useInstallPWA } from '@/hooks/useInstallPWA';
 import clsx from 'clsx';
 
 export default function ChauffeurLayout() {
@@ -31,6 +33,9 @@ export default function ChauffeurLayout() {
   const { clearTournee } = useChauffeurStore();
   const { isConnected, setConnected } = useSocketStore();
   const navigate = useNavigate();
+
+  const { isInstallable, isInstalled, installApp } = useInstallPWA();
+  const [installBannerDismissed, setInstallBannerDismissed] = useState(false);
 
   // Check if onboarding is complete (skip for admins impersonating)
   useEffect(() => {
@@ -341,6 +346,34 @@ export default function ChauffeurLayout() {
             className="px-3 py-1.5 bg-yellow-600 text-white text-sm font-medium rounded-lg hover:bg-yellow-700 flex-shrink-0"
           >
             Aide
+          </button>
+        </div>
+      )}
+
+      {/* Install app banner */}
+      {isInstallable && !isInstalled && !installBannerDismissed && !isImpersonating && (
+        <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-4 py-3 flex items-center gap-3">
+          <div className="flex-shrink-0 w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+            <ArrowDownTrayIcon className="h-5 w-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">Installer OptiTour</p>
+            <p className="text-xs text-primary-200">Acces rapide depuis l'ecran d'accueil</p>
+          </div>
+          <button
+            onClick={async () => {
+              const ok = await installApp();
+              if (ok) setInstallBannerDismissed(true);
+            }}
+            className="px-4 py-2 bg-white text-primary-700 text-sm font-bold rounded-lg hover:bg-primary-50 flex-shrink-0 transition-colors"
+          >
+            Installer
+          </button>
+          <button
+            onClick={() => setInstallBannerDismissed(true)}
+            className="p-1 text-primary-200 hover:text-white flex-shrink-0"
+          >
+            <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
       )}

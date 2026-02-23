@@ -19,6 +19,7 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
   DocumentTextIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -405,14 +406,13 @@ export default function ChauffeurPointPage() {
                 type="file"
                 accept="image/*"
                 capture="environment"
-                multiple
                 className="hidden"
                 onChange={handlePhotoCapture}
               />
               <input
                 ref={galleryInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                 multiple
                 className="hidden"
                 onChange={handlePhotoCapture}
@@ -420,44 +420,57 @@ export default function ChauffeurPointPage() {
             </div>
           )}
         </div>
+        {isActive && (
+          <p className="text-xs text-gray-400 mb-3 -mt-1">Galerie : sélectionnez plusieurs photos d'un coup</p>
+        )}
 
-        {(point.photos && point.photos.length > 0) || uploadedPhotos.length > 0 || uploadingPhotos.length > 0 ? (
-          <div className="grid grid-cols-3 gap-2">
-            {/* Photos from server (existing before this session) */}
-            {point.photos?.map((photo) => (
-              <div key={photo.id} className="relative aspect-square">
-                <img
-                  src={photo.path}
-                  alt={photo.filename}
-                  className="w-full h-full object-cover rounded"
-                />
+        <div className="grid grid-cols-3 gap-2">
+          {/* Photos from server (existing before this session) */}
+          {point.photos?.map((photo) => (
+            <div key={photo.id} className="relative aspect-square">
+              <img
+                src={photo.path}
+                alt={photo.filename}
+                className="w-full h-full object-cover rounded"
+              />
+            </div>
+          ))}
+          {/* Photos uploaded in this session */}
+          {uploadedPhotos.map((photo) => (
+            <div key={photo.id} className="relative aspect-square">
+              <img
+                src={photo.path}
+                alt={photo.filename}
+                className="w-full h-full object-cover rounded"
+              />
+            </div>
+          ))}
+          {/* Local previews during upload */}
+          {uploadingPhotos.map((preview, index) => (
+            <div key={`uploading-${index}`} className="relative aspect-square">
+              <img
+                src={preview}
+                alt={`Upload ${index + 1}`}
+                className="w-full h-full object-cover rounded opacity-60"
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
               </div>
-            ))}
-            {/* Photos uploaded in this session */}
-            {uploadedPhotos.map((photo) => (
-              <div key={photo.id} className="relative aspect-square">
-                <img
-                  src={photo.path}
-                  alt={photo.filename}
-                  className="w-full h-full object-cover rounded"
-                />
-              </div>
-            ))}
-            {/* Local previews during upload */}
-            {uploadingPhotos.map((preview, index) => (
-              <div key={`uploading-${index}`} className="relative aspect-square">
-                <img
-                  src={preview}
-                  alt={`Upload ${index + 1}`}
-                  className="w-full h-full object-cover rounded opacity-60"
-                />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
+            </div>
+          ))}
+          {/* Add more photos button in grid */}
+          {isActive && !isSaving && (
+            <button
+              type="button"
+              onClick={() => galleryInputRef.current?.click()}
+              className="aspect-square rounded border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors"
+            >
+              <PlusIcon className="h-8 w-8" />
+              <span className="text-[10px] mt-1">Ajouter</span>
+            </button>
+          )}
+        </div>
+        {(point.photos?.length || 0) === 0 && uploadedPhotos.length === 0 && uploadingPhotos.length === 0 && !isActive && (
           <p className="text-gray-400 text-center py-4">Aucune photo</p>
         )}
       </Card>
