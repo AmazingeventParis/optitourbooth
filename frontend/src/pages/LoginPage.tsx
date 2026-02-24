@@ -37,7 +37,17 @@ export default function LoginPage() {
 
       setAuth(user, token, refreshToken);
       toast.success(`Bienvenue ${user.prenom} !`);
-      navigate('/');
+
+      // Rediriger selon le rôle
+      if (user.roles.includes('superadmin')) {
+        navigate('/super-admin');
+      } else if (user.roles.includes('chauffeur') && !user.roles.includes('admin')) {
+        navigate('/chauffeur');
+      } else if (user.roles.includes('preparateur') && !user.roles.includes('admin') && !user.roles.includes('chauffeur')) {
+        navigate('/preparations');
+      } else {
+        navigate('/');
+      }
     } catch (error: unknown) {
       const message =
         error instanceof Error
