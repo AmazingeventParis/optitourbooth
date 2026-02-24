@@ -27,6 +27,7 @@ import {
   TruckIcon,
   MapPinIcon,
 } from '@heroicons/react/24/outline';
+import { AgendaSkeleton } from '@/components/ui/PageLoader';
 import clsx from 'clsx';
 
 interface TourneesByDate {
@@ -118,11 +119,16 @@ export default function ChauffeurAgendaPage() {
 
   const selectedDateTournees = selectedDate ? getDayTournees(selectedDate) : [];
 
+  // Show skeleton on initial load
+  if (isLoading && Object.keys(tourneesByDate).length === 0) {
+    return <AgendaSkeleton />;
+  }
+
   return (
     <div className="p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <CalendarDaysIcon className="h-7 w-7 text-primary-600" />
           Mon agenda
         </h1>
@@ -182,7 +188,7 @@ export default function ChauffeurAgendaPage() {
                 key={day.toISOString()}
                 onClick={() => setSelectedDate(day)}
                 className={clsx(
-                  'relative aspect-square p-1 rounded-lg transition-colors flex flex-col items-center justify-center',
+                  'relative aspect-square p-1 rounded-lg transition-colors flex flex-col items-center justify-center min-h-[44px]',
                   !isCurrentMonth && 'opacity-40',
                   isToday(day) && 'ring-2 ring-primary-500',
                   isSelected && 'bg-primary-100',

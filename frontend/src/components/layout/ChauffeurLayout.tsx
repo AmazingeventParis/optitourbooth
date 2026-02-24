@@ -23,8 +23,14 @@ import {
   ExclamationTriangleIcon,
   WrenchScrewdriverIcon,
   ArrowDownTrayIcon,
+  SunIcon,
+  MoonIcon,
 } from '@heroicons/react/24/outline';
 import { useInstallPWA } from '@/hooks/useInstallPWA';
+import { useDarkMode } from '@/hooks/useDarkMode';
+import { useInAppNotifications } from '@/hooks/useInAppNotifications';
+import OfflineBanner from '@/components/ui/OfflineBanner';
+import NotificationBadge from '@/components/ui/NotificationBadge';
 import clsx from 'clsx';
 
 export default function ChauffeurLayout() {
@@ -35,6 +41,10 @@ export default function ChauffeurLayout() {
   const navigate = useNavigate();
 
   const { isInstallable, isInstalled, installApp } = useInstallPWA();
+  const { isDark, toggle: toggleDarkMode } = useDarkMode();
+
+  // In-app notifications from socket events
+  useInAppNotifications();
   const [installBannerDismissed, setInstallBannerDismissed] = useState(false);
 
   // Check if onboarding is complete (skip for admins impersonating)
@@ -151,7 +161,7 @@ export default function ChauffeurLayout() {
   }, [checkActiveTournee]);
 
   // GPS tracking - always enabled when connected (including admin impersonation)
-  const { isTracking, error: gpsError, accuracy } = useGPSTracking({
+  const { isTracking, error: gpsError, accuracy, pendingSync, gpsMode } = useGPSTracking({
     enabled: isConnected,
     impersonatedChauffeurId: isImpersonating ? impersonatedChauffeur?.id : undefined,
   });
@@ -196,7 +206,7 @@ export default function ChauffeurLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Header */}
       <header className="bg-primary-600 text-white px-4 py-3 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
@@ -267,9 +277,31 @@ export default function ChauffeurLayout() {
               )}
             </span>
             <span className="hidden sm:inline">
-              {gpsError ? 'GPS erreur' : isTracking ? 'GPS' : 'GPS off'}
+              {gpsError ? 'GPS erreur' : isTracking ? (gpsMode === 'eco' ? 'GPS éco' : 'GPS') : 'GPS off'}
             </span>
           </div>
+
+          {/* Sync pending indicator */}
+          {pendingSync > 0 && (
+            <div
+              className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-orange-500/20 text-orange-100"
+              title={`${pendingSync} position(s) en attente de synchronisation`}
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-400" />
+              </span>
+              <span className="hidden sm:inline">{pendingSync}</span>
+            </div>
+          )}
+
+          {/* Dark mode toggle */}
+          <button
+            onClick={toggleDarkMode}
+            className="p-2 rounded-lg hover:bg-primary-700 transition-colors"
+            title={isDark ? 'Mode clair' : 'Mode sombre'}
+          >
+            {isDark ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
+          </button>
 
           {/* Bouton mode Préparateur pour les chauffeurs ayant aussi ce rôle */}
           {!isImpersonating && (user?.roles.includes('preparateur') || user?.roles.includes('admin')) && (
@@ -292,6 +324,9 @@ export default function ChauffeurLayout() {
           </button>
         </div>
       </header>
+
+      {/* Offline banner */}
+      <OfflineBanner />
 
       {/* Impersonation banner */}
       {isImpersonating && (
@@ -327,7 +362,7 @@ export default function ChauffeurLayout() {
           </button>
           <button
             onClick={() => setShowPushBanner(false)}
-            className="p-1 text-blue-400 hover:text-blue-600 flex-shrink-0"
+            className="p-2 text-blue-400 hover:text-blue-600 flex-shrink-0"
           >
             <XMarkIcon className="h-5 w-5" />
           </button>
@@ -371,7 +406,7 @@ export default function ChauffeurLayout() {
           </button>
           <button
             onClick={() => setInstallBannerDismissed(true)}
-            className="p-1 text-primary-200 hover:text-white flex-shrink-0"
+            className="p-2 text-primary-200 hover:text-white flex-shrink-0"
           >
             <XMarkIcon className="h-5 w-5" />
           </button>
@@ -384,7 +419,7 @@ export default function ChauffeurLayout() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 safe-area-bottom">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-2 safe-area-bottom">
         <div className="flex justify-around max-w-md mx-auto">
           {navItems.map((item) => (
             <NavLink
@@ -393,15 +428,16 @@ export default function ChauffeurLayout() {
               end={item.href === '/chauffeur'}
               className={({ isActive }) =>
                 clsx(
-                  'flex flex-col items-center px-4 py-2 rounded-lg transition-colors',
+                  'relative flex flex-col items-center px-4 py-2 rounded-lg transition-colors min-h-[48px] min-w-[48px] justify-center',
                   isActive
-                    ? 'text-primary-600 bg-primary-50'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/30'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
                 )
               }
             >
               <item.icon className="h-6 w-6" />
               <span className="text-xs mt-1">{item.name}</span>
+              {item.name === 'Accueil' && <NotificationBadge />}
             </NavLink>
           ))}
         </div>

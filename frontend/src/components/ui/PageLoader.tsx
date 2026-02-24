@@ -84,4 +84,180 @@ export const StatsSkeleton = memo(function StatsSkeleton() {
   );
 });
 
+/**
+ * Skeleton pour le dashboard chauffeur
+ */
+export const DashboardSkeleton = memo(function DashboardSkeleton() {
+  return (
+    <div className="p-4 space-y-6 animate-pulse">
+      {/* Greeting */}
+      <div>
+        <div className="h-7 bg-gray-200 rounded w-48 mb-2" />
+        <div className="h-4 bg-gray-200 rounded w-36" />
+      </div>
+      {/* Tournee card */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <div className="h-5 bg-gray-200 rounded w-36 mb-2" />
+            <div className="h-3 bg-gray-200 rounded w-28" />
+          </div>
+          <div className="h-6 bg-gray-200 rounded-full w-20" />
+        </div>
+        <div className="grid grid-cols-4 gap-2 mb-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-gray-100 rounded-lg p-3 text-center">
+              <div className="h-8 bg-gray-200 rounded w-8 mx-auto mb-1" />
+              <div className="h-3 bg-gray-200 rounded w-12 mx-auto" />
+            </div>
+          ))}
+        </div>
+        <div className="h-10 bg-gray-200 rounded-lg w-full" />
+      </div>
+      {/* Weekly stats */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="h-5 bg-gray-200 rounded w-32 mb-4" />
+        <div className="grid grid-cols-3 gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="bg-gray-100 rounded-xl p-3 text-center">
+              <div className="h-8 bg-gray-200 rounded w-12 mx-auto mb-1" />
+              <div className="h-3 bg-gray-200 rounded w-16 mx-auto" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+/**
+ * Skeleton pour la liste de tournée chauffeur
+ */
+export const TourneeListSkeleton = memo(function TourneeListSkeleton() {
+  return (
+    <div className="flex flex-col h-[calc(100vh-8rem)] animate-pulse">
+      {/* Header */}
+      <div className="p-4 bg-white border-b">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="h-6 bg-gray-200 rounded w-40 mb-2" />
+            <div className="h-4 bg-gray-200 rounded w-28" />
+          </div>
+          <div className="h-9 bg-gray-200 rounded-lg w-24" />
+        </div>
+        <div className="h-10 bg-gray-100 rounded-lg" />
+      </div>
+      {/* List items */}
+      <div className="flex-1 p-4 space-y-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex gap-3">
+              <div className="flex-shrink-0 w-10 h-10 bg-gray-200 rounded-full" />
+              <div className="flex-1">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="h-4 bg-gray-200 rounded w-32" />
+                  <div className="h-5 bg-gray-200 rounded-full w-16" />
+                </div>
+                <div className="h-3 bg-gray-200 rounded w-48 mb-2" />
+                <div className="flex items-center gap-3">
+                  <div className="h-5 bg-gray-200 rounded w-20" />
+                  <div className="h-3 bg-gray-200 rounded w-16" />
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+
+/**
+ * Skeleton pour le détail d'un point chauffeur
+ */
+export const PointDetailSkeleton = memo(function PointDetailSkeleton() {
+  return (
+    <div className="p-4 space-y-4 animate-pulse">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="h-9 w-9 bg-gray-200 rounded" />
+        <div className="flex-1">
+          <div className="h-5 bg-gray-200 rounded w-24 mb-1" />
+          <div className="h-5 bg-gray-200 rounded w-20" />
+        </div>
+        <div className="h-6 bg-gray-200 rounded-full w-16" />
+      </div>
+      {/* Client info */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="h-5 bg-gray-200 rounded w-40 mb-3" />
+        <div className="space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="h-5 w-5 bg-gray-200 rounded" />
+            <div className="flex-1">
+              <div className="h-4 bg-gray-200 rounded w-48 mb-1" />
+              <div className="h-3 bg-gray-200 rounded w-32" />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="h-5 w-5 bg-gray-200 rounded" />
+            <div className="h-4 bg-gray-200 rounded w-28" />
+          </div>
+        </div>
+        <div className="flex gap-2 mt-4">
+          <div className="h-10 bg-gray-200 rounded-lg flex-1" />
+          <div className="h-10 bg-gray-200 rounded-lg flex-1" />
+        </div>
+      </div>
+      {/* Photos grid */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="h-5 bg-gray-200 rounded w-24 mb-3" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="aspect-square bg-gray-200 rounded" />
+          ))}
+        </div>
+      </div>
+      {/* Action buttons */}
+      <div className="space-y-3">
+        <div className="h-11 bg-gray-200 rounded-lg" />
+        <div className="h-11 bg-gray-200 rounded-lg" />
+        <div className="h-11 bg-gray-200 rounded-lg" />
+      </div>
+    </div>
+  );
+});
+
+/**
+ * Skeleton pour l'agenda chauffeur
+ */
+export const AgendaSkeleton = memo(function AgendaSkeleton() {
+  return (
+    <div className="p-4 space-y-4 animate-pulse">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="h-7 bg-gray-200 rounded w-36" />
+        <div className="h-4 bg-gray-200 rounded w-20" />
+      </div>
+      {/* Calendar */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="h-8 w-8 bg-gray-200 rounded" />
+          <div className="h-5 bg-gray-200 rounded w-32" />
+          <div className="h-8 w-8 bg-gray-200 rounded" />
+        </div>
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="h-4 bg-gray-200 rounded mx-auto w-8" />
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: 35 }).map((_, i) => (
+            <div key={i} className="aspect-square bg-gray-100 rounded-lg" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default PageLoader;

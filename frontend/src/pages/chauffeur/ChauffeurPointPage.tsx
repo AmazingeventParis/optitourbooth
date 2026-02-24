@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Badge, Button, Modal, Input, Select, PhoneNumbers } from '@/components/ui';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -6,6 +6,7 @@ import { tourneesService } from '@/services/tournees.service';
 import { useAuthStore } from '@/store/authStore';
 import { useChauffeurStore } from '@/store/chauffeurStore';
 import { useToast } from '@/hooks/useToast';
+import { usePhotoUpload } from '@/hooks/usePhotoUpload';
 import { formatTimeRange } from '@/utils/format';
 import {
   ArrowLeftIcon,
@@ -20,7 +21,13 @@ import {
   ExclamationTriangleIcon,
   DocumentTextIcon,
   PlusIcon,
+  XMarkIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
+import { PointDetailSkeleton } from '@/components/ui/PageLoader';
+import PhotoLightbox from '@/components/ui/PhotoLightbox';
+import { haptics } from '@/utils/haptics';
+import { useSwipeGesture } from '@/hooks/useSwipeGesture';
 import clsx from 'clsx';
 
 const getTypeConfig = (type: string) => {
@@ -63,17 +70,33 @@ export default function ChauffeurPointPage() {
   const [incidentType, setIncidentType] = useState('');
   const [incidentDescription, setIncidentDescription] = useState('');
 
-  // Photos
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingPhotos, setUploadingPhotos] = useState<string[]>([]); // Local previews during upload
-  const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ id: string; path: string; filename: string }>>([]); // Successfully uploaded photos
+  // Lightbox
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  // Swipe right to go back
+  const swipeHandlers = useSwipeGesture({
+    onSwipeRight: () => navigate('/chauffeur/tournee'),
+  });
 
   // Get point from store
   const point = useMemo(() => {
     if (!tournee?.points || !pointId) return null;
     return tournee.points.find((p) => p.id === pointId) || null;
   }, [tournee?.points, pointId]);
+
+  // Photo upload
+  const {
+    photos: uploadPhotos,
+    addPhotos,
+    removePhoto,
+    retryPhoto,
+    fileInputRef,
+    galleryInputRef,
+  } = usePhotoUpload({
+    tourneeId: tournee?.id || '',
+    pointId: pointId || '',
+  });
 
   useEffect(() => {
     if (user?.id) {
@@ -89,6 +112,7 @@ export default function ChauffeurPointPage() {
       await tourneesService.updatePoint(tournee.id, point.id, {
         statut: 'termine',
       });
+      haptics.success();
       success('Point terminé');
       setIsCompleteDialogOpen(false);
       // Refresh tournee data before navigating
@@ -112,6 +136,7 @@ export default function ChauffeurPointPage() {
         description: incidentDescription || 'Incident signalé par le chauffeur',
       });
 
+      haptics.heavy();
       success('Incident signalé');
       setIsIncidentModalOpen(false);
       // Refresh tournee data before navigating
@@ -151,69 +176,10 @@ export default function ChauffeurPointPage() {
     const originalFiles = Array.from(files);
 
     // Reset file inputs immediately so they can be used again
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    if (galleryInputRef.current) {
-      galleryInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
 
-    // Compress images before upload (10MB → 1.5MB)
-    setIsSaving(true);
-    let compressedFiles: File[];
-    try {
-      const { compressImages } = await import('@/utils/imageCompression');
-      compressedFiles = await compressImages(originalFiles);
-    } catch (err) {
-      console.error('Compression error:', err);
-      compressedFiles = originalFiles; // Fallback on original if compression fails
-    }
-
-    // Show local preview during upload
-    const previews: string[] = [];
-    for (const file of compressedFiles) {
-      const reader = new FileReader();
-      const preview = await new Promise<string>((resolve) => {
-        reader.onload = (ev) => resolve(ev.target?.result as string);
-        reader.readAsDataURL(file);
-      });
-      previews.push(preview);
-    }
-    setUploadingPhotos(previews);
-
-    // Upload to server (but always keep photos visible locally)
-    try {
-      const result = await tourneesService.uploadPhotos(tournee.id, point.id, compressedFiles);
-
-      // Check if upload actually returned photos from server
-      const newPhotos = result as Array<{ id: string; path: string; filename: string }>;
-
-      if (newPhotos && newPhotos.length > 0) {
-        success(`${newPhotos.length} photo(s) ajoutée(s)`);
-        // Use server URLs
-        setUploadedPhotos(prev => [...prev, ...newPhotos]);
-      } else {
-        // Server didn't return photos - keep local previews
-        success(`${previews.length} photo(s) enregistrée(s) localement`);
-        setUploadedPhotos(prev => [...prev, ...previews.map((p, i) => ({
-          id: `local-${Date.now()}-${i}`,
-          path: p,
-          filename: `photo-${i + 1}`,
-        }))]);
-      }
-    } catch (err) {
-      // Even on error, keep photos visible locally
-      console.error('Upload error:', err);
-      success(`${previews.length} photo(s) enregistrée(s) localement`);
-      setUploadedPhotos(prev => [...prev, ...previews.map((p, i) => ({
-        id: `local-${Date.now()}-${i}`,
-        path: p,
-        filename: `photo-${i + 1}`,
-      }))]);
-    } finally {
-      setUploadingPhotos([]);
-      setIsSaving(false);
-    }
+    addPhotos(originalFiles);
   };
 
   const openGoogleMaps = () => {
@@ -237,11 +203,7 @@ export default function ChauffeurPointPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
-      </div>
-    );
+    return <PointDetailSkeleton />;
   }
 
   if (!point || !tournee) {
@@ -257,11 +219,19 @@ export default function ChauffeurPointPage() {
     );
   }
 
+  // Build combined photo list for lightbox
+  const allLightboxPhotos = [
+    ...(point.photos?.map((p) => ({ id: p.id, src: p.path, alt: p.filename })) || []),
+    ...uploadPhotos
+      .filter((p) => p.status === 'done' || p.status === 'uploading')
+      .map((p) => ({ id: p.id, src: p.serverPath || p.preview, alt: p.filename })),
+  ];
+
   const typeConfig = getTypeConfig(point.type);
   const isActive = (point.statut === 'a_faire' || point.statut === 'en_cours') && tournee.statut === 'en_cours';
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4" {...swipeHandlers}>
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate('/chauffeur/tournee')}>
@@ -380,14 +350,13 @@ export default function ChauffeurPointPage() {
       {/* Photos Section */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">Photos ({(point.photos?.length || 0) + uploadedPhotos.length + uploadingPhotos.length})</h3>
+          <h3 className="font-semibold">Photos ({(point.photos?.length || 0) + uploadPhotos.length})</h3>
           {isActive && (
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isSaving}
               >
                 <CameraIcon className="h-4 w-4 mr-1" />
                 Appareil
@@ -396,7 +365,6 @@ export default function ChauffeurPointPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => galleryInputRef.current?.click()}
-                disabled={isSaving}
               >
                 <PhotoIcon className="h-4 w-4 mr-1" />
                 Galerie
@@ -424,10 +392,14 @@ export default function ChauffeurPointPage() {
           <p className="text-xs text-gray-400 mb-3 -mt-1">Galerie : sélectionnez plusieurs photos d'un coup</p>
         )}
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {/* Photos from server (existing before this session) */}
-          {point.photos?.map((photo) => (
-            <div key={photo.id} className="relative aspect-square">
+          {point.photos?.map((photo, idx) => (
+            <div
+              key={photo.id}
+              className="relative aspect-square group cursor-pointer"
+              onClick={() => { setLightboxIndex(idx); setLightboxOpen(true); }}
+            >
               <img
                 src={photo.path}
                 alt={photo.filename}
@@ -435,31 +407,66 @@ export default function ChauffeurPointPage() {
               />
             </div>
           ))}
-          {/* Photos uploaded in this session */}
-          {uploadedPhotos.map((photo) => (
-            <div key={photo.id} className="relative aspect-square">
+          {/* Photos uploaded/uploading in this session */}
+          {uploadPhotos.map((photo) => (
+            <div
+              key={photo.id}
+              className="relative aspect-square group cursor-pointer"
+              onClick={() => {
+                if (photo.status === 'done') {
+                  const idx = allLightboxPhotos.findIndex((p) => p.id === photo.id);
+                  if (idx >= 0) { setLightboxIndex(idx); setLightboxOpen(true); }
+                }
+              }}
+            >
               <img
-                src={photo.path}
+                src={photo.serverPath || photo.preview}
                 alt={photo.filename}
-                className="w-full h-full object-cover rounded"
+                className={clsx(
+                  'w-full h-full object-cover rounded',
+                  photo.status === 'uploading' && 'opacity-70',
+                  photo.status === 'error' && 'opacity-50'
+                )}
               />
-            </div>
-          ))}
-          {/* Local previews during upload */}
-          {uploadingPhotos.map((preview, index) => (
-            <div key={`uploading-${index}`} className="relative aspect-square">
-              <img
-                src={preview}
-                alt={`Upload ${index + 1}`}
-                className="w-full h-full object-cover rounded opacity-60"
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
-              </div>
+              {/* Progress bar */}
+              {photo.status === 'uploading' && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-300 rounded-b">
+                  <div
+                    className="h-full bg-primary-500 rounded-b transition-all"
+                    style={{ width: `${photo.progress}%` }}
+                  />
+                </div>
+              )}
+              {/* Uploading spinner */}
+              {(photo.status === 'uploading' || photo.status === 'pending') && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                </div>
+              )}
+              {/* Error overlay */}
+              {photo.status === 'error' && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <button
+                    onClick={() => retryPhoto(photo.id)}
+                    className="p-2 bg-red-500 text-white rounded-full"
+                  >
+                    <ArrowPathIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
+              {/* Delete button */}
+              {isActive && photo.status !== 'uploading' && (
+                <button
+                  onClick={() => removePhoto(photo.id)}
+                  className="absolute top-1 right-1 p-1.5 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              )}
             </div>
           ))}
           {/* Add more photos button in grid */}
-          {isActive && !isSaving && (
+          {isActive && (
             <button
               type="button"
               onClick={() => galleryInputRef.current?.click()}
@@ -470,7 +477,7 @@ export default function ChauffeurPointPage() {
             </button>
           )}
         </div>
-        {(point.photos?.length || 0) === 0 && uploadedPhotos.length === 0 && uploadingPhotos.length === 0 && !isActive && (
+        {(point.photos?.length || 0) === 0 && uploadPhotos.length === 0 && !isActive && (
           <p className="text-gray-400 text-center py-4">Aucune photo</p>
         )}
       </Card>
@@ -615,6 +622,22 @@ export default function ChauffeurPointPage() {
         confirmText="Terminer"
         variant="warning"
         isLoading={isSaving}
+      />
+
+      {/* Photo Lightbox */}
+      <PhotoLightbox
+        photos={allLightboxPhotos}
+        initialIndex={lightboxIndex}
+        isOpen={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        onDelete={isActive ? (photoId) => {
+          removePhoto(photoId);
+          if (allLightboxPhotos.length <= 1) {
+            setLightboxOpen(false);
+          } else if (lightboxIndex >= allLightboxPhotos.length - 1) {
+            setLightboxIndex(Math.max(0, lightboxIndex - 1));
+          }
+        } : undefined}
       />
     </div>
   );

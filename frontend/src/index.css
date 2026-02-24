@@ -14,6 +14,20 @@
   body {
     @apply bg-gray-50 text-gray-900 antialiased;
   }
+
+  /* Dark mode base overrides */
+  html.dark body {
+    @apply bg-gray-900 text-gray-100;
+  }
+
+  html.dark .card,
+  html.dark .bg-white {
+    background-color: #1f2937; /* gray-800 */
+  }
+
+  html.dark .border-gray-200 {
+    border-color: #374151; /* gray-700 */
+  }
 }
 
 @layer components {
@@ -117,6 +131,12 @@
 }
 
 @layer utilities {
+  /* Touch targets - minimum 48px for mobile accessibility */
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
   /* Scrollbar custom */
   .scrollbar-thin {
     scrollbar-width: thin;

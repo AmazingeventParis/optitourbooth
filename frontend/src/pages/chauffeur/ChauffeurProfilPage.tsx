@@ -3,16 +3,21 @@ import { Card, Button, Input } from '@/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { usersService } from '@/services/users.service';
 import { useToast } from '@/hooks/useToast';
+import { useDarkMode } from '@/hooks/useDarkMode';
 import {
   UserCircleIcon,
   EnvelopeIcon,
   PhoneIcon,
   KeyIcon,
+  SunIcon,
+  MoonIcon,
+  ComputerDesktopIcon,
 } from '@heroicons/react/24/outline';
 
 export default function ChauffeurProfilPage() {
   const { user, setAuth, token, refreshToken } = useAuthStore();
   const { success, error: showError } = useToast();
+  const { theme, setTheme, isDark } = useDarkMode();
 
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -86,7 +91,7 @@ export default function ChauffeurProfilPage() {
 
   return (
     <div className="p-4 space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900">Mon profil</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Mon profil</h1>
 
       {/* Profile Card */}
       <Card className="p-4">
@@ -227,6 +232,43 @@ export default function ChauffeurProfilPage() {
             Changer mon mot de passe
           </Button>
         )}
+      </Card>
+
+      {/* Dark Mode */}
+      <Card className="p-4">
+        <h3 className="font-semibold mb-3 flex items-center gap-2">
+          {isDark ? <MoonIcon className="h-5 w-5" /> : <SunIcon className="h-5 w-5" />}
+          Apparence
+        </h3>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setTheme('light')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+              theme === 'light' ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <SunIcon className="h-4 w-4" />
+            Clair
+          </button>
+          <button
+            onClick={() => setTheme('dark')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+              theme === 'dark' ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <MoonIcon className="h-4 w-4" />
+            Sombre
+          </button>
+          <button
+            onClick={() => setTheme('system')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+              theme === 'system' ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <ComputerDesktopIcon className="h-4 w-4" />
+            Auto
+          </button>
+        </div>
       </Card>
 
       {/* App Info */}

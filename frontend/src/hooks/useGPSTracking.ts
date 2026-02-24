@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { socketService, PositionUpdate } from '@/services/socket.service';
 import { gpsService } from '@/services/gps.service';
+import { useOfflineStore } from '@/store/offlineStore';
 
 interface UseGPSTrackingOptions {
   enabled: boolean;
@@ -9,11 +10,15 @@ interface UseGPSTrackingOptions {
   impersonatedChauffeurId?: string; // For admin impersonation mode
 }
 
+type GPSMode = 'high' | 'eco';
+
 interface UseGPSTrackingReturn {
   isTracking: boolean;
   lastPosition: PositionUpdate | null;
   error: string | null;
   accuracy: number | null;
+  pendingSync: number;
+  gpsMode: GPSMode;
 }
 
 /**
@@ -32,16 +37,18 @@ export function useGPSTracking({
   const [lastPosition, setLastPosition] = useState<PositionUpdate | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [gpsMode, setGpsMode] = useState<GPSMode>('high');
 
   const watchIdRef = useRef<number | null>(null);
   const socketIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastPositionRef = useRef<GeolocationPosition | null>(null);
   const lastSocketSendRef = useRef<number>(0);
+  const batteryLevelRef = useRef<number>(1);
 
-  // Send position via Socket.io
+  // Send position via Socket.io, or queue if offline
   const sendPositionViaSocket = useCallback(() => {
-    if (!lastPositionRef.current || !socketService.isConnected()) return;
+    if (!lastPositionRef.current) return;
 
     const pos = lastPositionRef.current;
     const positionData: PositionUpdate = {
@@ -51,10 +58,19 @@ export function useGPSTracking({
       speed: pos.coords.speed ?? undefined,
       heading: pos.coords.heading ?? undefined,
       timestamp: pos.timestamp,
-      impersonatedUserId: impersonatedChauffeurId, // Include if admin is impersonating
+      impersonatedUserId: impersonatedChauffeurId,
     };
 
-    socketService.sendPosition(positionData);
+    if (navigator.onLine && socketService.isConnected()) {
+      socketService.sendPosition(positionData);
+    } else {
+      // Queue position for later sync
+      useOfflineStore.getState().addToQueue({
+        type: 'gps-position',
+        payload: positionData as unknown as Record<string, unknown>,
+      });
+    }
+
     lastSocketSendRef.current = Date.now();
     setLastPosition(positionData);
   }, [impersonatedChauffeurId]);
@@ -70,11 +86,39 @@ export function useGPSTracking({
     }
   }, []);
 
+  // Determine adaptive interval based on speed and battery
+  const getAdaptiveSettings = useCallback(() => {
+    const speed = lastPositionRef.current?.coords.speed ?? 0;
+    const isMoving = speed > 1; // > 1 m/s ≈ 3.6 km/h
+    const lowBattery = batteryLevelRef.current < 0.15;
+
+    if (lowBattery) {
+      setGpsMode('eco');
+      return { interval: 120000, highAccuracy: false, maximumAge: 30000 };
+    }
+    if (!isMoving) {
+      setGpsMode('eco');
+      return { interval: 60000, highAccuracy: false, maximumAge: 30000 };
+    }
+    setGpsMode('high');
+    return { interval: intervalMs, highAccuracy: true, maximumAge: 5000 };
+  }, [intervalMs]);
+
   // Start tracking
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) {
       setError('La géolocalisation n\'est pas supportée par ce navigateur');
       return;
+    }
+
+    // Monitor battery level
+    if ('getBattery' in navigator) {
+      (navigator as any).getBattery().then((battery: any) => {
+        batteryLevelRef.current = battery.level;
+        battery.addEventListener('levelchange', () => {
+          batteryLevelRef.current = battery.level;
+        });
+      }).catch(() => { /* Battery API not available */ });
     }
 
     setError(null);
@@ -87,7 +131,6 @@ export function useGPSTracking({
         setAccuracy(position.coords.accuracy);
         setError(null);
 
-        // Update position state
         const positionData: PositionUpdate = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -98,9 +141,10 @@ export function useGPSTracking({
         };
         setLastPosition(positionData);
 
-        // Send immediately if enough time has passed
+        // Send immediately if enough time has passed (adaptive)
+        const settings = getAdaptiveSettings();
         const now = Date.now();
-        if (now - lastSocketSendRef.current >= intervalMs) {
+        if (now - lastSocketSendRef.current >= settings.interval) {
           sendPositionViaSocket();
         }
       },
@@ -127,7 +171,7 @@ export function useGPSTracking({
       }
     );
 
-    // Set up socket interval for regular updates
+    // Set up socket interval for regular updates (uses adaptive interval)
     socketIntervalRef.current = setInterval(() => {
       sendPositionViaSocket();
     }, intervalMs);
@@ -138,7 +182,7 @@ export function useGPSTracking({
     }, restBackupIntervalMs);
 
     console.log('[GPS] Tracking started');
-  }, [intervalMs, restBackupIntervalMs, sendPositionViaSocket, sendPositionViaRest]);
+  }, [intervalMs, restBackupIntervalMs, sendPositionViaSocket, sendPositionViaRest, getAdaptiveSettings]);
 
   // Stop tracking
   const stopTracking = useCallback(() => {
@@ -176,10 +220,15 @@ export function useGPSTracking({
     };
   }, [enabled, impersonatedChauffeurId, startTracking, stopTracking]);
 
+  // Count pending GPS positions in offline queue
+  const pendingSync = useOfflineStore((s) => s.queue.filter((i) => i.type === 'gps-position').length);
+
   return {
     isTracking,
     lastPosition,
     error,
     accuracy,
+    pendingSync,
+    gpsMode,
   };
 }

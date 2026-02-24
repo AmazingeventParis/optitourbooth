@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Badge, Button } from '@/components/ui';
 import { useChauffeurStore } from '@/store/chauffeurStore';
 import { useEffectiveUser } from '@/hooks/useEffectiveUser';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { tourneesService } from '@/services/tournees.service';
 import { pushNotificationService } from '@/services/pushNotification.service';
 import { formatTime } from '@/utils/format';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { DashboardSkeleton } from '@/components/ui/PageLoader';
 import {
   MapPinIcon,
   ClockIcon,
@@ -217,26 +219,32 @@ export default function ChauffeurDashboard() {
     navigate('/chauffeur/onboarding');
   };
 
+  // Pull-to-refresh
+  const handlePullRefresh = useCallback(async () => {
+    if (effectiveUser?.id) {
+      await fetchTournee(effectiveUser.id, true);
+    }
+  }, [effectiveUser?.id, fetchTournee]);
+
+  const { containerRef, PullIndicator } = usePullToRefresh({ onRefresh: handlePullRefresh });
+
   const showAppConfigCard = !isAppInstalled || !hasNotificationPermission || !hasGPSPermission;
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const stats = getPointsStats();
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 space-y-6" ref={containerRef}>
+      {PullIndicator}
       {/* Greeting */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Bonjour {effectiveUser?.prenom} !
         </h1>
-        <p className="text-gray-500">
+        <p className="text-gray-500 dark:text-gray-400">
           {format(new Date(), "EEEE d MMMM yyyy", { locale: fr })}
         </p>
       </div>

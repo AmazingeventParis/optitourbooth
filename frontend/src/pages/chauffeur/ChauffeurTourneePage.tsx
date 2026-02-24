@@ -11,6 +11,9 @@ import { Point, PointProduit, Produit, Tournee } from '@/types';
 import { format, isAfter, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { formatTime, formatTimeRange } from '@/utils/format';
+import { TourneeListSkeleton } from '@/components/ui/PageLoader';
+import { haptics } from '@/utils/haptics';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import {
   MapPinIcon,
   ClockIcon,
@@ -121,6 +124,7 @@ export default function ChauffeurTourneePage() {
     setIsSaving(true);
     try {
       await tourneesService.start(tournee.id);
+      haptics.medium();
       success('Tournée démarrée');
       setIsStartDialogOpen(false);
       handleRefresh();
@@ -137,6 +141,7 @@ export default function ChauffeurTourneePage() {
     setIsSaving(true);
     try {
       await tourneesService.finish(tournee.id);
+      haptics.success();
       success('Tournée terminée');
       setIsFinishDialogOpen(false);
       handleRefresh();
@@ -192,6 +197,11 @@ export default function ChauffeurTourneePage() {
     [tournee?.depotLatitude, tournee?.depotLongitude, tournee?.depotAdresse]
   );
 
+  // Pull-to-refresh
+  const { containerRef: pullRefreshRef, PullIndicator } = usePullToRefresh({
+    onRefresh: handleRefresh,
+  });
+
   // Callback mémorisé pour le click sur un point de la carte
   const handlePointClick = useCallback((point: Point) => {
     setSelectedPointId(point.id);
@@ -201,11 +211,7 @@ export default function ChauffeurTourneePage() {
   }, [navigate, tournee?.statut]);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
-      </div>
-    );
+    return <TourneeListSkeleton />;
   }
 
   if (!tournee) {
@@ -232,7 +238,7 @@ export default function ChauffeurTourneePage() {
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Header */}
-      <div className="p-4 bg-white border-b">
+      <div className="p-4 bg-white dark:bg-gray-800 border-b dark:border-gray-700">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="font-bold text-lg">
@@ -308,7 +314,8 @@ export default function ChauffeurTourneePage() {
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         {viewMode === 'list' ? (
-          <div className="h-full overflow-y-auto p-4 space-y-3">
+          <div className="h-full overflow-y-auto p-4 space-y-3" ref={pullRefreshRef}>
+            {PullIndicator}
             {sortedPoints.map((point, index) => {
               const statutConfig = getPointStatutConfig(point.statut);
               const isActive = point.statut === 'a_faire' || point.statut === 'en_cours';

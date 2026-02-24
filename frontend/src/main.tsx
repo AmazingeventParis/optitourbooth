@@ -10,6 +10,8 @@ import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import '@fontsource/inter/700.css';
 import './index.css';
+import { setupQueueSync } from '@/utils/offlineQueue';
+import { initWebVitals } from '@/utils/webVitals';
 
 // Configuration React Query avec cache optimisé
 const queryClient = new QueryClient({
@@ -33,9 +35,33 @@ const queryClient = new QueryClient({
   },
 });
 
-// Register service worker for push notifications
+// Initialize offline queue sync
+setupQueueSync();
+
+// Initialize Web Vitals monitoring
+initWebVitals();
+
+// Register service worker with update check
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch((err) => {
+  navigator.serviceWorker.register('/sw.js').then((registration) => {
+    // Check for updates every 5 minutes
+    setInterval(() => registration.update(), 5 * 60 * 1000);
+
+    registration.addEventListener('updatefound', () => {
+      const newWorker = registration.installing;
+      if (!newWorker) return;
+
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          // New version available - prompt user
+          if (confirm('Nouvelle version disponible. Mettre à jour ?')) {
+            newWorker.postMessage({ type: 'SKIP_WAITING' });
+            window.location.reload();
+          }
+        }
+      });
+    });
+  }).catch((err) => {
     console.warn('[SW] Registration failed:', err);
   });
 }

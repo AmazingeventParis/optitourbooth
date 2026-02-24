@@ -138,6 +138,27 @@ class GPSService {
   }
 
   /**
+   * Send a batch of positions to server
+   */
+  async sendBatchPositions(positions: Array<{
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    speed?: number;
+    heading?: number;
+    timestamp: number;
+  }>): Promise<void> {
+    if (positions.length === 0) return;
+
+    try {
+      await api.post('/gps/positions/batch', { positions });
+    } catch (error) {
+      console.error('Failed to send batch positions to server:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Check if currently tracking
    */
   isCurrentlyTracking(): boolean {
