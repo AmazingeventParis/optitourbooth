@@ -26,6 +26,7 @@ const DailyPlanningPage = lazy(() => import('@/pages/DailyPlanningPage'));
 const PreparationsPage = lazy(() => import('@/pages/PreparationsPage'));
 const RapportsPage = lazy(() => import('@/pages/RapportsPage'));
 const MapPopupPage = lazy(() => import('@/pages/MapPopupPage'));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 
 // ============================================
 // LAZY LOADING - Pages Chauffeur
@@ -264,6 +265,7 @@ function App() {
         <Route path="planning" element={<LazyPage><DailyPlanningPage /></LazyPage>} />
         <Route path="historique" element={<LazyPage><TourneesPage /></LazyPage>} />
         <Route path="rapports" element={<LazyPage><RapportsPage /></LazyPage>} />
+        <Route path="parametres" element={<LazyPage><SettingsPage /></LazyPage>} />
       </Route>
 
       {/* Routes Préparateur */}

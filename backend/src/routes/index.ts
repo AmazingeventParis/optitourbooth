@@ -13,6 +13,7 @@ import notificationRoutes from './notification.routes.js';
 import machineRoutes from './machine.routes.js';
 import preparationRoutes from './preparation.routes.js';
 import tenantRoutes from './tenant.routes.js';
+import settingsRoutes from './settings.routes.js';
 
 const router = Router();
 
@@ -116,6 +117,10 @@ router.get('/', (_req: Request, res: Response) => {
         ready: 'POST /api/preparations/:id/ready',
         unloadPhotos: 'POST /api/preparations/:id/unload-photos',
       },
+      settings: {
+        get: 'GET /api/settings',
+        update: 'PUT /api/settings',
+      },
       tenants: {
         list: 'GET /api/tenants',
         create: 'POST /api/tenants',
@@ -140,6 +145,7 @@ router.use('/vehicules', vehiculeRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/machines', machineRoutes);
 router.use('/preparations', preparationRoutes);
+router.use('/settings', settingsRoutes);
 router.use('/tenants', tenantRoutes);
 
 export default router;

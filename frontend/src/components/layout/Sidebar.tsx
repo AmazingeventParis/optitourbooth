@@ -15,6 +15,7 @@ import {
   EyeIcon,
   WrenchScrewdriverIcon,
   ArrowDownTrayIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore, User } from '@/store/authStore';
 import { useChauffeurs } from '@/hooks/queries/useUsers';
@@ -44,6 +45,7 @@ const navigation: Array<{
   { name: 'Véhicules', href: '/vehicules', icon: TruckIcon, roles: ['admin'] },
   { name: 'Produits', href: '/produits', icon: CubeIcon, roles: ['admin'] },
   { name: 'Rapports', href: '/rapports', icon: ChartBarIcon, roles: ['admin'] },
+  { name: 'Paramètres', href: '/parametres', icon: Cog6ToothIcon, roles: ['admin'] },
 ];
 
 function SidebarContent() {

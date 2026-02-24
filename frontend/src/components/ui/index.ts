@@ -29,3 +29,8 @@ export { default as AddressAutocomplete } from './AddressAutocomplete';
 export type { AddressResult } from './AddressAutocomplete';
 
 export { default as PhoneNumbers } from './PhoneNumbers';
+
+export { default as Toggle } from './Toggle';
+
+export { default as Tabs } from './Tabs';
+export type { Tab } from './Tabs';
