@@ -80,6 +80,7 @@ export const authController = {
         telephone: true,
         avatarUrl: true,
         actif: true,
+        tenantId: true,
         createdAt: true,
         lastLoginAt: true,
       },

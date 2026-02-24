@@ -11,9 +11,10 @@ declare global {
       user?: {
         id: string;
         email: string;
-        roles: Array<'admin' | 'chauffeur' | 'preparateur'>;
+        roles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur'>;
         nom: string;
         prenom: string;
+        tenantId: string | null;
       };
     }
   }
@@ -22,7 +23,8 @@ declare global {
 interface JwtPayload {
   userId: string;
   email: string;
-  roles: Array<'admin' | 'chauffeur' | 'preparateur'>;
+  roles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur'>;
+  tenantId?: string | null;
 }
 
 // Middleware d'authentification
@@ -64,6 +66,7 @@ export async function authenticate(
         nom: true,
         prenom: true,
         actif: true,
+        tenantId: true,
       },
     });
 
@@ -84,6 +87,7 @@ export async function authenticate(
       roles: user.roles,
       nom: user.nom,
       prenom: user.prenom,
+      tenantId: user.tenantId,
     };
 
     next();
@@ -91,6 +95,25 @@ export async function authenticate(
     console.error('Erreur middleware auth:', error);
     apiResponse.serverError(res);
   }
+}
+
+// Middleware pour vérifier le rôle superadmin
+export function requireSuperAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  if (!req.user) {
+    apiResponse.unauthorized(res);
+    return;
+  }
+
+  if (!req.user.roles.includes('superadmin')) {
+    apiResponse.forbidden(res, 'Accès réservé aux super-administrateurs');
+    return;
+  }
+
+  next();
 }
 
 // Middleware pour vérifier le rôle admin
@@ -104,7 +127,7 @@ export function requireAdmin(
     return;
   }
 
-  if (!req.user.roles.includes('admin')) {
+  if (!req.user.roles.includes('admin') && !req.user.roles.includes('superadmin')) {
     apiResponse.forbidden(res, 'Accès réservé aux administrateurs');
     return;
   }
@@ -123,7 +146,7 @@ export function requireChauffeur(
     return;
   }
 
-  if (!req.user.roles.includes('chauffeur') && !req.user.roles.includes('admin')) {
+  if (!req.user.roles.includes('chauffeur') && !req.user.roles.includes('admin') && !req.user.roles.includes('superadmin')) {
     apiResponse.forbidden(res, 'Accès réservé aux chauffeurs');
     return;
   }
@@ -142,7 +165,7 @@ export function requirePreparateur(
     return;
   }
 
-  if (!req.user.roles.includes('preparateur') && !req.user.roles.includes('admin')) {
+  if (!req.user.roles.includes('preparateur') && !req.user.roles.includes('admin') && !req.user.roles.includes('superadmin')) {
     apiResponse.forbidden(res, 'Accès réservé aux préparateurs');
     return;
   }
@@ -151,7 +174,7 @@ export function requirePreparateur(
 }
 
 // Middleware pour vérifier qu'un utilisateur a au moins un des rôles spécifiés
-export function requireRole(...allowedRoles: Array<'admin' | 'chauffeur' | 'preparateur'>) {
+export function requireRole(...allowedRoles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur'>) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
       apiResponse.unauthorized(res);
@@ -194,6 +217,7 @@ export async function optionalAuth(
           nom: true,
           prenom: true,
           actif: true,
+          tenantId: true,
         },
       });
 
@@ -204,6 +228,7 @@ export async function optionalAuth(
           roles: user.roles,
           nom: user.nom,
           prenom: user.prenom,
+          tenantId: user.tenantId,
         };
       }
     } catch {

@@ -8,6 +8,7 @@ interface TokenPayload {
   userId: string;
   email: string;
   roles: string[];
+  tenantId?: string | null;
 }
 
 interface AuthTokens {
@@ -23,6 +24,7 @@ interface UserWithoutPassword {
   prenom: string;
   telephone: string | null;
   actif: boolean;
+  tenantId: string | null;
 }
 
 export const authService = {
@@ -63,6 +65,7 @@ export const authService = {
       userId: user.id,
       email: user.email,
       roles: user.roles,
+      tenantId: user.tenantId,
     });
 
     // Retourner l'utilisateur sans le mot de passe
@@ -120,6 +123,7 @@ export const authService = {
       userId: user.id,
       email: user.email,
       roles: user.roles,
+      tenantId: user.tenantId,
     });
   },
 

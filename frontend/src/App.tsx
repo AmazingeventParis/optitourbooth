@@ -50,6 +50,12 @@ const ChauffeurAgendaPage = lazy(() =>
 );
 
 // ============================================
+// LAZY LOADING - Pages Super Admin
+// ============================================
+const SuperAdminLayout = lazy(() => import('@/components/layout/SuperAdminLayout'));
+const SuperAdminTenantsPage = lazy(() => import('@/pages/SuperAdminTenantsPage'));
+
+// ============================================
 // Composant Suspense wrapper pour les pages
 // ============================================
 function LazyPage({ children }: { children: React.ReactNode }) {
@@ -73,6 +79,10 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (isAuthenticated) {
+    // Rediriger superadmin vers son interface
+    if (user?.roles.includes('superadmin')) {
+      return <Navigate to="/super-admin" replace />;
+    }
     // Rediriger selon le rôle
     // Tout utilisateur avec rôle chauffeur (sans admin) → interface chauffeur
     if (user?.roles.includes('chauffeur') && !user?.roles.includes('admin')) {
@@ -101,6 +111,11 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Superadmin → son interface dédiée
+  if (user?.roles.includes('superadmin')) {
+    return <Navigate to="/super-admin" replace />;
   }
 
   // Tout utilisateur avec rôle chauffeur (sans admin) → interface chauffeur
@@ -163,6 +178,29 @@ function PreparateurRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Protection pour les routes super admin
+function SuperAdminRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, user } = useAuthStore();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!user?.roles.includes('superadmin')) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   const { isAuthenticated, setUser } = useAuthStore();
 
@@ -194,6 +232,18 @@ function App() {
           </AdminRoute>
         }
       />
+
+      {/* Routes Super Admin */}
+      <Route
+        path="/super-admin"
+        element={
+          <SuperAdminRoute>
+            <LazyPage><SuperAdminLayout /></LazyPage>
+          </SuperAdminRoute>
+        }
+      >
+        <Route index element={<LazyPage><SuperAdminTenantsPage /></LazyPage>} />
+      </Route>
 
       {/* Routes Admin */}
       <Route

@@ -4,12 +4,13 @@ import { persist } from 'zustand/middleware';
 export interface User {
   id: string;
   email: string;
-  roles: Array<'admin' | 'chauffeur' | 'preparateur'>;
+  roles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur'>;
   nom: string;
   prenom: string;
   telephone?: string;
   avatarUrl?: string;
   actif?: boolean;
+  tenantId?: string | null;
 }
 
 interface AuthState {

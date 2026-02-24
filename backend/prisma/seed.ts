@@ -1,4 +1,4 @@
-import { PrismaClient, MachineType } from '@prisma/client';
+import { PrismaClient, MachineType, TenantPlan } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -6,11 +6,48 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Début du seeding...');
 
+  // ===== TENANT =====
+  const shootnboxTenant = await prisma.tenant.upsert({
+    where: { slug: 'shootnbox' },
+    update: {},
+    create: {
+      name: 'Shootnbox',
+      slug: 'shootnbox',
+      plan: TenantPlan.PRO,
+      config: {
+        modules: { tournees: true, preparations: true, vehicules: true, produits: true, rapports: true, gps: true, notifications: true },
+        limits: { maxUsers: 50, maxChauffeurs: 20, maxVehicules: 20 },
+      },
+      active: true,
+    },
+  });
+  console.log(`✅ Tenant créé: ${shootnboxTenant.name} (${shootnboxTenant.slug})`);
+
+  // ===== SUPERADMIN =====
+  const superAdminPassword = await bcrypt.hash('SuperAdmin1!', 12);
+  const superAdmin = await prisma.user.upsert({
+    where: { email: 'superadmin@optitour.fr' },
+    update: {},
+    create: {
+      email: 'superadmin@optitour.fr',
+      passwordHash: superAdminPassword,
+      roles: ['superadmin'],
+      nom: 'Super',
+      prenom: 'Admin',
+      telephone: null,
+      tenantId: null, // superadmin n'appartient à aucun tenant
+      actif: true,
+    },
+  });
+  console.log(`✅ Super Admin créé: ${superAdmin.email}`);
+
+  // ===== USERS =====
+
   // Créer l'utilisateur admin principal (Vincent)
   const vincentPassword = await bcrypt.hash('testtesT1!', 12);
   const vincent = await prisma.user.upsert({
     where: { email: 'vincent.pixerelle@gmail.com' },
-    update: {},
+    update: { tenantId: shootnboxTenant.id },
     create: {
       email: 'vincent.pixerelle@gmail.com',
       passwordHash: vincentPassword,
@@ -18,6 +55,7 @@ async function main() {
       nom: 'Pixerelle',
       prenom: 'Vincent',
       telephone: '0600000000',
+      tenantId: shootnboxTenant.id,
       actif: true,
     },
   });
@@ -27,7 +65,7 @@ async function main() {
   const adminPassword = await bcrypt.hash('admin123', 12);
   const admin = await prisma.user.upsert({
     where: { email: 'admin@shootnbox.fr' },
-    update: {},
+    update: { tenantId: shootnboxTenant.id },
     create: {
       email: 'admin@shootnbox.fr',
       passwordHash: adminPassword,
@@ -35,6 +73,7 @@ async function main() {
       nom: 'Admin',
       prenom: 'Shootnbox',
       telephone: '0600000001',
+      tenantId: shootnboxTenant.id,
       actif: true,
     },
   });
@@ -44,7 +83,7 @@ async function main() {
   const chauffeurPassword = await bcrypt.hash('chauffeur123', 12);
   const chauffeur = await prisma.user.upsert({
     where: { email: 'chauffeur@shootnbox.fr' },
-    update: {},
+    update: { tenantId: shootnboxTenant.id },
     create: {
       email: 'chauffeur@shootnbox.fr',
       passwordHash: chauffeurPassword,
@@ -52,10 +91,23 @@ async function main() {
       nom: 'Dupont',
       prenom: 'Jean',
       telephone: '0611111111',
+      tenantId: shootnboxTenant.id,
       actif: true,
     },
   });
   console.log(`✅ Chauffeur créé: ${chauffeur.email}`);
+
+  // Assigner les utilisateurs existants (sans tenant) au tenant Shootnbox
+  const updatedUsers = await prisma.user.updateMany({
+    where: {
+      tenantId: null,
+      roles: { hasSome: ['admin', 'chauffeur', 'preparateur'] },
+    },
+    data: { tenantId: shootnboxTenant.id },
+  });
+  if (updatedUsers.count > 0) {
+    console.log(`✅ ${updatedUsers.count} utilisateurs existants assignés au tenant Shootnbox`);
+  }
 
   // Créer quelques produits de base
   const produits = [
@@ -358,6 +410,7 @@ async function main() {
   console.log('🎉 Seeding terminé !');
   console.log('');
   console.log('📧 Comptes créés:');
+  console.log('   Super Admin: superadmin@optitour.fr / SuperAdmin1!');
   console.log('   Admin: vincent.pixerelle@gmail.com / testtesT1!');
   console.log('   Admin test: admin@shootnbox.fr / admin123');
   console.log('   Chauffeur: chauffeur@shootnbox.fr / chauffeur123');

@@ -16,9 +16,16 @@ datasource db {
 // ----- ENUMS -----
 
 enum UserRole {
+  superadmin
   admin
   chauffeur
   preparateur
+}
+
+enum TenantPlan {
+  STARTER
+  PRO
+  ENTERPRISE
 }
 
 enum TourneeStatut {
@@ -77,6 +84,21 @@ enum PreparationStatut {
 
 // ----- TABLES PRINCIPALES -----
 
+/// Tenants (organisations clientes)
+model Tenant {
+  id        String     @id @default(uuid())
+  name      String
+  slug      String     @unique
+  plan      TenantPlan @default(STARTER)
+  config    Json       @default("{}")
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  users     User[]
+  @@index([active])
+  @@map("tenants")
+}
+
 /// Utilisateurs (Administrateurs, Chauffeurs et Préparateurs)
 model User {
   id           String     @id @default(uuid())
@@ -90,6 +112,10 @@ model User {
   avatarUrl    String?    @map("avatar_url")
   actif        Boolean    @default(true)
 
+  // Tenant (null pour superadmin)
+  tenantId     String?    @map("tenant_id")
+  tenant       Tenant?    @relation(fields: [tenantId], references: [id])
+
   // Métadonnées
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
@@ -101,6 +127,8 @@ model User {
   pushSubscriptions PushSubscription[]
 
   @@index([actif]) // Requêtes fréquentes: utilisateurs actifs
+  @@index([tenantId])
+  @@index([tenantId, actif])
   @@map("users")
 }
 

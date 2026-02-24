@@ -1,6 +1,44 @@
 // Types pour les entités
 
-export type UserRole = 'admin' | 'chauffeur' | 'preparateur';
+export type UserRole = 'superadmin' | 'admin' | 'chauffeur' | 'preparateur';
+export type TenantPlan = 'STARTER' | 'PRO' | 'ENTERPRISE';
+
+export interface TenantConfig {
+  modules: {
+    tournees: boolean;
+    preparations: boolean;
+    vehicules: boolean;
+    produits: boolean;
+    rapports: boolean;
+    gps: boolean;
+    notifications: boolean;
+  };
+  limits: {
+    maxUsers: number;
+    maxChauffeurs: number;
+    maxVehicules: number;
+  };
+}
+
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  plan: TenantPlan;
+  config: TenantConfig;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { users: number };
+  users?: Array<{
+    id: string;
+    email: string;
+    nom: string;
+    prenom: string;
+    roles: UserRole[];
+    actif: boolean;
+  }>;
+}
 export type TourneeStatut = 'brouillon' | 'planifiee' | 'en_cours' | 'terminee' | 'annulee';
 export type PointType = 'livraison' | 'ramassage' | 'livraison_ramassage';
 export type PointStatut = 'a_faire' | 'en_cours' | 'termine' | 'incident' | 'annule';
@@ -17,6 +55,7 @@ export interface User {
   couleur?: string;
   avatarUrl?: string;
   actif: boolean;
+  tenantId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
