@@ -180,9 +180,10 @@ export const settingsController = {
     const existingConfig = (tenant.config as Record<string, unknown>) || {};
     const newConfig = deepMerge(existingConfig, req.body as Record<string, unknown>);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await prisma.tenant.update({
       where: { id: tenantId },
-      data: { config: newConfig },
+      data: { config: newConfig as any },
     });
 
     // Retourner la config finale avec defaults
