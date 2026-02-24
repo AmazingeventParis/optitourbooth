@@ -1,19 +1,20 @@
 # OptiTourBooth - Etat du projet
 
-> Derniere mise a jour : 20 fevrier 2026
+> Derniere mise a jour : 24 fevrier 2026
 
-## Statut global : ~75-80% termine
+## Statut global : ~80% termine
 
-Le coeur du projet est fonctionnel et deploye en production sur Coolify.
+Le coeur du projet est fonctionnel et deploye en production sur Coolify. Multi-tenant SaaS ajoute.
 
 ---
 
 ## Ce qui est FAIT et fonctionnel
 
 ### Backend
-- **API Express + TypeScript** : 60+ endpoints, 10 controllers
-- **Base de donnees** : PostgreSQL 16 + PostGIS, 15 modeles Prisma
-- **Auth** : JWT + refresh tokens, roles multiples (admin/chauffeur/preparateur)
+- **API Express + TypeScript** : 70+ endpoints, 11 controllers
+- **Base de donnees** : PostgreSQL 16 + PostGIS, 16 modeles Prisma (+ Tenant)
+- **Auth** : JWT + refresh tokens, roles multiples (superadmin/admin/chauffeur/preparateur)
+- **Multi-tenant** : Modele Tenant, plans (STARTER/PRO/ENTERPRISE), config JSON, CRUD superadmin
 - **Temps reel** : Socket.io (positions chauffeurs, mises a jour statuts)
 - **Cache** : Redis avec TTL et invalidation
 - **Upload photos** : Cloudinary
@@ -36,6 +37,13 @@ Le coeur du projet est fonctionnel et deploye en production sur Coolify.
 - **Preparations** : Workflow de preparation des machines (bornes)
 - **Rapports** : Analytics avec graphiques (distances, durees, couts, incidents)
 
+### Frontend Super Admin (SaaS)
+- **Interface dediee** : /super-admin avec layout sombre "OptiTour SA"
+- **CRUD Tenants** : Liste paginee, recherche, creation avec slug auto, choix plan, toggle actif
+- **Creation admin tenant** : Formulaire premier admin integre a la creation du tenant
+- **Desactivation** : Soft delete (active=false) avec confirmation
+- **Route guard** : SuperAdminRoute, redirection automatique apres login
+
 ### Frontend Chauffeur (PWA)
 - **Dashboard** : Stats semaine, livraison en cours, prompts PWA
 - **Page point** : Details livraison, upload photo, capture signature, rapport incident
@@ -46,9 +54,10 @@ Le coeur du projet est fonctionnel et deploye en production sur Coolify.
 
 ### Deploiement
 - Docker multi-stage (Alpine) sur Coolify
-- Auto-seed au premier deploiement
+- Seed idempotent (upsert) execute a chaque demarrage
 - Health checks configures
 - Gestion des variables d'environnement
+- Repo unique (AmazingeventParis/optitourbooth) pour API et Web
 
 ---
 
@@ -66,42 +75,48 @@ Le coeur du projet est fonctionnel et deploye en production sur Coolify.
 - `backend/src/controllers/tournee.controller.ts` : 2190 lignes
 - `frontend/src/pages/TourneeDetailPage.tsx` : 1257 lignes
 
-#### 3. Gestion des photos - incomplet
+#### 3. Multi-tenant - phase 2
+- Filtrage des donnees par tenantId (tournees, clients, vehicules, etc.)
+- Middleware tenant isolation (chaque admin ne voit que ses donnees)
+- Gestion des limites du plan (maxUsers, maxChauffeurs, maxVehicules)
+- Interface tenant admin pour gerer son propre tenant
+
+#### 4. Gestion des photos - incomplet
 - Pas de galerie/vignettes dans l'UI chauffeur
 - Pas de suppression de photos
 - Pas de categorisation (avant/apres/incident/preuve)
 - Photos non affichees cote admin pour review
 
-#### 4. Exports & rapports
+#### 5. Exports & rapports
 - Pas d'export Excel/CSV des tournees
 - Pas de generation PDF (bons de livraison, rapports)
 - Pas d'export itineraire pour GPS
 
 ### Priorite moyenne
 
-#### 5. Notifications - lacunes
+#### 6. Notifications - lacunes
 - Web Push ok
 - Manque : notifications in-app, SMS, email
 - Pas d'historique ni de regles personnalisables
 
-#### 6. Optimisation mobile chauffeur
+#### 7. Optimisation mobile chauffeur
 - Interface PWA existante mais peu testee sur vrais devices
 - UX a ameliorer sur les grosses pages
 
-#### 7. Planification avancee des tournees
+#### 8. Planification avancee des tournees
 - VROOM basique fonctionne
 - Manque : multi-jours, contraintes capacite vehicule, competences chauffeur, equilibrage de charge, optimisation carburant
 
 ### Priorite basse
 
-#### 8. Portail client
+#### 9. Portail client
 - Aucune interface client (suivi livraison, notification a la completion)
 
-#### 9. Audit & conformite
+#### 10. Audit & conformite
 - Pas de log d'audit des modifications
 - Pas de workflow RGPD (export/suppression donnees)
 
-#### 10. Gestion machines - incomplet
+#### 11. Gestion machines - incomplet
 - CRUD basique ok
 - Manque : planning maintenance, suivi defauts, historique location
 
@@ -119,6 +134,9 @@ Le coeur du projet est fonctionnel et deploye en production sur Coolify.
 | libssl.so.1.1 manquant | `apk add openssl` sur Alpine |
 | Redis cache stale data | Cache desactive pour liste tournees |
 | Roles migration | Passage de `role` (string) a `roles` (array) |
+| Frontend repo Coolify | Change de Pixoupix vers AmazingeventParis (pas de droits push) |
+| Login superadmin redirect | LoginPage faisait navigate('/') en dur → redirection par role |
+| Seed non execute sur DB existante | start.sh lance toujours seed (upsert idempotent) |
 
 ---
 
@@ -126,12 +144,12 @@ Le coeur du projet est fonctionnel et deploye en production sur Coolify.
 
 | Metrique | Valeur |
 |----------|--------|
-| Controllers backend | 10 fichiers |
-| Pages frontend | 15 pages |
+| Controllers backend | 11 fichiers |
+| Pages frontend | 16 pages |
 | Services backend | 10 services |
-| Services frontend | 12 services |
-| Modeles base de donnees | 15 entites |
-| Endpoints API | 60+ |
+| Services frontend | 13 services |
+| Modeles base de donnees | 16 entites |
+| Endpoints API | 70+ |
 | Fichiers de test | 2 (utilitaires uniquement) |
 
 ---
