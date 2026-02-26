@@ -488,7 +488,7 @@ export default function TourneeDetailPage() {
   }
 
   const statutConfig = getStatutConfig(tournee.statut);
-  const canEdit = tournee.statut === 'planifiee';
+  const canEdit = tournee.statut === 'brouillon' || tournee.statut === 'planifiee';
 
   return (
     <div className="space-y-6">
