@@ -1362,15 +1362,17 @@ export const tourneeController = {
       return;
     }
 
-    // Vérifier les produits
-    const produitIds = data.produits.map((p) => p.produitId);
-    const produits = await prisma.produit.findMany({
-      where: { id: { in: produitIds }, actif: true },
-    });
+    // Vérifier les produits (si fournis)
+    const produitIds = (data.produits || []).map((p) => p.produitId);
+    if (produitIds.length > 0) {
+      const produits = await prisma.produit.findMany({
+        where: { id: { in: produitIds }, actif: true },
+      });
 
-    if (produits.length !== produitIds.length) {
-      apiResponse.badRequest(res, 'Un ou plusieurs produits sont invalides');
-      return;
+      if (produits.length !== produitIds.length) {
+        apiResponse.badRequest(res, 'Un ou plusieurs produits sont invalides');
+        return;
+      }
     }
 
     // Vérifier les options si fournies
@@ -1429,12 +1431,14 @@ export const tourneeController = {
     const point = await prisma.point.create({
       data: {
         ...pointData,
-        produits: {
-          create: data.produits.map((p) => ({
-            produitId: p.produitId,
-            quantite: p.quantite,
-          })),
-        },
+        produits: produitIds.length > 0
+          ? {
+              create: data.produits.map((p) => ({
+                produitId: p.produitId,
+                quantite: p.quantite,
+              })),
+            }
+          : undefined,
         options: data.options
           ? {
               create: data.options.map((o) => ({

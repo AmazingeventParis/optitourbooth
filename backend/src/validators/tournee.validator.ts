@@ -64,7 +64,7 @@ export const createPointSchema = z.object({
   creneauFin: z.string().regex(/^\d{2}:\d{2}$/, 'Format heure invalide (HH:MM)').optional(),
   notesInternes: z.string().optional(),
   notesClient: z.string().optional(),
-  produits: z.array(pointProduitSchema).min(1, 'Au moins un produit requis'),
+  produits: z.array(pointProduitSchema).optional().default([]),
   options: z.array(pointOptionSchema).optional(),
 });
 

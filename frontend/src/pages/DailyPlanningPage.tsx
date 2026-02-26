@@ -2133,12 +2133,12 @@ export default function DailyPlanningPage() {
       tourneesService.addPoint(targetTourneeId, {
         clientId: pendingPoint.clientId!,
         type: (pendingPoint.type as 'livraison' | 'ramassage' | 'livraison_ramassage') || 'livraison',
-        creneauDebut: pendingPoint.creneauDebut,
-        creneauFin: pendingPoint.creneauFin,
-        notesInternes: pendingPoint.notes,
+        creneauDebut: pendingPoint.creneauDebut || undefined,
+        creneauFin: pendingPoint.creneauFin || undefined,
+        notesInternes: pendingPoint.notes || undefined,
         produits: pendingPoint.produitsIds && pendingPoint.produitsIds.length > 0
           ? pendingPoint.produitsIds.map(p => ({ produitId: p.id, quantite: 1 }))
-          : pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : undefined,
+          : pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : [],
       }).then((updatedTournee: Tournee) => {
         // L'API retourne directement la tournée complète avec ETAs OSRM
         setTournees(current => {
