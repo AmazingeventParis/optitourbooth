@@ -3,6 +3,8 @@ import { Button, Card, Input, Badge, Modal } from '@/components/ui';
 import DataTable, { Column } from '@/components/ui/DataTable';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/hooks/useToast';
+import { useSettings, useTerminologie } from '@/hooks/queries/useSettings';
+import { TYPE_VEHICULE_LABELS } from '@/constants/settingsLabels';
 import { Vehicule, PaginationMeta } from '@/types';
 import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, TruckIcon } from '@heroicons/react/24/outline';
 import api from '@/services/api';
@@ -33,6 +35,9 @@ const initialFormData: VehiculeFormData = {
 
 export default function VehiculesPage() {
   const { success, error: showError } = useToast();
+  const termi = useTerminologie();
+  const { data: settings } = useSettings();
+  const configuredTypes = settings?.flotteMateriel?.typesVehicules ?? [];
 
   const [vehicules, setVehicules] = useState<Vehicule[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 20, total: 0, totalPages: 0 });
@@ -261,12 +266,21 @@ export default function VehiculesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Véhicules</h1>
-          <p className="text-gray-500">Gérez la flotte de véhicules</p>
+          <h1 className="text-2xl font-bold text-gray-900">{termi.vehicule}s</h1>
+          <p className="text-gray-500">Gérez la flotte de {termi.vehicule.toLowerCase()}s</p>
+          {configuredTypes.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {configuredTypes.map((t) => (
+                <span key={t} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
+                  {TYPE_VEHICULE_LABELS[t] || t}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <Button onClick={openCreateModal}>
           <PlusIcon className="h-5 w-5 mr-2" />
-          Nouveau véhicule
+          Nouveau {termi.vehicule.toLowerCase()}
         </Button>
       </div>
 

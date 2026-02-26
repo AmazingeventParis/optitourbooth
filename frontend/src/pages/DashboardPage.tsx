@@ -5,6 +5,7 @@ import { tourneesService } from '@/services/tournees.service';
 import { usersService } from '@/services/users.service';
 import { socketService, PositionUpdate } from '@/services/socket.service';
 import { useToast } from '@/hooks/useToast';
+import { useTerminologie } from '@/hooks/queries/useSettings';
 import { User, Tournee, Point } from '@/types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -130,6 +131,7 @@ export default function DashboardPage() {
   const { user, token } = useAuthStore();
   const { error: showError } = useToast();
   const navigate = useNavigate();
+  const termi = useTerminologie();
 
   const [todayTournees, setTodayTournees] = useState<Tournee[]>([]);
   const [isLoadingTournees, setIsLoadingTournees] = useState(true);
@@ -296,15 +298,15 @@ export default function DashboardPage() {
         <div className="flex items-center gap-6 text-sm">
           <div className="text-center">
             <p className="text-2xl font-bold text-primary-600">{todayTournees.length}</p>
-            <p className="text-gray-500">tournée{todayTournees.length > 1 ? 's' : ''}</p>
+            <p className="text-gray-500">{termi.tournee.toLowerCase()}{todayTournees.length > 1 ? 's' : ''}</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-primary-600">{completedPoints}/{totalPoints}</p>
-            <p className="text-gray-500">points</p>
+            <p className="text-gray-500">{termi.point.toLowerCase()}s</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-primary-600">{activeDrivers}</p>
-            <p className="text-gray-500">chauffeur{activeDrivers > 1 ? 's' : ''}</p>
+            <p className="text-gray-500">{termi.chauffeur.toLowerCase()}{activeDrivers > 1 ? 's' : ''}</p>
           </div>
         </div>
       </div>
@@ -318,8 +320,8 @@ export default function DashboardPage() {
         <div className="card">
           <div className="card-body text-center py-12 text-gray-500">
             <TruckIcon className="mx-auto h-12 w-12 text-gray-300 mb-3" />
-            <p className="text-lg font-medium">Aucune tournée aujourd'hui</p>
-            <p className="text-sm mt-1">Créez une tournée depuis l'onglet Historique ou importez un fichier Excel</p>
+            <p className="text-lg font-medium">Aucune {termi.tournee.toLowerCase()} aujourd'hui</p>
+            <p className="text-sm mt-1">Créez une {termi.tournee.toLowerCase()} depuis l'onglet Historique ou importez un fichier Excel</p>
           </div>
         </div>
       ) : (

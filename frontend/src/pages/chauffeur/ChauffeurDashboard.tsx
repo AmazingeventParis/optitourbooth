@@ -4,6 +4,7 @@ import { Card, Badge, Button } from '@/components/ui';
 import { useChauffeurStore } from '@/store/chauffeurStore';
 import { useEffectiveUser } from '@/hooks/useEffectiveUser';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { useTerminologie } from '@/hooks/queries/useSettings';
 import { tourneesService } from '@/services/tournees.service';
 import { pushNotificationService } from '@/services/pushNotification.service';
 import { formatTime } from '@/utils/format';
@@ -39,6 +40,7 @@ export default function ChauffeurDashboard() {
   const navigate = useNavigate();
   const { effectiveUser } = useEffectiveUser();
   const { tournee, isLoading, fetchTournee } = useChauffeurStore();
+  const termi = useTerminologie();
 
   // Weekly stats state
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats>({
@@ -340,7 +342,7 @@ export default function ChauffeurDashboard() {
           <Card className="p-4">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="font-semibold text-lg">Tournée du jour</h2>
+                <h2 className="font-semibold text-lg">{termi.tournee} du jour</h2>
                 <p className="text-gray-500 text-sm">
                   {tournee.heureDepart && `Départ prévu: ${formatTime(tournee.heureDepart)}`}
                 </p>
@@ -394,12 +396,12 @@ export default function ChauffeurDashboard() {
               {tournee.statut === 'planifiee' ? (
                 <>
                   <PlayIcon className="h-5 w-5 mr-2" />
-                  Voir la tournée
+                  Voir la {termi.tournee.toLowerCase()}
                 </>
               ) : tournee.statut === 'en_cours' ? (
                 <>
                   <TruckIcon className="h-5 w-5 mr-2" />
-                  Continuer la tournée
+                  Continuer la {termi.tournee.toLowerCase()}
                 </>
               ) : (
                 <>
@@ -413,7 +415,7 @@ export default function ChauffeurDashboard() {
           {/* Next Point Preview */}
           {tournee.statut === 'en_cours' && tournee.points && (
             <Card className="p-4">
-              <h3 className="font-semibold mb-3">Prochain point</h3>
+              <h3 className="font-semibold mb-3">Prochain {termi.point.toLowerCase()}</h3>
               {(() => {
                 const nextPoint = tournee.points
                   .sort((a, b) => a.ordre - b.ordre)
@@ -422,7 +424,7 @@ export default function ChauffeurDashboard() {
                 if (!nextPoint) {
                   return (
                     <p className="text-gray-500 text-center py-4">
-                      Tous les points sont terminés !
+                      Tous les {termi.point.toLowerCase()}s sont terminés !
                     </p>
                   );
                 }
@@ -457,10 +459,10 @@ export default function ChauffeurDashboard() {
         <Card className="p-8 text-center">
           <TruckIcon className="h-16 w-16 mx-auto text-gray-300 mb-4" />
           <h2 className="text-xl font-semibold text-gray-700 mb-2">
-            Pas de tournée aujourd'hui
+            Pas de {termi.tournee.toLowerCase()} aujourd'hui
           </h2>
           <p className="text-gray-500">
-            Aucune tournée n'est planifiée pour vous aujourd'hui.
+            Aucune {termi.tournee.toLowerCase()} n'est planifiée pour vous aujourd'hui.
           </p>
         </Card>
       )}
@@ -499,7 +501,7 @@ export default function ChauffeurDashboard() {
               <div className="text-2xl font-bold text-green-700">
                 {weeklyStats.pointsLivres}
               </div>
-              <div className="text-xs text-green-600 font-medium">points livrés</div>
+              <div className="text-xs text-green-600 font-medium">{termi.point.toLowerCase()}s livrés</div>
             </div>
           </div>
         )}

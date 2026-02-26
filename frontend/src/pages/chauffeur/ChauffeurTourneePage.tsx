@@ -7,6 +7,7 @@ import { tourneesService } from '@/services/tournees.service';
 import { useChauffeurStore } from '@/store/chauffeurStore';
 import { useEffectiveUser } from '@/hooks/useEffectiveUser';
 import { useToast } from '@/hooks/useToast';
+import { useTerminologie } from '@/hooks/queries/useSettings';
 import { Point, PointProduit, Produit, Tournee } from '@/types';
 import { format, isAfter, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -65,6 +66,7 @@ export default function ChauffeurTourneePage() {
   const { effectiveUser } = useEffectiveUser();
   const { tournee: storeTournee, isLoading: storeLoading, fetchTournee, refreshTournee } = useChauffeurStore();
   const { success, error: showError } = useToast();
+  const termi = useTerminologie();
 
   // Check if a specific tourneeId was passed via navigation state (from agenda)
   const stateData = location.state as { tourneeId?: string } | null;
@@ -125,7 +127,7 @@ export default function ChauffeurTourneePage() {
     try {
       await tourneesService.start(tournee.id);
       haptics.medium();
-      success('Tournée démarrée');
+      success(`${termi.tournee} démarrée`);
       setIsStartDialogOpen(false);
       handleRefresh();
     } catch (err) {
@@ -142,7 +144,7 @@ export default function ChauffeurTourneePage() {
     try {
       await tourneesService.finish(tournee.id);
       haptics.success();
-      success('Tournée terminée');
+      success(`${termi.tournee} terminée`);
       setIsFinishDialogOpen(false);
       handleRefresh();
     } catch (err) {
@@ -220,12 +222,12 @@ export default function ChauffeurTourneePage() {
         <Card className="p-8 text-center">
           <MapPinIcon className="h-16 w-16 mx-auto text-gray-300 mb-4" />
           <h2 className="text-xl font-semibold text-gray-700 mb-2">
-            Pas de tournée
+            Pas de {termi.tournee.toLowerCase()}
           </h2>
           <p className="text-gray-500 mb-4">
             {specificTourneeId
-              ? "Cette tournée n'existe pas ou n'est plus disponible."
-              : "Aucune tournée n'est planifiée pour vous aujourd'hui."}
+              ? `Cette ${termi.tournee.toLowerCase()} n'existe pas ou n'est plus disponible.`
+              : `Aucune ${termi.tournee.toLowerCase()} n'est planifiée pour vous aujourd'hui.`}
           </p>
           <Button variant="secondary" onClick={() => navigate(specificTourneeId ? '/chauffeur/agenda' : '/chauffeur')}>
             {specificTourneeId ? "Retour à l'agenda" : "Retour à l'accueil"}
@@ -247,7 +249,7 @@ export default function ChauffeurTourneePage() {
             <div className="flex items-center gap-3 text-sm text-gray-500">
               <span className="flex items-center">
                 <MapPinIcon className="h-4 w-4 mr-1" />
-                {sortedPoints.length} points
+                {sortedPoints.length} {termi.point.toLowerCase()}{sortedPoints.length > 1 ? 's' : ''}
               </span>
               {tournee.distanceTotaleKm && (
                 <span>{tournee.distanceTotaleKm.toFixed(1)} km</span>
@@ -436,8 +438,8 @@ export default function ChauffeurTourneePage() {
         isOpen={isStartDialogOpen}
         onClose={() => setIsStartDialogOpen(false)}
         onConfirm={handleStartTournee}
-        title="Démarrer la tournée"
-        message="Confirmez-vous le démarrage de votre tournée ?"
+        title={`Démarrer la ${termi.tournee.toLowerCase()}`}
+        message={`Confirmez-vous le démarrage de votre ${termi.tournee.toLowerCase()} ?`}
         confirmText="Démarrer"
         variant="warning"
         isLoading={isSaving}
@@ -448,8 +450,8 @@ export default function ChauffeurTourneePage() {
         isOpen={isFinishDialogOpen}
         onClose={() => setIsFinishDialogOpen(false)}
         onConfirm={handleFinishTournee}
-        title="Terminer la tournée"
-        message="Tous les points sont terminés. Confirmez-vous la fin de votre tournée ?"
+        title={`Terminer la ${termi.tournee.toLowerCase()}`}
+        message={`Tous les ${termi.point.toLowerCase()}s sont terminés. Confirmez-vous la fin de votre ${termi.tournee.toLowerCase()} ?`}
         confirmText="Terminer"
         variant="warning"
         isLoading={isSaving}

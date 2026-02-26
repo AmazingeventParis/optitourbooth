@@ -7,6 +7,8 @@ import { useAuthStore } from '@/store/authStore';
 import { useChauffeurStore } from '@/store/chauffeurStore';
 import { useToast } from '@/hooks/useToast';
 import { usePhotoUpload } from '@/hooks/usePhotoUpload';
+import { useSettings } from '@/hooks/queries/useSettings';
+import { ANOMALIE_ACTIVE_LABELS } from '@/constants/settingsLabels';
 import { formatTimeRange } from '@/utils/format';
 import {
   ArrowLeftIcon,
@@ -39,7 +41,7 @@ const getTypeConfig = (type: string) => {
   return configs[type] || configs.livraison;
 };
 
-const incidentTypes = [
+const DEFAULT_INCIDENT_TYPES = [
   { value: 'client_absent', label: 'Client absent' },
   { value: 'adresse_incorrecte', label: 'Adresse incorrecte' },
   { value: 'acces_impossible', label: 'Accès impossible' },
@@ -54,6 +56,20 @@ export default function ChauffeurPointPage() {
   const { user } = useAuthStore();
   const { tournee, isLoading, fetchTournee, refreshTournee } = useChauffeurStore();
   const { success, error: showError } = useToast();
+  const { data: settings } = useSettings();
+
+  // Build incident types from settings anomalies, fallback to defaults
+  const incidentTypes = useMemo(() => {
+    const anomalies = settings?.workflowTerrain?.anomaliesActives;
+    if (!anomalies || anomalies.length === 0) return DEFAULT_INCIDENT_TYPES;
+    return [
+      ...anomalies.map((a) => ({
+        value: a,
+        label: ANOMALIE_ACTIVE_LABELS[a] || a,
+      })),
+      { value: 'autre', label: 'Autre' },
+    ];
+  }, [settings?.workflowTerrain?.anomaliesActives]);
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -485,14 +501,18 @@ export default function ChauffeurPointPage() {
       {/* Action Buttons */}
       {isActive && (
         <div className="space-y-3">
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => setIsSignatureModalOpen(true)}
-          >
-            <PencilSquareIcon className="h-5 w-5 mr-2" />
-            Signature client
-          </Button>
+          {/* Signature: shown if actionsLivraison includes signature_client, or no settings configured */}
+          {(!settings?.workflowTerrain?.actionsLivraison?.length ||
+            settings.workflowTerrain.actionsLivraison.includes('signature_client')) && (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setIsSignatureModalOpen(true)}
+            >
+              <PencilSquareIcon className="h-5 w-5 mr-2" />
+              Signature client
+            </Button>
+          )}
 
           <Button
             className="w-full"

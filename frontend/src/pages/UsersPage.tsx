@@ -272,6 +272,19 @@ export default function UsersPage() {
       ),
     },
     {
+      key: 'couleur',
+      header: 'Couleur',
+      render: (user) => (
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-block w-6 h-6 rounded-full border border-gray-200 flex-shrink-0"
+            style={{ backgroundColor: user.couleur || '#3B82F6' }}
+          />
+          <span className="text-xs text-gray-400 font-mono">{user.couleur || '#3B82F6'}</span>
+        </div>
+      ),
+    },
+    {
       key: 'telephone',
       header: 'Téléphone',
       render: (user) => user.telephone || '-',

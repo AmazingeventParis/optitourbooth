@@ -13,4 +13,5 @@ export * from './useTournees';
 export * from './useClients';
 export * from './useProduits';
 export * from './useUsers';
+export * from './useSettings';
 export * from './queryKeys';
