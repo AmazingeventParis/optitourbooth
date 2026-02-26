@@ -23,6 +23,19 @@ async function main() {
   });
   console.log(`✅ Tenant créé: ${shootnboxTenant.name} (${shootnboxTenant.slug})`);
 
+  // ===== NETTOYAGE : supprimer les anciens comptes de test =====
+  const obsoleteEmails = [
+    'vincent.pixerelle@gmail.com',
+    'admin@shootnbox.fr',
+    'chauffeur@shootnbox.fr',
+  ];
+  const deleted = await prisma.user.deleteMany({
+    where: { email: { in: obsoleteEmails } },
+  });
+  if (deleted.count > 0) {
+    console.log(`🗑️  ${deleted.count} ancien(s) compte(s) de test supprimé(s)`);
+  }
+
   // ===== SUPERADMIN (seul compte créé par le seed) =====
   const superAdminPassword = await bcrypt.hash('SuperAdmin1!', 12);
   const superAdmin = await prisma.user.upsert({
