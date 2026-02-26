@@ -28,9 +28,7 @@ curl -s -X GET "https://coolify.swipego.app/api/v1/deploy?uuid=hooooowo888gwocok
 
 ## Comptes
 - **Super Admin** : superadmin@optitour.fr / SuperAdmin1! → /super-admin
-- Admin: vincent.pixerelle@gmail.com / testtesT1!
-- Admin: admin@shootnbox.fr / admin123
-- Chauffeur: chauffeur@shootnbox.fr / chauffeur123
+- Les autres comptes (admin, chauffeur, etc.) doivent être créés manuellement via l'interface
 
 ## Architecture multi-tenant
 - **Modele Tenant** : name, slug (unique), plan (STARTER/PRO/ENTERPRISE), config JSON, active
