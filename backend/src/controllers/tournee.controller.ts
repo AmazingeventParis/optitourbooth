@@ -510,7 +510,7 @@ export const tourneeController = {
       where: { id: data.chauffeurId },
     });
 
-    if (!chauffeur || !chauffeur.actif || !chauffeur.roles.includes('chauffeur')) {
+    if (!chauffeur || !chauffeur.actif || (!chauffeur.roles.includes('chauffeur') && !chauffeur.roles.includes('admin'))) {
       apiResponse.badRequest(res, 'Chauffeur invalide ou inactif');
       return;
     }
@@ -630,7 +630,7 @@ export const tourneeController = {
         where: { id: data.chauffeurId },
       });
 
-      if (!chauffeur || !chauffeur.actif || !chauffeur.roles.includes('chauffeur')) {
+      if (!chauffeur || !chauffeur.actif || (!chauffeur.roles.includes('chauffeur') && !chauffeur.roles.includes('admin'))) {
         apiResponse.badRequest(res, 'Chauffeur invalide ou inactif');
         return;
       }
