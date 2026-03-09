@@ -3,7 +3,8 @@ import { prisma } from '../config/database.js';
 import { config } from '../config/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
 
-const LIR_PREFIX = '(LIR)';
+// Regex pour matcher (LIR), (LIR PREM), (LIR SALON), (LIR MIROIR), etc.
+const LIR_REGEX = /^\(LIR[^)]*\)/i;
 
 // Mapping Google Calendar colorId → nom du produit OptiTour
 const COLOR_TO_PRODUIT: Record<string, string> = {
@@ -69,7 +70,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
 
       const events = response.data.items || [];
       const lirEvents = events.filter(
-        (e) => e.summary && e.summary.trim().toUpperCase().startsWith(LIR_PREFIX)
+        (e) => e.summary && LIR_REGEX.test(e.summary.trim())
       );
 
       console.log(`[Google Calendar] ${calId}: ${lirEvents.length} (LIR) sur ${events.length} total`);
@@ -86,7 +87,10 @@ export async function syncGoogleCalendarEvents(): Promise<{
   let errors = 0;
 
   for (const { event } of allLirEvents) {
-    const clientName = (event.summary || '').trim().substring(LIR_PREFIX.length).trim() || 'Client inconnu';
+    const rawTitle = (event.summary || '').trim();
+    const lirMatch = rawTitle.match(LIR_REGEX);
+    const lirTag = lirMatch ? lirMatch[0] : '';
+    const clientName = rawTitle.substring(lirTag.length).trim() || 'Client inconnu';
     const location = event.location || '';
     const description = event.description || '';
     const eventId = event.id || '';
