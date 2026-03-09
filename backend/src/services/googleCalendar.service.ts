@@ -17,6 +17,159 @@ const COLOR_TO_PRODUIT: Record<string, string> = {
   '10': 'Spinner',    // Basilic (vert foncé)
 };
 
+// ===== PARSER DE DESCRIPTION =====
+
+interface ParsedDescription {
+  adresse: string | null;
+  contactNom: string | null;
+  contactTelephone: string | null;
+  creneauLivraison: string | null;  // ex: "10h-14h"
+  creneauRecuperation: string | null;
+  notes: string;
+}
+
+// Regex pour numéros de téléphone français
+const PHONE_REGEX = /(?:0[1-9])[\s.\-]?(?:\d{2}[\s.\-]?){4}/g;
+
+// Regex pour créneaux horaires: "10h-14h", "10H00-12H00", "10h à 14h", "entre 10H ET 12H"
+const TIME_SLOT_REGEX = /(\d{1,2})\s*[hH]\s*(\d{0,2})\s*(?:-|à|a|ET)\s*(\d{1,2})\s*[hH]\s*(\d{0,2})/;
+
+// Regex pour adresse française (numéro + rue/avenue/boulevard...)
+const ADDRESS_REGEX = /\d+\s*[,.]?\s*(?:rue|avenue|av\.|bd|boulevard|place|allée|chemin|impasse|passage|quai|cours|route)\s+[^\n,]+(?:,\s*\d{5}\s*[^\n,]+)?/i;
+
+function cleanHtml(text: string): string {
+  return text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(p|div|span|b|i|u|strong|em|a|ul|li|ol|table|tr|td|th|thead|tbody)[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#?\w+;/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function parseDescription(rawDescription: string): ParsedDescription {
+  const text = cleanHtml(rawDescription);
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  let adresse: string | null = null;
+  let contactNom: string | null = null;
+  let contactTelephone: string | null = null;
+  let creneauLivraison: string | null = null;
+  let creneauRecuperation: string | null = null;
+  const notesLines: string[] = [];
+  const timeSlots: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineUpper = line.toUpperCase();
+
+    // Extraction adresse avec label
+    if (lineUpper.startsWith('ADRESSE') && line.includes(':')) {
+      adresse = line.substring(line.indexOf(':') + 1).trim();
+      continue;
+    }
+
+    // Extraction créneau livraison avec label
+    if (lineUpper.startsWith('LIVRAISON') && line.includes(':')) {
+      const match = line.match(TIME_SLOT_REGEX);
+      if (match) {
+        creneauLivraison = formatTimeSlot(match);
+      }
+      continue;
+    }
+
+    // Extraction créneau récupération avec label
+    if ((lineUpper.startsWith('RECUP') || lineUpper.startsWith('RÉCUP')) && line.includes(':')) {
+      const match = line.match(TIME_SLOT_REGEX);
+      if (match) {
+        creneauRecuperation = formatTimeSlot(match);
+      }
+      continue;
+    }
+
+    // Extraction contact avec label
+    if (lineUpper.startsWith('CONTACT') && line.includes(':')) {
+      const contactPart = line.substring(line.indexOf(':') + 1).trim();
+      const phones = contactPart.match(PHONE_REGEX);
+      if (phones) {
+        contactTelephone = phones[0].replace(/[\s.\-]/g, '');
+      }
+      // Nom avant le téléphone
+      const nameBeforePhone = contactPart.replace(PHONE_REGEX, '').replace(/[/,]/g, '').trim();
+      if (nameBeforePhone && nameBeforePhone.length > 2) {
+        contactNom = nameBeforePhone;
+      }
+      continue;
+    }
+
+    // Détection d'adresse sans label (numéro + rue)
+    if (!adresse) {
+      const addrMatch = line.match(ADDRESS_REGEX);
+      if (addrMatch) {
+        adresse = line;
+        continue;
+      }
+    }
+
+    // Détection de créneaux horaires dans les lignes
+    const timeMatch = line.match(TIME_SLOT_REGEX);
+    if (timeMatch) {
+      timeSlots.push(formatTimeSlot(timeMatch));
+      continue;
+    }
+
+    // Détection de numéro de téléphone (avec potentiellement un nom avant)
+    const phoneMatches = line.match(PHONE_REGEX);
+    if (phoneMatches && !contactTelephone) {
+      contactTelephone = phoneMatches[0].replace(/[\s.\-]/g, '');
+      // Le texte avant le téléphone est probablement le nom du contact
+      const beforePhone = line.substring(0, line.indexOf(phoneMatches[0])).replace(/[,/]/g, '').trim();
+      if (beforePhone && beforePhone.length > 2 && !contactNom) {
+        // Filtrer les lignes qui ne sont pas des noms (mots-clés)
+        const lowerBefore = beforePhone.toLowerCase();
+        if (!lowerBefore.includes('code') && !lowerBefore.includes('parking') && !lowerBefore.includes('rdc')) {
+          contactNom = beforePhone;
+        }
+      }
+      continue;
+    }
+
+    // Le reste va dans les notes
+    notesLines.push(line);
+  }
+
+  // Si on a des créneaux non labelisés, le 1er = livraison, le 2nd = récupération
+  if (!creneauLivraison && timeSlots.length > 0) {
+    creneauLivraison = timeSlots[0];
+  }
+  if (!creneauRecuperation && timeSlots.length > 1) {
+    creneauRecuperation = timeSlots[1];
+  }
+
+  return {
+    adresse,
+    contactNom,
+    contactTelephone,
+    creneauLivraison,
+    creneauRecuperation,
+    notes: notesLines.filter(l => l.length > 1).join(' | '),
+  };
+}
+
+function formatTimeSlot(match: RegExpMatchArray): string {
+  const h1 = match[1].padStart(2, '0');
+  const m1 = (match[2] || '00').padStart(2, '0');
+  const h2 = match[3].padStart(2, '0');
+  const m2 = (match[4] || '00').padStart(2, '0');
+  return `${h1}:${m1}-${h2}:${m2}`;
+}
+
+// ===== GOOGLE CALENDAR CLIENT =====
+
 function getCalendarClient() {
   if (!config.googleCalendar.serviceAccountBase64) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_BASE64 non configuré');
@@ -33,6 +186,8 @@ function getCalendarClient() {
 
   return google.calendar({ version: 'v3', auth });
 }
+
+// ===== SYNC =====
 
 export async function syncGoogleCalendarEvents(): Promise<{
   found: number;
@@ -54,9 +209,8 @@ export async function syncGoogleCalendarEvents(): Promise<{
     now.getTime() + config.googleCalendar.syncDaysAhead * 24 * 60 * 60 * 1000
   ).toISOString();
 
-  let allLirEvents: { event: any; calendarId: string }[] = [];
+  const allLirEvents: { event: any; calendarId: string }[] = [];
 
-  // Récupérer les événements de chaque calendrier
   for (const calId of calendarIds) {
     try {
       const response = await calendar.events.list({
@@ -95,7 +249,13 @@ export async function syncGoogleCalendarEvents(): Promise<{
     const description = event.description || '';
     const eventId = event.id || '';
 
-    // Déterminer le produit via la couleur de l'événement
+    // Parser la description
+    const parsed = description ? parseDescription(description) : null;
+
+    // Adresse : priorité au champ location de l'événement, sinon celle de la description
+    const adresse = location || parsed?.adresse || null;
+
+    // Produit via couleur
     const colorId = event.colorId || '';
     const produitNom = COLOR_TO_PRODUIT[colorId] || null;
 
@@ -103,7 +263,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
       console.log(`[Google Calendar] ${clientName} → couleur ${colorId} → ${produitNom}`);
     }
 
-    // Dates : start.date pour all-day, start.dateTime pour événements avec heure
+    // Dates
     const startDate = event.start?.date || event.start?.dateTime?.substring(0, 10) || '';
     let endDate = event.end?.date || event.end?.dateTime?.substring(0, 10) || '';
 
@@ -119,9 +279,18 @@ export async function syncGoogleCalendarEvents(): Promise<{
       endDate = endDateObj.toISOString().substring(0, 10);
     }
 
-    const notes = description
-      ? `Google Calendar: ${description}`
-      : 'Import Google Calendar (LIR)';
+    // Créneaux : extraits de la description
+    const creneauLivDebut = parsed?.creneauLivraison?.split('-')[0] || null;
+    const creneauLivFin = parsed?.creneauLivraison?.split('-')[1] || null;
+    const creneauRecDebut = parsed?.creneauRecuperation?.split('-')[0] || null;
+    const creneauRecFin = parsed?.creneauRecuperation?.split('-')[1] || null;
+
+    // Notes : infos restantes de la description
+    const notes = parsed?.notes || (description ? `Google Calendar: ${cleanHtml(description)}` : 'Import Google Calendar (LIR)');
+
+    // Contact
+    const contactNom = parsed?.contactNom || null;
+    const contactTelephone = parsed?.contactTelephone || null;
 
     // Point livraison (date de début)
     try {
@@ -130,17 +299,25 @@ export async function syncGoogleCalendarEvents(): Promise<{
         update: {
           date: ensureDateUTC(startDate),
           clientName,
-          adresse: location,
+          adresse,
           type: 'livraison',
           produitNom,
+          creneauDebut: creneauLivDebut,
+          creneauFin: creneauLivFin,
+          contactNom,
+          contactTelephone,
           notes,
         },
         create: {
           date: ensureDateUTC(startDate),
           clientName,
-          adresse: location,
+          adresse,
           type: 'livraison',
           produitNom,
+          creneauDebut: creneauLivDebut,
+          creneauFin: creneauLivFin,
+          contactNom,
+          contactTelephone,
           notes,
           source: 'google_calendar',
           externalId: `${eventId}_livraison`,
@@ -159,17 +336,25 @@ export async function syncGoogleCalendarEvents(): Promise<{
         update: {
           date: ensureDateUTC(endDate),
           clientName,
-          adresse: location,
+          adresse,
           type: 'ramassage',
           produitNom,
+          creneauDebut: creneauRecDebut,
+          creneauFin: creneauRecFin,
+          contactNom,
+          contactTelephone,
           notes,
         },
         create: {
           date: ensureDateUTC(endDate),
           clientName,
-          adresse: location,
+          adresse,
           type: 'ramassage',
           produitNom,
+          creneauDebut: creneauRecDebut,
+          creneauFin: creneauRecFin,
+          contactNom,
+          contactTelephone,
           notes,
           source: 'google_calendar',
           externalId: `${eventId}_ramassage`,
