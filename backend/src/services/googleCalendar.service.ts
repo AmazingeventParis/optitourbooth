@@ -64,7 +64,7 @@ function parseDescription(rawDescription: string): ParsedDescription {
   const timeSlots: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i]!;
     const lineUpper = line.toUpperCase();
 
     // Extraction adresse avec label
@@ -124,10 +124,11 @@ function parseDescription(rawDescription: string): ParsedDescription {
 
     // Détection de numéro de téléphone (avec potentiellement un nom avant)
     const phoneMatches = line.match(PHONE_REGEX);
-    if (phoneMatches && !contactTelephone) {
+    if (phoneMatches && phoneMatches[0] && !contactTelephone) {
       contactTelephone = phoneMatches[0].replace(/[\s.\-]/g, '');
       // Le texte avant le téléphone est probablement le nom du contact
-      const beforePhone = line.substring(0, line.indexOf(phoneMatches[0])).replace(/[,/]/g, '').trim();
+      const phoneIdx = line.indexOf(phoneMatches[0]);
+      const beforePhone = (phoneIdx > 0 ? line.substring(0, phoneIdx) : '').replace(/[,/]/g, '').trim();
       if (beforePhone && beforePhone.length > 2 && !contactNom) {
         // Filtrer les lignes qui ne sont pas des noms (mots-clés)
         const lowerBefore = beforePhone.toLowerCase();
