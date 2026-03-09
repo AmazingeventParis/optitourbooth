@@ -145,10 +145,10 @@ function parseDescription(rawDescription: string): ParsedDescription {
 
   // Si on a des créneaux non labelisés, le 1er = livraison, le 2nd = récupération
   if (!creneauLivraison && timeSlots.length > 0) {
-    creneauLivraison = timeSlots[0];
+    creneauLivraison = timeSlots[0] ?? null;
   }
   if (!creneauRecuperation && timeSlots.length > 1) {
-    creneauRecuperation = timeSlots[1];
+    creneauRecuperation = timeSlots[1] ?? null;
   }
 
   return {
@@ -162,9 +162,9 @@ function parseDescription(rawDescription: string): ParsedDescription {
 }
 
 function formatTimeSlot(match: RegExpMatchArray): string {
-  const h1 = match[1].padStart(2, '0');
+  const h1 = (match[1] || '0').padStart(2, '0');
   const m1 = (match[2] || '00').padStart(2, '0');
-  const h2 = match[3].padStart(2, '0');
+  const h2 = (match[3] || '0').padStart(2, '0');
   const m2 = (match[4] || '00').padStart(2, '0');
   return `${h1}:${m1}-${h2}:${m2}`;
 }
