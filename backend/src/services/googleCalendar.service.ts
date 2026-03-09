@@ -31,8 +31,8 @@ interface ParsedDescription {
 // Regex pour numéros de téléphone français
 const PHONE_REGEX = /(?:0[1-9])[\s.\-]?(?:\d{2}[\s.\-]?){4}/g;
 
-// Regex pour créneaux horaires: "10h-14h", "10H00-12H00", "10h à 14h", "entre 10H ET 12H"
-const TIME_SLOT_REGEX = /(\d{1,2})\s*[hH]\s*(\d{0,2})\s*(?:-|à|a|ET)\s*(\d{1,2})\s*[hH]\s*(\d{0,2})/;
+// Regex pour créneaux horaires: "10h-14h", "10H00-12H00", "10h à 14h", "entre 14h et 18h"
+const TIME_SLOT_REGEX = /(\d{1,2})\s*[hH]\s*(\d{0,2})\s*(?:-|à|a|et|ET|and)\s*(\d{1,2})\s*[hH]\s*(\d{0,2})/i;
 
 // Regex pour adresse française (numéro + rue/avenue/boulevard...)
 const ADDRESS_REGEX = /\d+\s*[,.]?\s*(?:rue|avenue|av\.|bd|boulevard|place|allée|chemin|impasse|passage|quai|cours|route)\s+[^\n,]+(?:,\s*\d{5}\s*[^\n,]+)?/i;
