@@ -564,6 +564,7 @@ model PendingPoint {
   clientName        String   @map("client_name")
   adresse           String?
   type              String   // 'livraison', 'ramassage', etc.
+  produitNom        String?  @map("produit_nom")
   creneauDebut      String?  @map("creneau_debut")
   creneauFin        String?  @map("creneau_fin")
   notes             String?  @db.Text

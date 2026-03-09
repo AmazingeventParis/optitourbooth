@@ -5,6 +5,17 @@ import { ensureDateUTC } from '../utils/dateUtils.js';
 
 const LIR_PREFIX = '(LIR)';
 
+// Mapping Google Calendar colorId → nom du produit OptiTour
+const COLOR_TO_PRODUIT: Record<string, string> = {
+  '3': 'Ring',        // Raisin (violet)
+  '4': 'Playbox',     // Flamant (rose)
+  '5': 'Smakk',       // Banane (jaune)
+  '6': 'Miroir',      // Mandarine (orange)
+  '8': 'Vegas',       // Graphite (gris foncé)
+  '9': 'Aircam',      // Myrtille (bleu foncé)
+  '10': 'Spinner',    // Basilic (vert foncé)
+};
+
 function getCalendarClient() {
   if (!config.googleCalendar.serviceAccountBase64) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_BASE64 non configuré');
@@ -69,8 +80,16 @@ export async function syncGoogleCalendarEvents(): Promise<{
     const description = event.description || '';
     const eventId = event.id || '';
 
+    // Déterminer le produit via la couleur de l'événement
+    const colorId = event.colorId || '';
+    const produitNom = COLOR_TO_PRODUIT[colorId] || null;
+
+    if (produitNom) {
+      console.log(`[Google Calendar] ${clientName} → couleur ${colorId} → ${produitNom}`);
+    }
+
     // Dates : start.date pour all-day, start.dateTime pour événements avec heure
-    let startDate = event.start?.date || event.start?.dateTime?.substring(0, 10) || '';
+    const startDate = event.start?.date || event.start?.dateTime?.substring(0, 10) || '';
     let endDate = event.end?.date || event.end?.dateTime?.substring(0, 10) || '';
 
     if (!startDate || !endDate) {
@@ -79,7 +98,6 @@ export async function syncGoogleCalendarEvents(): Promise<{
     }
 
     // Pour les événements "all-day", Google Calendar met la date de fin au jour SUIVANT
-    // Ex: événement du 10 au 12 mars → start=2026-03-10, end=2026-03-13
     if (event.start?.date && event.end?.date) {
       const endDateObj = new Date(endDate + 'T12:00:00Z');
       endDateObj.setDate(endDateObj.getDate() - 1);
@@ -99,6 +117,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           clientName,
           adresse: location,
           type: 'livraison',
+          produitNom,
           notes,
         },
         create: {
@@ -106,6 +125,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           clientName,
           adresse: location,
           type: 'livraison',
+          produitNom,
           notes,
           source: 'google_calendar',
           externalId: `${eventId}_livraison`,
@@ -126,6 +146,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           clientName,
           adresse: location,
           type: 'ramassage',
+          produitNom,
           notes,
         },
         create: {
@@ -133,6 +154,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           clientName,
           adresse: location,
           type: 'ramassage',
+          produitNom,
           notes,
           source: 'google_calendar',
           externalId: `${eventId}_ramassage`,

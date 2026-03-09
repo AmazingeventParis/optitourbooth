@@ -6,6 +6,7 @@ export interface BackendPendingPoint {
   clientName: string;
   adresse?: string;
   type: string;
+  produitNom?: string;
   creneauDebut?: string;
   creneauFin?: string;
   notes?: string;

@@ -29,6 +29,7 @@ export async function createPendingPoints(req: Request, res: Response): Promise<
         clientName: point.clientName,
         adresse: point.adresse || null,
         type: point.type,
+        produitNom: point.produitNom || null,
         creneauDebut: point.creneauDebut || null,
         creneauFin: point.creneauFin || null,
         notes: point.notes || null,
