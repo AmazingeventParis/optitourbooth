@@ -1,6 +1,6 @@
 // Types pour les entités
 
-export type UserRole = 'superadmin' | 'admin' | 'chauffeur' | 'preparateur';
+export type UserRole = 'superadmin' | 'admin' | 'chauffeur' | 'preparateur' | 'warehouse';
 export type TenantPlan = 'STARTER' | 'PRO' | 'ENTERPRISE';
 
 export interface TenantConfig {

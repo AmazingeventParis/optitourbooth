@@ -85,11 +85,11 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
       return <Navigate to="/super-admin" replace />;
     }
     // Rediriger selon le rôle
-    // Tout utilisateur avec rôle chauffeur (sans admin) → interface chauffeur
-    if (user?.roles.includes('chauffeur') && !user?.roles.includes('admin')) {
+    // Tout utilisateur avec rôle chauffeur (sans admin/warehouse) → interface chauffeur
+    if (user?.roles.includes('chauffeur') && !user?.roles.includes('admin') && !user?.roles.includes('warehouse')) {
       return <Navigate to="/chauffeur" replace />;
     }
-    if (user?.roles.includes('preparateur') && !user?.roles.includes('admin') && !user?.roles.includes('chauffeur')) {
+    if (user?.roles.includes('preparateur') && !user?.roles.includes('admin') && !user?.roles.includes('chauffeur') && !user?.roles.includes('warehouse')) {
       return <Navigate to="/preparations" replace />;
     }
     return <Navigate to="/" replace />;
@@ -119,12 +119,17 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/super-admin" replace />;
   }
 
-  // Tout utilisateur avec rôle chauffeur (sans admin) → interface chauffeur
-  if (user?.roles.includes('chauffeur') && !user?.roles.includes('admin')) {
+  // Admin ou warehouse → accès au layout principal
+  if (user?.roles.includes('admin') || user?.roles.includes('warehouse')) {
+    return <>{children}</>;
+  }
+
+  // Tout utilisateur avec rôle chauffeur (sans admin/warehouse) → interface chauffeur
+  if (user?.roles.includes('chauffeur')) {
     return <Navigate to="/chauffeur" replace />;
   }
 
-  if (user?.roles.includes('preparateur') && !user?.roles.includes('admin') && !user?.roles.includes('chauffeur')) {
+  if (user?.roles.includes('preparateur')) {
     return <Navigate to="/preparations" replace />;
   }
 
@@ -171,8 +176,8 @@ function PreparateurRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  // Les admins et préparateurs peuvent accéder à l'interface préparateur
-  if (!user?.roles.includes('preparateur') && !user?.roles.includes('admin')) {
+  // Les admins, préparateurs et warehouse peuvent accéder à l'interface préparateur
+  if (!user?.roles.includes('preparateur') && !user?.roles.includes('admin') && !user?.roles.includes('warehouse')) {
     return <Navigate to="/" replace />;
   }
 

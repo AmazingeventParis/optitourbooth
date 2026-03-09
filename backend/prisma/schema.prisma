@@ -20,6 +20,7 @@ enum UserRole {
   admin
   chauffeur
   preparateur
+  warehouse
 }
 
 enum TenantPlan {

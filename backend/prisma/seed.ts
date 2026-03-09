@@ -54,6 +54,24 @@ async function main() {
   });
   console.log(`✅ Super Admin créé: ${superAdmin.email}`);
 
+  // ===== WAREHOUSE (bureau@shootnbox.fr) =====
+  const warehousePassword = await bcrypt.hash('Laurytal2', 12);
+  const warehouseUser = await prisma.user.upsert({
+    where: { email: 'bureau@shootnbox.fr' },
+    update: {},
+    create: {
+      email: 'bureau@shootnbox.fr',
+      passwordHash: warehousePassword,
+      roles: ['warehouse'],
+      nom: 'Bureau',
+      prenom: 'Shootnbox',
+      telephone: null,
+      tenantId: shootnboxTenant.id,
+      actif: true,
+    },
+  });
+  console.log(`✅ Warehouse créé: ${warehouseUser.email}`);
+
   // Créer quelques produits de base
   const produits = [
     {
@@ -354,8 +372,9 @@ async function main() {
   console.log('');
   console.log('🎉 Seeding terminé !');
   console.log('');
-  console.log('📧 Compte créé:');
+  console.log('📧 Comptes créés:');
   console.log('   Super Admin: superadmin@optitour.fr / SuperAdmin1!');
+  console.log('   Warehouse:   bureau@shootnbox.fr / Laurytal2');
   console.log('   (Les autres comptes doivent être créés manuellement via l\'interface)');
 }
 

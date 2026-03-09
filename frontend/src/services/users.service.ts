@@ -6,7 +6,7 @@ interface CreateUserData {
   password: string;
   nom: string;
   prenom: string;
-  roles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur'>;
+  roles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur' | 'warehouse'>;
   telephone?: string;
 }
 
@@ -15,7 +15,7 @@ interface UpdateUserData {
   password?: string;
   nom?: string;
   prenom?: string;
-  roles?: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur'>;
+  roles?: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur' | 'warehouse'>;
   telephone?: string;
   actif?: boolean;
 }

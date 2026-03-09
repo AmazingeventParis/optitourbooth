@@ -38,10 +38,10 @@ const navigation: Array<{
   icon: any;
   roles: UserRole[];
 }> = [
-  { name: 'Dashboard', href: '/', icon: HomeIcon, roles: ['admin'] },
-  { name: 'Planning', href: '/planning', icon: CalendarDaysIcon, roles: ['admin'] },
+  { name: 'Dashboard', href: '/', icon: HomeIcon, roles: ['admin', 'warehouse'] },
+  { name: 'Planning', href: '/planning', icon: CalendarDaysIcon, roles: ['admin', 'warehouse'] },
   { name: 'Historique', href: '/historique', icon: ClockIcon, roles: ['admin'] },
-  { name: 'Préparations', href: '/preparations', icon: WrenchScrewdriverIcon, roles: ['admin', 'preparateur'] },
+  { name: 'Préparations', href: '/preparations', icon: WrenchScrewdriverIcon, roles: ['admin', 'preparateur', 'warehouse'] },
   { name: 'Clients', href: '/clients', icon: UserGroupIcon, roles: ['admin'] },
   { name: 'Utilisateurs', href: '/utilisateurs', icon: UsersIcon, roles: ['admin'] },
   { name: 'Véhicules', href: '/vehicules', icon: TruckIcon, roles: ['admin'] },

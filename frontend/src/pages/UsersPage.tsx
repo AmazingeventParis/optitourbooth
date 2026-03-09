@@ -14,7 +14,7 @@ interface UserFormData {
   password: string;
   nom: string;
   prenom: string;
-  roles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur'>;
+  roles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur' | 'warehouse'>;
   telephone: string;
   couleur: string;
 }
@@ -264,8 +264,8 @@ export default function UsersPage() {
       render: (user) => (
         <div className="flex gap-1 flex-wrap">
           {user.roles.map(role => (
-            <Badge key={role} variant={role === 'admin' ? 'info' : role === 'chauffeur' ? 'default' : 'warning'}>
-              {role === 'admin' ? 'Admin' : role === 'chauffeur' ? 'Chauffeur' : 'Préparateur'}
+            <Badge key={role} variant={role === 'admin' ? 'info' : role === 'chauffeur' ? 'default' : role === 'warehouse' ? 'success' : 'warning'}>
+              {role === 'admin' ? 'Admin' : role === 'chauffeur' ? 'Chauffeur' : role === 'warehouse' ? 'Warehouse' : 'Préparateur'}
             </Badge>
           ))}
         </div>
@@ -358,6 +358,7 @@ export default function UsersPage() {
               { value: '', label: 'Tous les rôles' },
               { value: 'admin', label: 'Admin' },
               { value: 'chauffeur', label: 'Chauffeur' },
+              { value: 'warehouse', label: 'Warehouse' },
             ]}
           />
           <Button type="submit" variant="secondary">
@@ -488,6 +489,7 @@ export default function UsersPage() {
               {[
                 { value: 'preparateur' as const, label: 'Préparateur' },
                 { value: 'chauffeur' as const, label: 'Chauffeur' },
+                { value: 'warehouse' as const, label: 'Warehouse' },
                 { value: 'admin' as const, label: 'Administrateur' },
               ].map(({ value, label }) => (
                 <label key={value} className="flex items-center">

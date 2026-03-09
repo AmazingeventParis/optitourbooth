@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import * as machineController from '../controllers/machine.controller.js';
-import { authenticate, requireAdmin, requirePreparateur } from '../middlewares/auth.middleware.js';
+import { authenticate, requireAdmin, requireRole } from '../middlewares/auth.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 // Configuration multer pour l'upload d'images
@@ -22,9 +22,9 @@ const imageUpload = multer({
 
 const router = Router();
 
-// Routes de lecture accessibles aux préparateurs
-router.get('/', authenticate, requirePreparateur, asyncHandler(machineController.listMachines));
-router.get('/:id', authenticate, requirePreparateur, asyncHandler(machineController.getMachine));
+// Routes de lecture accessibles aux préparateurs et warehouse
+router.get('/', authenticate, requireRole('preparateur', 'warehouse', 'admin', 'superadmin'), asyncHandler(machineController.listMachines));
+router.get('/:id', authenticate, requireRole('preparateur', 'warehouse', 'admin', 'superadmin'), asyncHandler(machineController.getMachine));
 
 // Routes d'action réservées aux admins
 router.use(authenticate, requireAdmin);

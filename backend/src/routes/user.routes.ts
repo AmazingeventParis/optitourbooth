@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { userController } from '../controllers/user.controller.js';
-import { authenticate, requireAdmin } from '../middlewares/auth.middleware.js';
+import { authenticate, requireAdmin, requireWarehouse } from '../middlewares/auth.middleware.js';
 import { validate, validateMultiple } from '../middlewares/validation.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import {
@@ -32,19 +32,19 @@ const router = Router();
 // Toutes les routes nécessitent une authentification
 router.use(authenticate);
 
-// Route spéciale pour les chauffeurs (accessible aux admins)
+// Route spéciale pour les chauffeurs (accessible aux admins et warehouse)
 router.get('/chauffeurs', asyncHandler(userController.listChauffeurs));
 
-// Routes admin seulement
-router.use(requireAdmin);
-
-router.get('/', validate(userQuerySchema, 'query'), asyncHandler(userController.list));
-
+// Routes lecture accessibles au warehouse (dashboard a besoin de lister les users)
+router.get('/', requireWarehouse, validate(userQuerySchema, 'query'), asyncHandler(userController.list));
 router.get(
   '/:id',
+  requireWarehouse,
   validate(userIdSchema, 'params'),
   asyncHandler(userController.getById)
 );
+
+// Routes admin seulement (écriture)
 
 router.post('/', validate(createUserSchema), asyncHandler(userController.create));
 

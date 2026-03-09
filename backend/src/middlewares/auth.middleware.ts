@@ -11,7 +11,7 @@ declare global {
       user?: {
         id: string;
         email: string;
-        roles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur'>;
+        roles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur' | 'warehouse'>;
         nom: string;
         prenom: string;
         tenantId: string | null;
@@ -23,7 +23,7 @@ declare global {
 interface JwtPayload {
   userId: string;
   email: string;
-  roles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur'>;
+  roles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur' | 'warehouse'>;
   tenantId?: string | null;
 }
 
@@ -173,8 +173,27 @@ export function requirePreparateur(
   next();
 }
 
+// Middleware pour vérifier le rôle warehouse (accès lecture dashboard, planning, préparations)
+export function requireWarehouse(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  if (!req.user) {
+    apiResponse.unauthorized(res);
+    return;
+  }
+
+  if (!req.user.roles.includes('warehouse') && !req.user.roles.includes('admin') && !req.user.roles.includes('superadmin')) {
+    apiResponse.forbidden(res, 'Accès réservé aux responsables entrepôt');
+    return;
+  }
+
+  next();
+}
+
 // Middleware pour vérifier qu'un utilisateur a au moins un des rôles spécifiés
-export function requireRole(...allowedRoles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur'>) {
+export function requireRole(...allowedRoles: Array<'superadmin' | 'admin' | 'chauffeur' | 'preparateur' | 'warehouse'>) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
       apiResponse.unauthorized(res);
