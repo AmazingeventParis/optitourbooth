@@ -6,16 +6,21 @@ import { ensureDateUTC } from '../utils/dateUtils.js';
 // Regex pour matcher (LIR), (LIR PREM), (LIR SALON), (LIR MIROIR), etc.
 const LIR_REGEX = /^\(LIR[^)]*\)/i;
 
-// Mapping Google Calendar colorId → nom du produit OptiTour
-const COLOR_TO_PRODUIT: Record<string, string> = {
-  '3': 'Ring',        // Raisin (violet)
-  '4': 'Playbox',     // Flamant (rose)
-  '5': 'Smakk',       // Banane (jaune)
-  '6': 'Miroir',      // Mandarine (orange)
-  '8': 'Vegas',       // Graphite (gris foncé)
-  '9': 'Aircam',      // Myrtille (bleu foncé)
-  '10': 'Spinner',    // Basilic (vert foncé)
+// Mapping LIR tag → nom du produit OptiTour
+// Note: colorId n'est pas accessible via service account (c'est une préférence utilisateur)
+// On utilise le tag LIR et le calendrier source comme alternatives
+const LIR_TAG_TO_PRODUIT: Record<string, string> = {
+  'MIROIR': 'Miroir',
+  'VEGAS': 'Vegas',
+  'RING': 'Ring',
+  'PLAYBOX': 'Playbox',
+  'AIRCAM': 'Aircam',
+  'SPINNER': 'Spinner',
+  'SMAKK': 'Smakk',
 };
+
+// Calendrier Smakk → tous les événements sont du produit Smakk
+const SMAKK_CALENDAR_ID = 'faa39fa21157c487ef3a5007739b04b69a9309cffee9d8bfc4ff09c75958bbd1@group.calendar.google.com';
 
 // ===== PARSER DE DESCRIPTION =====
 
@@ -270,7 +275,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
   let skipped = 0;
   let errors = 0;
 
-  for (const { event } of allLirEvents) {
+  for (const { event, calendarId } of allLirEvents) {
     const rawTitle = (event.summary || '').trim();
     const lirMatch = rawTitle.match(LIR_REGEX);
     const lirTag = lirMatch ? lirMatch[0] : '';
@@ -285,20 +290,23 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Adresse : priorité au champ location de l'événement, sinon celle de la description
     const adresse = location || parsed?.adresse || null;
 
-    // Produit via couleur
-    const colorId = event.colorId || '';
-    const produitNom = COLOR_TO_PRODUIT[colorId] || null;
+    // Produit : détection par tag LIR et calendrier source
+    let produitNom: string | null = null;
 
-    // Log détaillé pour debug (un seul événement)
-    if (created === 0 && errors === 0 && skipped === 0) {
-      console.log(`[Google Calendar] RAW EVENT SAMPLE:`, JSON.stringify({
-        summary: event.summary,
-        colorId: event.colorId,
-        hasColorId: 'colorId' in event,
-        eventKeys: Object.keys(event),
-      }));
+    // 1. Si c'est le calendrier Smakk, c'est forcément un produit Smakk
+    if (calendarId === SMAKK_CALENDAR_ID) {
+      produitNom = 'Smakk';
     }
-    console.log(`[Google Calendar] ${clientName} → colorId="${colorId}" → ${produitNom || 'aucun produit'}`);
+
+    // 2. Extraire le mot-clé du tag LIR: "(LIR MIROIR)" → "MIROIR"
+    if (!produitNom && lirTag) {
+      const tagContent = lirTag.replace(/^\(LIR\s*/i, '').replace(/\)$/, '').trim().toUpperCase();
+      if (tagContent && LIR_TAG_TO_PRODUIT[tagContent]) {
+        produitNom = LIR_TAG_TO_PRODUIT[tagContent];
+      }
+    }
+
+    console.log(`[Google Calendar] ${clientName} → tag="${lirTag}" cal="${calendarId === SMAKK_CALENDAR_ID ? 'smakk' : 'main'}" → ${produitNom || 'aucun produit'}`);
 
 
     // Dates
