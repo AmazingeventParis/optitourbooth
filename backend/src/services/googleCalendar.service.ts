@@ -39,9 +39,9 @@ export async function syncGoogleCalendarEvents(): Promise<{
   updated: number;
   errors: number;
 }> {
-  const calendarId = config.googleCalendar.calendarId;
-  if (!calendarId) {
-    console.log('[Google Calendar] GOOGLE_CALENDAR_ID non configuré, sync ignorée');
+  const calendarIds = config.googleCalendar.calendarIds;
+  if (calendarIds.length === 0) {
+    console.log('[Google Calendar] Aucun calendrier configuré (GOOGLE_CALENDAR_IDS), sync ignorée');
     return { found: 0, created: 0, updated: 0, errors: 0 };
   }
 
@@ -53,28 +53,39 @@ export async function syncGoogleCalendarEvents(): Promise<{
     now.getTime() + config.googleCalendar.syncDaysAhead * 24 * 60 * 60 * 1000
   ).toISOString();
 
-  // Récupérer les événements du calendrier
-  const response = await calendar.events.list({
-    calendarId,
-    timeMin,
-    timeMax,
-    singleEvents: true,
-    orderBy: 'startTime',
-    maxResults: 500,
-  });
+  let allLirEvents: { event: any; calendarId: string }[] = [];
 
-  const events = response.data.items || [];
-  const lirEvents = events.filter(
-    (e) => e.summary && e.summary.trim().toUpperCase().startsWith(LIR_PREFIX)
-  );
+  // Récupérer les événements de chaque calendrier
+  for (const calId of calendarIds) {
+    try {
+      const response = await calendar.events.list({
+        calendarId: calId,
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 500,
+      });
 
-  console.log(`[Google Calendar] ${lirEvents.length} événements (LIR) trouvés sur ${events.length} total`);
+      const events = response.data.items || [];
+      const lirEvents = events.filter(
+        (e) => e.summary && e.summary.trim().toUpperCase().startsWith(LIR_PREFIX)
+      );
+
+      console.log(`[Google Calendar] ${calId}: ${lirEvents.length} (LIR) sur ${events.length} total`);
+      allLirEvents.push(...lirEvents.map(event => ({ event, calendarId: calId })));
+    } catch (e) {
+      console.error(`[Google Calendar] Erreur lecture calendrier ${calId}:`, e);
+    }
+  }
+
+  console.log(`[Google Calendar] Total: ${allLirEvents.length} événements (LIR)`);
 
   let created = 0;
   let updated = 0;
   let errors = 0;
 
-  for (const event of lirEvents) {
+  for (const { event } of allLirEvents) {
     const clientName = (event.summary || '').trim().substring(LIR_PREFIX.length).trim() || 'Client inconnu';
     const location = event.location || '';
     const description = event.description || '';
@@ -179,7 +190,7 @@ export function startGoogleCalendarSync(): void {
     return;
   }
 
-  if (!config.googleCalendar.serviceAccountBase64 || !config.googleCalendar.calendarId) {
+  if (!config.googleCalendar.serviceAccountBase64 || config.googleCalendar.calendarIds.length === 0) {
     console.log('[Google Calendar] Configuration incomplète, sync désactivée');
     return;
   }

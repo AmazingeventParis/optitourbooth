@@ -64,7 +64,7 @@ export const config = {
   // Google Calendar sync
   googleCalendar: {
     serviceAccountBase64: process.env.GOOGLE_SERVICE_ACCOUNT_BASE64 || '',
-    calendarId: process.env.GOOGLE_CALENDAR_ID || '',
+    calendarIds: (process.env.GOOGLE_CALENDAR_IDS || process.env.GOOGLE_CALENDAR_ID || '').split(',').map(s => s.trim()).filter(Boolean),
     syncEnabled: process.env.GOOGLE_CALENDAR_SYNC_ENABLED === 'true',
     syncIntervalMinutes: parseInt(process.env.GOOGLE_CALENDAR_SYNC_INTERVAL || '15', 10),
     syncDaysAhead: parseInt(process.env.GOOGLE_CALENDAR_SYNC_DAYS_AHEAD || '30', 10),
