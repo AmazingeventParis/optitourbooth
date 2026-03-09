@@ -6,6 +6,9 @@ import { ensureDateUTC } from '../utils/dateUtils.js';
 // Regex pour matcher (LIR), (LIR PREM), (LIR SALON), (LIR MIROIR), etc.
 const LIR_REGEX = /^\(LIR[^)]*\)/i;
 
+// Tags LIR à ignorer (pas de points à créer)
+const LIR_TAGS_IGNORED = ['TNT'];
+
 // Mapping LIR tag → nom du produit OptiTour
 // Note: colorId n'est pas accessible via service account (c'est une préférence utilisateur)
 // On utilise le tag LIR et le calendrier source comme alternatives
@@ -280,6 +283,13 @@ export async function syncGoogleCalendarEvents(): Promise<{
     const lirMatch = rawTitle.match(LIR_REGEX);
     const lirTag = lirMatch ? lirMatch[0] : '';
     const clientName = rawTitle.substring(lirTag.length).trim() || 'Client inconnu';
+
+    // Vérifier si le tag LIR est dans la liste des tags ignorés
+    const tagContent = lirTag.replace(/^\(LIR\s*/i, '').replace(/\)$/, '').trim().toUpperCase();
+    if (LIR_TAGS_IGNORED.includes(tagContent)) {
+      continue;
+    }
+
     const location = event.location || '';
     const description = event.description || '';
     const eventId = event.id || '';
@@ -294,11 +304,8 @@ export async function syncGoogleCalendarEvents(): Promise<{
     let produitNom: string | null = null;
 
     // 1. Extraire le mot-clé du tag LIR: "(LIR MIROIR)" → "MIROIR"
-    if (lirTag) {
-      const tagContent = lirTag.replace(/^\(LIR\s*/i, '').replace(/\)$/, '').trim().toUpperCase();
-      if (tagContent && LIR_TAG_TO_PRODUIT[tagContent]) {
-        produitNom = LIR_TAG_TO_PRODUIT[tagContent];
-      }
+    if (tagContent && LIR_TAG_TO_PRODUIT[tagContent]) {
+      produitNom = LIR_TAG_TO_PRODUIT[tagContent];
     }
 
     // 2. Fallback : calendrier Smakk → produit Smakk
