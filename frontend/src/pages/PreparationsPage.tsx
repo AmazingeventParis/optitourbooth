@@ -141,7 +141,7 @@ export default function PreparationsPage() {
       // Mode création - pré-sélectionner l'utilisateur connecté
       setIsViewMode(false);
       setEvenements([{ dateEvenement: '', client: '' }]);
-      setSelectedPreparateur(user?.prenom || '');
+      setSelectedPreparateur('Wilfried');
       fetchCalendarEvents(machine.type);
     }
 
