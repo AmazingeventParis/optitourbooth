@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Card, Button, Modal, Input, Badge } from '@/components/ui';
 import { machinesService } from '@/services/machines.service';
 import { preparationsService } from '@/services/preparations.service';
+import { pendingPointsService, CalendarEvent } from '@/services/pendingPoints.service';
 import { useToast } from '@/hooks/useToast';
 import { useAuthStore } from '@/store/authStore';
 import { usePreparateurs } from '@/hooks/queries/useUsers';
@@ -81,10 +82,11 @@ export default function PreparationsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state - Liste d'événements à créer
-  const [evenements, setEvenements] = useState<Array<{ dateEvenement: string; client: string }>>([
+  const [evenements, setEvenements] = useState<Array<{ dateEvenement: string; client: string; pendingPointId?: string }>>([
     { dateEvenement: '', client: '' }
   ]);
   const [selectedPreparateur, setSelectedPreparateur] = useState<string>('');
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
 
   // Action modal state
   const [isViewMode, setIsViewMode] = useState(false);
@@ -116,6 +118,17 @@ export default function PreparationsPage() {
     }
   };
 
+  const fetchCalendarEvents = async (machineType: MachineType) => {
+    try {
+      const calendarType = machineType === 'Smakk' ? 'smakk' : 'shootnbox';
+      const events = await pendingPointsService.listCalendarEvents(calendarType);
+      setCalendarEvents(events);
+    } catch (err) {
+      console.error('Erreur chargement événements calendrier:', err);
+      setCalendarEvents([]);
+    }
+  };
+
   const handleOpenModal = (machine: Machine) => {
     setSelectedMachine(machine);
     const preparation = getPreparationForMachine(machine);
@@ -129,6 +142,7 @@ export default function PreparationsPage() {
       setIsViewMode(false);
       setEvenements([{ dateEvenement: '', client: '' }]);
       setSelectedPreparateur(user?.prenom || '');
+      fetchCalendarEvents(machine.type);
     }
 
     setDefautText('');
@@ -172,6 +186,14 @@ export default function PreparationsPage() {
           preparateur,
           notes: undefined,
         });
+        // Marquer l'événement calendrier comme utilisé
+        if (evt.pendingPointId) {
+          try {
+            await pendingPointsService.markUsedInPreparation(evt.pendingPointId);
+          } catch (e) {
+            console.error('Erreur marquage événement utilisé:', e);
+          }
+        }
       }
 
       success(`${evenementsValides.length} préparation(s) créée(s)`);
@@ -901,6 +923,55 @@ export default function PreparationsPage() {
                       <XMarkIcon className="h-5 w-5" />
                     </button>
                   )}
+
+                  {/* Sélection via Google Agenda */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Choisir un événement Google Agenda
+                    </label>
+                    <select
+                      value={evt.pendingPointId || ''}
+                      onChange={(e) => {
+                        const newEvents = [...evenements];
+                        const selectedId = e.target.value;
+                        if (selectedId === '') {
+                          // Mode manuel
+                          newEvents[index] = { dateEvenement: '', client: '', pendingPointId: undefined };
+                        } else {
+                          const calEvt = calendarEvents.find(ce => ce.id === selectedId);
+                          if (calEvt) {
+                            const dateStr = typeof calEvt.date === 'string'
+                              ? calEvt.date.substring(0, 10)
+                              : new Date(calEvt.date).toISOString().substring(0, 10);
+                            newEvents[index] = {
+                              dateEvenement: dateStr,
+                              client: calEvt.clientName,
+                              pendingPointId: calEvt.id,
+                            };
+                          }
+                        }
+                        setEvenements(newEvents);
+                      }}
+                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                    >
+                      <option value="">-- Saisie manuelle --</option>
+                      {calendarEvents
+                        .filter(ce => !evenements.some((ev, i) => i !== index && ev.pendingPointId === ce.id))
+                        .map(ce => {
+                          const dateStr = typeof ce.date === 'string'
+                            ? ce.date.substring(0, 10)
+                            : new Date(ce.date).toISOString().substring(0, 10);
+                          return (
+                            <option key={ce.id} value={ce.id}>
+                              {format(parseISO(dateStr), 'd MMM yyyy', { locale: fr })} - {ce.clientName}
+                              {ce.produitNom ? ` (${ce.produitNom})` : ''}
+                            </option>
+                          );
+                        })}
+                    </select>
+                  </div>
+
+                  {/* Champs date et client (auto-remplis ou manuels) */}
                   <Input
                     label="Date de l'événement"
                     type="date"
@@ -908,9 +979,11 @@ export default function PreparationsPage() {
                     onChange={(e) => {
                       const newEvents = [...evenements];
                       newEvents[index].dateEvenement = e.target.value;
+                      newEvents[index].pendingPointId = undefined; // Passe en mode manuel
                       setEvenements(newEvents);
                     }}
                     required
+                    disabled={!!evt.pendingPointId}
                   />
                   <Input
                     label="Nom du client"
@@ -918,10 +991,12 @@ export default function PreparationsPage() {
                     onChange={(e) => {
                       const newEvents = [...evenements];
                       newEvents[index].client = e.target.value;
+                      newEvents[index].pendingPointId = undefined; // Passe en mode manuel
                       setEvenements(newEvents);
                     }}
                     placeholder="Nom de l'événement ou du client"
                     required
+                    disabled={!!evt.pendingPointId}
                   />
                 </div>
               ))}

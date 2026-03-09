@@ -358,6 +358,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactNom,
           contactTelephone,
           notes,
+          calendarId,
           dispatched: livAlreadyInTournee ? true : undefined,
         },
         create: {
@@ -372,6 +373,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactTelephone,
           notes,
           source: 'google_calendar',
+          calendarId,
           externalId: `${eventId}_livraison`,
           dispatched: livAlreadyInTournee,
         },
@@ -406,6 +408,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactNom,
           contactTelephone,
           notes,
+          calendarId,
           dispatched: recAlreadyInTournee ? true : undefined,
         },
         create: {
@@ -420,6 +423,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactTelephone,
           notes,
           source: 'google_calendar',
+          calendarId,
           externalId: `${eventId}_ramassage`,
           dispatched: recAlreadyInTournee,
         },

@@ -141,6 +141,87 @@ export async function markDispatched(req: Request, res: Response): Promise<void>
 }
 
 /**
+ * GET /api/pending-points/calendar-events?calendarType=shootnbox|smakk
+ * Liste les événements Google Calendar uniques (groupés par événement)
+ * pour le panneau de préparations. Date: aujourd'hui → +15 jours.
+ * Exclut les événements déjà utilisés dans une préparation.
+ */
+export async function listCalendarEvents(req: Request, res: Response): Promise<void> {
+  const { calendarType } = req.query;
+
+  const now = new Date();
+  const dateStart = ensureDateUTC(now.toISOString().substring(0, 10));
+  const dateEnd = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+
+  // Filtre par calendrier source
+  const smakkCalendarId = 'faa39fa21157c487ef3a5007739b04b69a9309cffee9d8bfc4ff09c75958bbd1@group.calendar.google.com';
+  let calendarFilter: any = {};
+  if (calendarType === 'smakk') {
+    calendarFilter = { calendarId: smakkCalendarId };
+  } else if (calendarType === 'shootnbox') {
+    calendarFilter = { OR: [{ calendarId: { not: smakkCalendarId } }, { calendarId: null }] };
+  }
+
+  const points = await prisma.pendingPoint.findMany({
+    where: {
+      source: 'google_calendar',
+      date: { gte: dateStart, lte: dateEnd },
+      usedInPreparation: false,
+      type: 'livraison', // On prend uniquement les livraisons pour éviter les doublons
+      ...calendarFilter,
+    },
+    orderBy: { date: 'asc' },
+  });
+
+  // Retourner les événements avec date et client
+  const events = points.map((p: any) => ({
+    id: p.id,
+    date: p.date,
+    clientName: p.clientName,
+    produitNom: p.produitNom,
+    adresse: p.adresse,
+    externalId: p.externalId,
+  }));
+
+  apiResponse.success(res, events);
+}
+
+/**
+ * PATCH /api/pending-points/:id/use-in-preparation - Marquer comme utilisé dans une préparation
+ */
+export async function markUsedInPreparation(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+
+  try {
+    // Marquer le point livraison
+    const point = await prisma.pendingPoint.update({
+      where: { id },
+      data: { usedInPreparation: true },
+    });
+
+    // Marquer aussi le point ramassage associé (même externalId racine)
+    if (point.externalId) {
+      const eventIdBase = point.externalId.replace(/_livraison$/, '').replace(/_ramassage$/, '');
+      await prisma.pendingPoint.updateMany({
+        where: {
+          externalId: { startsWith: eventIdBase },
+          usedInPreparation: false,
+        },
+        data: { usedInPreparation: true },
+      });
+    }
+
+    apiResponse.success(res, { message: 'Événement marqué comme utilisé' });
+  } catch (error) {
+    if ((error as any).code === 'P2025') {
+      apiResponse.notFound(res, 'Point non trouvé');
+      return;
+    }
+    throw error;
+  }
+}
+
+/**
  * POST /api/pending-points/sync-google-calendar - Lancer une sync manuelle
  */
 export async function syncGoogleCalendar(_req: Request, res: Response): Promise<void> {

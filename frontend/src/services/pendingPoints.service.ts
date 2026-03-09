@@ -16,12 +16,32 @@ export interface BackendPendingPoint {
   externalId?: string;
 }
 
+export interface CalendarEvent {
+  id: string;
+  date: string;
+  clientName: string;
+  produitNom?: string;
+  adresse?: string;
+  externalId?: string;
+}
+
 export const pendingPointsService = {
   async listByDate(date: string): Promise<BackendPendingPoint[]> {
     const response = await api.get<ApiResponse<BackendPendingPoint[]>>(
       `/pending-points?date=${date}`
     );
     return response.data.data;
+  },
+
+  async listCalendarEvents(calendarType: 'shootnbox' | 'smakk'): Promise<CalendarEvent[]> {
+    const response = await api.get<ApiResponse<CalendarEvent[]>>(
+      `/pending-points/calendar-events?calendarType=${calendarType}`
+    );
+    return response.data.data;
+  },
+
+  async markUsedInPreparation(id: string): Promise<void> {
+    await api.patch(`/pending-points/${id}/use-in-preparation`);
   },
 
   async markDispatched(id: string): Promise<void> {
