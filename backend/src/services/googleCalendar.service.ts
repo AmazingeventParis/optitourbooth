@@ -289,9 +289,9 @@ export async function syncGoogleCalendarEvents(): Promise<{
     const colorId = event.colorId || '';
     const produitNom = COLOR_TO_PRODUIT[colorId] || null;
 
-    if (produitNom) {
-      console.log(`[Google Calendar] ${clientName} → couleur ${colorId} → ${produitNom}`);
-    }
+    // Log pour debug couleur
+    console.log(`[Google Calendar] ${clientName} → colorId="${colorId}" → ${produitNom || 'aucun produit'}`);
+
 
     // Dates
     const startDate = event.start?.date || event.start?.dateTime?.substring(0, 10) || '';
