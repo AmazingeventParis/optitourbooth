@@ -1,19 +1,12 @@
 import { Router } from 'express';
 import * as preparationController from '../controllers/preparation.controller.js';
-import { authenticate, requirePreparateur, requireRole } from '../middlewares/auth.middleware.js';
+import { authenticate, requireRole } from '../middlewares/auth.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
 
-// Toutes les routes nécessitent une authentification
-router.use(authenticate);
-
-// Routes de lecture accessibles aussi au warehouse
-router.get('/', requireRole('preparateur', 'warehouse', 'admin', 'superadmin'), asyncHandler(preparationController.listPreparations));
-router.get('/:id', requireRole('preparateur', 'warehouse', 'admin', 'superadmin'), asyncHandler(preparationController.getPreparation));
-
-// Routes d'écriture réservées aux préparateurs et admins
-router.use(requirePreparateur);
+// Toutes les routes nécessitent authentification + rôle preparateur, warehouse, admin ou superadmin
+router.use(authenticate, requireRole('preparateur', 'warehouse', 'admin', 'superadmin'));
 
 router.get('/', asyncHandler(preparationController.listPreparations));
 router.get('/:id', asyncHandler(preparationController.getPreparation));

@@ -703,9 +703,10 @@ interface TourneeTimelineProps {
   onSelectDepot?: (tourneeId: string | null) => void;
   isDragging?: boolean;
   isTargeted?: boolean;
+  readOnly?: boolean;
 }
 
-const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onEdit, onDelete, onValidate, selectedPointId, onSelectPoint, selectedDepotId, onSelectDepot, isDragging, isTargeted }: TourneeTimelineProps) {
+const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onEdit, onDelete, onValidate, selectedPointId, onSelectPoint, selectedDepotId, onSelectDepot, isDragging, isTargeted, readOnly }: TourneeTimelineProps) {
   const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
   const chauffeurColor = tournee.chauffeur?.couleur || TOURNEE_HEX_COLORS[colorIndex % TOURNEE_HEX_COLORS.length];
   const points = (tournee.points || []).sort((a, b) => a.ordre - b.ordre);
@@ -853,43 +854,45 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
           {tournee.statut === 'brouillon' && (
             <span className="text-[10px] opacity-70 bg-white/10 px-1.5 py-0.5 rounded">Brouillon</span>
           )}
-          <div className="flex items-center gap-0.5">
-            <button
-              onClick={shareViaWhatsApp}
-              className="p-1 rounded hover:bg-white/20 transition-colors"
-              title="Partager via WhatsApp"
-            >
-              <ShareIcon className="h-4 w-4" />
-            </button>
-            <button
-              onClick={onEdit}
-              className="p-1 rounded hover:bg-white/20 transition-colors"
-              title="Modifier la tournée"
-            >
-              <PencilIcon className="h-4 w-4" />
-            </button>
-            {onDelete && tournee.statut !== 'en_cours' && tournee.statut !== 'terminee' && (
+          {!readOnly && (
+            <div className="flex items-center gap-0.5">
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                className="p-1 rounded bg-red-500/50 hover:bg-red-500/80 transition-colors"
-                title="Supprimer la tournée"
+                onClick={shareViaWhatsApp}
+                className="p-1 rounded hover:bg-white/20 transition-colors"
+                title="Partager via WhatsApp"
               >
-                <TrashIcon className="h-4 w-4" />
+                <ShareIcon className="h-4 w-4" />
               </button>
-            )}
-            {tournee.statut === 'brouillon' && onValidate && (
               <button
-                onClick={onValidate}
-                className="p-1 rounded bg-green-500/80 hover:bg-green-500 transition-colors"
-                title="Valider la tournée pour la rendre visible au livreur"
+                onClick={onEdit}
+                className="p-1 rounded hover:bg-white/20 transition-colors"
+                title="Modifier la tournée"
               >
-                <CheckIcon className="h-4 w-4" />
+                <PencilIcon className="h-4 w-4" />
               </button>
-            )}
-          </div>
+              {onDelete && tournee.statut !== 'en_cours' && tournee.statut !== 'terminee' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  className="p-1 rounded bg-red-500/50 hover:bg-red-500/80 transition-colors"
+                  title="Supprimer la tournée"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
+              )}
+              {tournee.statut === 'brouillon' && onValidate && (
+                <button
+                  onClick={onValidate}
+                  className="p-1 rounded bg-green-500/80 hover:bg-green-500 transition-colors"
+                  title="Valider la tournée pour la rendre visible au livreur"
+                >
+                  <CheckIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1411,7 +1414,8 @@ const initialEditPointFormData: EditPointFormData = {
 
 export default function DailyPlanningPage() {
   const navigate = useNavigate();
-  const { token } = useAuthStore();
+  const { token, user: authUser } = useAuthStore();
+  const isWarehouseOnly = authUser?.roles.includes('warehouse') && !authUser?.roles.includes('admin') && !authUser?.roles.includes('superadmin');
   const { chauffeurPositions, updateChauffeurPosition, setConnected, setAllPositions } = useSocketStore();
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
@@ -3105,7 +3109,7 @@ export default function DailyPlanningPage() {
             onDragEnd={handleDragEnd}
           >
             {/* Section 1: Points à dispatcher (timeline horizontale) - Zone de drop fichier */}
-            <div
+            {!isWarehouseOnly && <div
               className={clsx(
                 'rounded-lg border overflow-hidden transition-all',
                 isDraggingFile
@@ -3206,7 +3210,7 @@ export default function DailyPlanningPage() {
                 onChange={handleFileSelect}
                 className="hidden"
               />
-            </div>
+            </div>}
 
             {/* Section 2: Carte */}
             <div className="bg-white rounded-lg border overflow-hidden">
@@ -3549,7 +3553,7 @@ export default function DailyPlanningPage() {
                   {/* Légende */}
                   <div className="mt-2 flex flex-wrap gap-2">
                     {/* Bouton Points à dispatcher */}
-                    {pendingPointsWithCoords.length > 0 && (
+                    {!isWarehouseOnly && pendingPointsWithCoords.length > 0 && (
                       <button
                         onClick={() => {
                           setShowOnlyPending(!showOnlyPending);
@@ -3622,20 +3626,24 @@ export default function DailyPlanningPage() {
                   <TruckIcon className="h-5 w-5" />
                   Tournées ({tournees.length})
                 </h2>
-                <Button size="sm" onClick={openCreateModal}>
-                  <PlusIcon className="h-4 w-4 mr-1" />
-                  Nouvelle tournée
-                </Button>
+                {!isWarehouseOnly && (
+                  <Button size="sm" onClick={openCreateModal}>
+                    <PlusIcon className="h-4 w-4 mr-1" />
+                    Nouvelle tournée
+                  </Button>
+                )}
               </div>
 
               {tournees.length === 0 ? (
                 <div className="bg-white rounded-lg border p-8 text-center">
                   <TruckIcon className="mx-auto h-10 w-10 text-gray-400" />
                   <p className="mt-2 text-sm text-gray-500">Aucune tournée pour cette date</p>
-                  <Button variant="secondary" size="sm" className="mt-3" onClick={openCreateModal}>
-                    <PlusIcon className="h-4 w-4 mr-1" />
-                    Créer une tournée
-                  </Button>
+                  {!isWarehouseOnly && (
+                    <Button variant="secondary" size="sm" className="mt-3" onClick={openCreateModal}>
+                      <PlusIcon className="h-4 w-4 mr-1" />
+                      Créer une tournée
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -3645,8 +3653,9 @@ export default function DailyPlanningPage() {
                       tournee={tournee}
                       colorIndex={index}
                       onEdit={() => navigate(`/tournees/${tournee.id}`)}
-                      onDelete={() => openDeleteTourneeDialog(tournee.id)}
-                      onValidate={() => openValidateDialog(tournee.id)}
+                      onDelete={isWarehouseOnly ? undefined : () => openDeleteTourneeDialog(tournee.id)}
+                      onValidate={isWarehouseOnly ? undefined : () => openValidateDialog(tournee.id)}
+                      readOnly={isWarehouseOnly}
                       selectedPointId={selectedPointId}
                       onSelectPoint={(id) => {
                         setSelectedPointId(id);
