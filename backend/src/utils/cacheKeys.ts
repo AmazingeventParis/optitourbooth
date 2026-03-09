@@ -8,6 +8,7 @@ export const cacheKeys = {
   },
   users: {
     chauffeurs: () => 'users:chauffeurs:all',
+    preparateurs: () => 'users:preparateurs:all',
     byId: (id: string) => `user:${id}`,
   },
   vehicules: {
@@ -27,6 +28,7 @@ export const cacheTTL = {
   tourneesList: 15 * 60,      // 15 min - données qui changent fréquemment
   tourneeById: 5 * 60,        // 5 min
   chauffeurs: 60 * 60,        // 1h - données relativement stables
+  preparateurs: 60 * 60,      // 1h
   vehicules: 60 * 60,         // 1h
   produits: 60 * 60,          // 1h
   userById: 5 * 60,           // 5 min (auth)

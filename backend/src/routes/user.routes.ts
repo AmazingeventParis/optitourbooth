@@ -35,6 +35,9 @@ router.use(authenticate);
 // Route spéciale pour les chauffeurs (accessible aux admins et warehouse)
 router.get('/chauffeurs', asyncHandler(userController.listChauffeurs));
 
+// Route spéciale pour les préparateurs (accessible aux préparateurs, admins et warehouse)
+router.get('/preparateurs', asyncHandler(userController.listPreparateurs));
+
 // Routes lecture accessibles au warehouse (dashboard a besoin de lister les users)
 router.get('/', requireWarehouse, validate(userQuerySchema, 'query'), asyncHandler(userController.list));
 router.get(

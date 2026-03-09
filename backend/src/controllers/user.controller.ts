@@ -330,6 +330,33 @@ export const userController = {
     apiResponse.success(res, chauffeurs);
   },
 
+  async listPreparateurs(_req: Request, res: Response): Promise<void> {
+    const preparateurs = await withCache(
+      cacheKeys.users.preparateurs(),
+      cacheTTL.preparateurs,
+      async () => {
+        return prisma.user.findMany({
+          where: {
+            OR: [
+              { roles: { has: 'preparateur' } },
+              { roles: { has: 'admin' } },
+            ],
+            actif: true,
+          },
+          select: {
+            id: true,
+            nom: true,
+            prenom: true,
+          },
+          orderBy: [{ prenom: 'asc' }, { nom: 'asc' }],
+        });
+      }
+    );
+
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    apiResponse.success(res, preparateurs);
+  },
+
   /**
    * POST /api/users/:id/avatar
    * Upload une photo de profil

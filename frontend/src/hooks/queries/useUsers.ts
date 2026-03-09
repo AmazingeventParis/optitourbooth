@@ -51,6 +51,17 @@ export function useChauffeurs() {
   });
 }
 
+/**
+ * Hook pour récupérer la liste des préparateurs actifs (preparateur + admin)
+ */
+export function usePreparateurs() {
+  return useQuery({
+    queryKey: queryKeys.users.preparateurs(),
+    queryFn: () => usersService.listPreparateurs(),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 // ============================================
 // MUTATIONS
 // ============================================

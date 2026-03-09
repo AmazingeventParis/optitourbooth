@@ -4,6 +4,7 @@ import { machinesService } from '@/services/machines.service';
 import { preparationsService } from '@/services/preparations.service';
 import { useToast } from '@/hooks/useToast';
 import { useAuthStore } from '@/store/authStore';
+import { usePreparateurs } from '@/hooks/queries/useUsers';
 import { Machine, MachineType, Preparation, PreparationStatut } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -65,6 +66,7 @@ const statutConfig: Record<PreparationStatut, { label: string; color: string; ba
 export default function PreparationsPage() {
   const { success, error: showError } = useToast();
   const { user } = useAuthStore();
+  const { data: preparateurs = [] } = usePreparateurs();
   const [machines, setMachines] = useState<Machine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -82,6 +84,7 @@ export default function PreparationsPage() {
   const [evenements, setEvenements] = useState<Array<{ dateEvenement: string; client: string }>>([
     { dateEvenement: '', client: '' }
   ]);
+  const [selectedPreparateur, setSelectedPreparateur] = useState<string>('');
 
   // Action modal state
   const [isViewMode, setIsViewMode] = useState(false);
@@ -120,10 +123,12 @@ export default function PreparationsPage() {
     if (preparation) {
       // Mode visualisation
       setIsViewMode(true);
+      setSelectedPreparateur(preparation.preparateur || '');
     } else {
-      // Mode création
+      // Mode création - pré-sélectionner l'utilisateur connecté
       setIsViewMode(false);
       setEvenements([{ dateEvenement: '', client: '' }]);
+      setSelectedPreparateur(user?.prenom || '');
     }
 
     setDefautText('');
@@ -149,10 +154,14 @@ export default function PreparationsPage() {
       return;
     }
 
+    if (!selectedPreparateur) {
+      showError('Erreur', 'Veuillez sélectionner un préparateur');
+      return;
+    }
+
     setIsSaving(true);
     try {
-      // Prénom du préparateur connecté
-      const preparateur = user.prenom;
+      const preparateur = selectedPreparateur;
 
       // Créer toutes les préparations
       for (const evt of evenementsValides) {
@@ -768,6 +777,36 @@ export default function PreparationsPage() {
                     </p>
                   </div>
 
+                  {/* Préparateur */}
+                  <div className="pt-1 border-t border-gray-100">
+                    <div className="flex flex-wrap gap-0.5">
+                      {preparateurs.map((p) => {
+                        const isSelected = preparation.preparateur === p.prenom;
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isSaving) return;
+                              preparationsService.update(preparation.id, { preparateur: p.prenom })
+                                .then(() => { fetchMachines(); })
+                                .catch((err) => showError('Erreur', (err as Error).message));
+                            }}
+                            className={clsx(
+                              'text-[8px] px-1 py-0.5 rounded font-medium transition-all leading-tight',
+                              isSelected
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                            )}
+                            title={`${p.prenom} ${p.nom}`}
+                          >
+                            {p.prenom}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* Actions rapides */}
                   <div className="flex gap-1">
                     {statut === 'en_preparation' && (
@@ -828,6 +867,28 @@ export default function PreparationsPage() {
                 </Button>
               </div>
 
+              {/* Sélection du préparateur */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Préparateur</label>
+                <div className="flex flex-wrap gap-2">
+                  {preparateurs.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedPreparateur(p.prenom)}
+                      className={clsx(
+                        'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                        selectedPreparateur === p.prenom
+                          ? 'bg-primary-600 text-white shadow-sm'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      )}
+                    >
+                      {p.prenom}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Liste des événements */}
               {evenements.map((evt, index) => (
                 <div key={index} className="space-y-3 p-4 bg-gray-50 rounded-lg relative">
@@ -880,6 +941,34 @@ export default function PreparationsPage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
                       <p className="text-sm text-gray-900">{prep.client}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Préparateur</label>
+                      <div className="flex flex-wrap gap-2">
+                        {preparateurs.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              preparationsService.update(prep.id, { preparateur: p.prenom })
+                                .then(() => {
+                                  setSelectedPreparateur(p.prenom);
+                                  fetchMachines();
+                                  success('Préparateur mis à jour');
+                                })
+                                .catch((err) => showError('Erreur', (err as Error).message));
+                            }}
+                            className={clsx(
+                              'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                              prep.preparateur === p.prenom
+                                ? 'bg-primary-600 text-white shadow-sm'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            )}
+                          >
+                            {p.prenom}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 );

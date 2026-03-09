@@ -68,6 +68,11 @@ export const usersService = {
     return response.data.data;
   },
 
+  async listPreparateurs(): Promise<User[]> {
+    const response = await api.get<ApiResponse<User[]>>('/users/preparateurs');
+    return response.data.data;
+  },
+
   async uploadAvatar(userId: string, file: File): Promise<User> {
     const formData = new FormData();
     formData.append('avatar', file);
