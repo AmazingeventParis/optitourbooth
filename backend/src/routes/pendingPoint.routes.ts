@@ -14,4 +14,7 @@ router.get('/', authenticate, requireRole('admin', 'warehouse', 'superadmin'), a
 router.delete('/:id', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.deletePendingPoint));
 router.patch('/:id/dispatch', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.markDispatched));
 
+// Sync manuelle Google Calendar
+router.post('/sync-google-calendar', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.syncGoogleCalendar));
+
 export default router;

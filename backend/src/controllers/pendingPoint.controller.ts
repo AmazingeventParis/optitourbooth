@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
+import { syncGoogleCalendarEvents } from '../services/googleCalendar.service.js';
 
 /**
  * POST /api/pending-points - Créer des points à dispatcher (appelé par Google Apps Script)
@@ -135,5 +136,17 @@ export async function markDispatched(req: Request, res: Response): Promise<void>
       return;
     }
     throw error;
+  }
+}
+
+/**
+ * POST /api/pending-points/sync-google-calendar - Lancer une sync manuelle
+ */
+export async function syncGoogleCalendar(_req: Request, res: Response): Promise<void> {
+  try {
+    const result = await syncGoogleCalendarEvents();
+    apiResponse.success(res, result);
+  } catch (error) {
+    apiResponse.error(res, `Erreur sync Google Calendar: ${(error as Error).message}`);
   }
 }

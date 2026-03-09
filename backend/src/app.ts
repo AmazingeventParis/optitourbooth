@@ -13,6 +13,7 @@ const __dirname = path.dirname(__filename);
 
 import { config, connectDatabase, disconnectDatabase } from './config/index.js';
 import { disconnectRedis, redis } from './config/redis.js';
+import { startGoogleCalendarSync, stopGoogleCalendarSync } from './services/googleCalendar.service.js';
 import { initializeSocket } from './config/socket.js';
 import { notFoundHandler, errorHandler } from './middlewares/index.js';
 import routes from './routes/index.js';
@@ -131,6 +132,9 @@ async function startServer(): Promise<void> {
       console.log('🚀 =====================================');
       console.log('');
 
+      // Démarrer la sync Google Calendar
+      startGoogleCalendarSync();
+
       // Keep-alive: ping self every 10 min to prevent Render free tier sleep
       if (!config.isDev && process.env.RENDER_EXTERNAL_URL) {
         const url = `${process.env.RENDER_EXTERNAL_URL}/api/health`;
@@ -168,6 +172,9 @@ async function gracefulShutdown(signal: string): Promise<void> {
   httpServer.close(() => {
     console.log('🔌 Serveur HTTP fermé');
   });
+
+  // Arrêter les tâches planifiées
+  stopGoogleCalendarSync();
 
   // Fermer les connexions
   await disconnectDatabase();

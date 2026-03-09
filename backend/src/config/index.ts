@@ -61,6 +61,15 @@ export const config = {
     google: process.env.API_KEY_GOOGLE || '',
   },
 
+  // Google Calendar sync
+  googleCalendar: {
+    serviceAccountBase64: process.env.GOOGLE_SERVICE_ACCOUNT_BASE64 || '',
+    calendarId: process.env.GOOGLE_CALENDAR_ID || '',
+    syncEnabled: process.env.GOOGLE_CALENDAR_SYNC_ENABLED === 'true',
+    syncIntervalMinutes: parseInt(process.env.GOOGLE_CALENDAR_SYNC_INTERVAL || '15', 10),
+    syncDaysAhead: parseInt(process.env.GOOGLE_CALENDAR_SYNC_DAYS_AHEAD || '30', 10),
+  },
+
   // CORS
   cors: {
     origin: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim()),
