@@ -289,7 +289,15 @@ export async function syncGoogleCalendarEvents(): Promise<{
     const colorId = event.colorId || '';
     const produitNom = COLOR_TO_PRODUIT[colorId] || null;
 
-    // Log pour debug couleur
+    // Log détaillé pour debug (un seul événement)
+    if (created === 0 && errors === 0 && skipped === 0) {
+      console.log(`[Google Calendar] RAW EVENT SAMPLE:`, JSON.stringify({
+        summary: event.summary,
+        colorId: event.colorId,
+        hasColorId: 'colorId' in event,
+        eventKeys: Object.keys(event),
+      }));
+    }
     console.log(`[Google Calendar] ${clientName} → colorId="${colorId}" → ${produitNom || 'aucun produit'}`);
 
 
