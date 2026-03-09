@@ -287,6 +287,16 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Vérifier si le tag LIR est dans la liste des tags ignorés
     const tagContent = lirTag.replace(/^\(LIR\s*/i, '').replace(/\)$/, '').trim().toUpperCase();
     if (LIR_TAGS_IGNORED.includes(tagContent)) {
+      // Supprimer les points déjà créés pour cet événement ignoré
+      const eventId = event.id || '';
+      if (eventId) {
+        const deleted = await prisma.pendingPoint.deleteMany({
+          where: { externalId: { startsWith: eventId } },
+        });
+        if (deleted.count > 0) {
+          console.log(`[Google Calendar] 🗑️ ${deleted.count} point(s) supprimé(s) pour événement ignoré (${tagContent}): ${clientName}`);
+        }
+      }
       continue;
     }
 
