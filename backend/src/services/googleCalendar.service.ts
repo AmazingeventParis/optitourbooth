@@ -17,6 +17,8 @@ const LIR_TAG_TO_PRODUIT: Record<string, string> = {
   'AIRCAM': 'Aircam',
   'SPINNER': 'Spinner',
   'SMAKK': 'Smakk',
+  'PREM': 'Vegas',       // Premium = Vegas
+  'PREMIUM': 'Vegas',
 };
 
 // Calendrier Smakk → tous les événements sont du produit Smakk
@@ -290,20 +292,20 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Adresse : priorité au champ location de l'événement, sinon celle de la description
     const adresse = location || parsed?.adresse || null;
 
-    // Produit : détection par tag LIR et calendrier source
+    // Produit : détection par tag LIR (prioritaire) et calendrier source (fallback)
     let produitNom: string | null = null;
 
-    // 1. Si c'est le calendrier Smakk, c'est forcément un produit Smakk
-    if (calendarId === SMAKK_CALENDAR_ID) {
-      produitNom = 'Smakk';
-    }
-
-    // 2. Extraire le mot-clé du tag LIR: "(LIR MIROIR)" → "MIROIR"
-    if (!produitNom && lirTag) {
+    // 1. Extraire le mot-clé du tag LIR: "(LIR MIROIR)" → "MIROIR"
+    if (lirTag) {
       const tagContent = lirTag.replace(/^\(LIR\s*/i, '').replace(/\)$/, '').trim().toUpperCase();
       if (tagContent && LIR_TAG_TO_PRODUIT[tagContent]) {
         produitNom = LIR_TAG_TO_PRODUIT[tagContent];
       }
+    }
+
+    // 2. Fallback : calendrier Smakk → produit Smakk
+    if (!produitNom && calendarId === SMAKK_CALENDAR_ID) {
+      produitNom = 'Smakk';
     }
 
     console.log(`[Google Calendar] ${clientName} → tag="${lirTag}" cal="${calendarId === SMAKK_CALENDAR_ID ? 'smakk' : 'main'}" → ${produitNom || 'aucun produit'}`);
