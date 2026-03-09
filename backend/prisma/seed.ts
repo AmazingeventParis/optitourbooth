@@ -72,53 +72,15 @@ async function main() {
   });
   console.log(`✅ Warehouse créé: ${warehouseUser.email}`);
 
-  // Créer quelques produits de base
-  const produits = [
-    {
-      nom: 'Photobooth Classic',
-      dureeInstallation: 30,
-      dureeDesinstallation: 20,
-      poids: 45,
-      largeur: 60,
-      hauteur: 180,
-      profondeur: 60,
-    },
-    {
-      nom: 'Photobooth Miroir',
-      dureeInstallation: 45,
-      dureeDesinstallation: 30,
-      poids: 65,
-      largeur: 80,
-      hauteur: 200,
-      profondeur: 15,
-    },
-    {
-      nom: 'Photobooth 360',
-      dureeInstallation: 60,
-      dureeDesinstallation: 45,
-      poids: 80,
-      largeur: 150,
-      hauteur: 100,
-      profondeur: 150,
-    },
-    {
-      nom: 'Photobooth Compact',
-      dureeInstallation: 20,
-      dureeDesinstallation: 15,
-      poids: 25,
-      largeur: 40,
-      hauteur: 150,
-      profondeur: 40,
-    },
-  ];
-
-  for (const produit of produits) {
-    const created = await prisma.produit.upsert({
-      where: { nom: produit.nom },
-      update: {},
-      create: produit,
-    });
-    console.log(`✅ Produit créé: ${created.nom}`);
+  // Supprimer les anciens produits Photobooth qui ne sont plus utilisés
+  const oldProduits = ['Photobooth Classic', 'Photobooth Miroir', 'Photobooth 360', 'Photobooth Compact'];
+  for (const nom of oldProduits) {
+    try {
+      await prisma.produit.delete({ where: { nom } });
+      console.log(`🗑️ Ancien produit supprimé: ${nom}`);
+    } catch {
+      // Produit déjà supprimé ou inexistant
+    }
   }
 
   // Créer des clients de test en Île-de-France
