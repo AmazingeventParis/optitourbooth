@@ -237,8 +237,37 @@ export async function syncGoogleCalendarEvents(): Promise<{
 
   console.log(`[Google Calendar] Total: ${allLirEvents.length} événements (LIR)`);
 
+  // Charger tous les points existants dans des tournées pour la période concernée
+  // afin de ne pas créer de pending points pour des événements déjà programmés
+  const existingTourneePoints = await prisma.point.findMany({
+    where: {
+      tournee: {
+        date: {
+          gte: new Date(timeMin),
+          lte: new Date(timeMax),
+        },
+        statut: { not: 'annulee' },
+      },
+    },
+    include: {
+      client: { select: { nom: true, societe: true } },
+      tournee: { select: { date: true } },
+    },
+  });
+
+  // Créer un Set pour lookup rapide : "date|clientName|type" (en lowercase)
+  const existingPointsSet = new Set<string>();
+  for (const pt of existingTourneePoints) {
+    const dateStr = pt.tournee.date.toISOString().substring(0, 10);
+    const clientNom = (pt.client.societe || pt.client.nom || '').toLowerCase().trim();
+    existingPointsSet.add(`${dateStr}|${clientNom}|${pt.type}`);
+    // Ajouter aussi juste par date + client (sans type) pour un matching plus large
+    existingPointsSet.add(`${dateStr}|${clientNom}`);
+  }
+
   let created = 0;
   let updated = 0;
+  let skipped = 0;
   let errors = 0;
 
   for (const { event } of allLirEvents) {
@@ -293,6 +322,11 @@ export async function syncGoogleCalendarEvents(): Promise<{
     const contactNom = parsed?.contactNom || null;
     const contactTelephone = parsed?.contactTelephone || null;
 
+    // Vérifier si ce client a déjà un point livraison à cette date dans une tournée
+    const clientNameLower = clientName.toLowerCase().trim();
+    const livAlreadyInTournee = existingPointsSet.has(`${startDate}|${clientNameLower}|livraison`)
+      || existingPointsSet.has(`${startDate}|${clientNameLower}`);
+
     // Point livraison (date de début)
     try {
       await prisma.pendingPoint.upsert({
@@ -308,6 +342,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactNom,
           contactTelephone,
           notes,
+          dispatched: livAlreadyInTournee ? true : undefined,
         },
         create: {
           date: ensureDateUTC(startDate),
@@ -322,13 +357,23 @@ export async function syncGoogleCalendarEvents(): Promise<{
           notes,
           source: 'google_calendar',
           externalId: `${eventId}_livraison`,
+          dispatched: livAlreadyInTournee,
         },
       });
-      created++;
+      if (livAlreadyInTournee) {
+        skipped++;
+        console.log(`[Google Calendar] ${clientName} livraison ${startDate} → déjà dans tournée, skip`);
+      } else {
+        created++;
+      }
     } catch (e) {
       console.error(`[Google Calendar] Erreur livraison ${clientName}:`, e);
       errors++;
     }
+
+    // Vérifier si ce client a déjà un point ramassage à cette date dans une tournée
+    const recAlreadyInTournee = existingPointsSet.has(`${endDate}|${clientNameLower}|ramassage`)
+      || existingPointsSet.has(`${endDate}|${clientNameLower}`);
 
     // Point ramassage (date de fin)
     try {
@@ -345,6 +390,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactNom,
           contactTelephone,
           notes,
+          dispatched: recAlreadyInTournee ? true : undefined,
         },
         create: {
           date: ensureDateUTC(endDate),
@@ -359,17 +405,23 @@ export async function syncGoogleCalendarEvents(): Promise<{
           notes,
           source: 'google_calendar',
           externalId: `${eventId}_ramassage`,
+          dispatched: recAlreadyInTournee,
         },
       });
-      created++;
+      if (recAlreadyInTournee) {
+        skipped++;
+        console.log(`[Google Calendar] ${clientName} ramassage ${endDate} → déjà dans tournée, skip`);
+      } else {
+        created++;
+      }
     } catch (e) {
       console.error(`[Google Calendar] Erreur ramassage ${clientName}:`, e);
       errors++;
     }
   }
 
-  console.log(`[Google Calendar] Sync terminée: ${created} upserts, ${errors} erreurs`);
-  return { found: allLirEvents.length, created, updated, errors };
+  console.log(`[Google Calendar] Sync terminée: ${created} créés, ${skipped} déjà en tournée, ${errors} erreurs`);
+  return { found: allLirEvents.length, created, updated: skipped, errors };
 }
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
