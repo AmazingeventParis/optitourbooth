@@ -1644,28 +1644,36 @@ export default function DailyPlanningPage() {
 
     // Charger aussi les points backend (Google Calendar, etc.)
     pendingPointsService.listByDate(selectedDate).then(backendPoints => {
-      const converted: ImportParsedPoint[] = backendPoints.map(bp => ({
-        clientName: bp.clientName,
-        adresse: bp.adresse,
-        type: bp.type || 'livraison',
-        produitName: bp.produitNom || undefined,
-        creneauDebut: bp.creneauDebut,
-        creneauFin: bp.creneauFin,
-        notes: bp.notes,
-        contactNom: bp.contactNom,
-        contactTelephone: bp.contactTelephone,
-        clientFound: false,
-        produitFound: !!bp.produitNom,
-        errors: [],
-        _backendId: bp.id,
-      }));
+      const converted: ImportParsedPoint[] = backendPoints.map(bp => {
+        // Matcher le produit par nom
+        const matchedProduit = bp.produitNom
+          ? produits.find(p => p.nom.toLowerCase() === bp.produitNom!.toLowerCase())
+          : undefined;
+        return {
+          clientName: bp.clientName,
+          adresse: bp.adresse,
+          type: bp.type || 'livraison',
+          produitName: matchedProduit?.nom || bp.produitNom || undefined,
+          produitId: matchedProduit?.id,
+          produitsIds: matchedProduit ? [{ id: matchedProduit.id, nom: matchedProduit.nom }] : undefined,
+          creneauDebut: bp.creneauDebut,
+          creneauFin: bp.creneauFin,
+          notes: bp.notes,
+          contactNom: bp.contactNom,
+          contactTelephone: bp.contactTelephone,
+          clientFound: true,
+          produitFound: !!matchedProduit,
+          errors: !matchedProduit && bp.produitNom ? [`Produit "${bp.produitNom}" non trouvé`] : [],
+          _backendId: bp.id,
+        };
+      });
       setPendingPoints([...localPoints, ...converted]);
       setTimeout(() => { isDateChanging.current = false; }, 0);
     }).catch(() => {
       setPendingPoints(localPoints);
       setTimeout(() => { isDateChanging.current = false; }, 0);
     });
-  }, [selectedDate]);
+  }, [selectedDate, produits]);
 
   // Sauvegarder les pending points dans localStorage quand ils changent
   // Ne sauvegarder que les points locaux (pas ceux venant du backend)
