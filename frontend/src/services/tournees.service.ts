@@ -101,6 +101,7 @@ export interface ImportParsedPoint {
   clientFound: boolean;
   produitFound: boolean;
   errors: string[];
+  _backendId?: string; // ID du PendingPoint backend (Google Calendar, etc.)
 }
 
 export interface ImportResult {

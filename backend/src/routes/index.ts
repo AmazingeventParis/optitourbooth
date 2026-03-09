@@ -14,6 +14,7 @@ import machineRoutes from './machine.routes.js';
 import preparationRoutes from './preparation.routes.js';
 import tenantRoutes from './tenant.routes.js';
 import settingsRoutes from './settings.routes.js';
+import pendingPointRoutes from './pendingPoint.routes.js';
 
 const router = Router();
 
@@ -147,5 +148,6 @@ router.use('/machines', machineRoutes);
 router.use('/preparations', preparationRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/tenants', tenantRoutes);
+router.use('/pending-points', pendingPointRoutes);
 
 export default router;

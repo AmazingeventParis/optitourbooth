@@ -56,6 +56,11 @@ export const config = {
     dir: process.env.UPLOAD_DIR || './uploads',
   },
 
+  // API Keys (machine-to-machine)
+  apiKeys: {
+    google: process.env.API_KEY_GOOGLE || '',
+  },
+
   // CORS
   cors: {
     origin: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim()),

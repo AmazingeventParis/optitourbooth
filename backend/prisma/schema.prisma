@@ -556,3 +556,26 @@ model Preparation {
   @@index([statut, dateEvenement]) // Préparations actives par date
   @@map("preparations")
 }
+
+// Points à dispatcher créés automatiquement (Google Calendar, etc.)
+model PendingPoint {
+  id                String   @id @default(uuid())
+  date              DateTime @db.Date
+  clientName        String   @map("client_name")
+  adresse           String?
+  type              String   // 'livraison', 'ramassage', etc.
+  creneauDebut      String?  @map("creneau_debut")
+  creneauFin        String?  @map("creneau_fin")
+  notes             String?  @db.Text
+  contactNom        String?  @map("contact_nom")
+  contactTelephone  String?  @map("contact_telephone")
+  source            String   @default("google_calendar")
+  externalId        String?  @unique @map("external_id")
+  dispatched        Boolean  @default(false)
+
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([date, dispatched])
+  @@map("pending_points")
+}

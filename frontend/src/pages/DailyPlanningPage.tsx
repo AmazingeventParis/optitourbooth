@@ -32,6 +32,7 @@ import { produitsService } from '@/services/produits.service';
 import { socketService, ChauffeurPosition } from '@/services/socket.service';
 import { useSocketStore, isPositionStale } from '@/store/socketStore';
 import { useAuthStore } from '@/store/authStore';
+import { pendingPointsService } from '@/services/pendingPoints.service';
 import { Button, Badge, Modal, Input, Select, TimeSelect, AddressAutocomplete, PhoneNumbers } from '@/components/ui';
 import type { AddressResult } from '@/components/ui';
 import WheelTimePicker from '@/components/ui/WheelTimePicker';
@@ -1633,27 +1634,44 @@ export default function DailyPlanningPage() {
   // Charger les pending points au montage et quand la date change
   useEffect(() => {
     isDateChanging.current = true;
+
+    // Charger les points locaux (localStorage)
     const saved = localStorage.getItem(`pending-points-${selectedDate}`);
+    let localPoints: ImportParsedPoint[] = [];
     if (saved) {
-      try {
-        setPendingPoints(JSON.parse(saved));
-      } catch {
-        setPendingPoints([]);
-      }
-    } else {
-      setPendingPoints([]);
+      try { localPoints = JSON.parse(saved); } catch { /* ignore */ }
     }
-    // Reset flag après le chargement
-    setTimeout(() => {
-      isDateChanging.current = false;
-    }, 0);
+
+    // Charger aussi les points backend (Google Calendar, etc.)
+    pendingPointsService.listByDate(selectedDate).then(backendPoints => {
+      const converted: ImportParsedPoint[] = backendPoints.map(bp => ({
+        clientName: bp.clientName,
+        adresse: bp.adresse,
+        type: bp.type || 'livraison',
+        creneauDebut: bp.creneauDebut,
+        creneauFin: bp.creneauFin,
+        notes: bp.notes,
+        contactNom: bp.contactNom,
+        contactTelephone: bp.contactTelephone,
+        clientFound: false,
+        produitFound: false,
+        errors: [],
+        _backendId: bp.id,
+      }));
+      setPendingPoints([...localPoints, ...converted]);
+      setTimeout(() => { isDateChanging.current = false; }, 0);
+    }).catch(() => {
+      setPendingPoints(localPoints);
+      setTimeout(() => { isDateChanging.current = false; }, 0);
+    });
   }, [selectedDate]);
 
   // Sauvegarder les pending points dans localStorage quand ils changent
+  // Ne sauvegarder que les points locaux (pas ceux venant du backend)
   useEffect(() => {
-    // Ne pas sauvegarder pendant un changement de date
     if (isDateChanging.current) return;
-    localStorage.setItem(`pending-points-${selectedDate}`, JSON.stringify(pendingPoints));
+    const localOnly = pendingPoints.filter(p => !p._backendId);
+    localStorage.setItem(`pending-points-${selectedDate}`, JSON.stringify(localOnly));
   }, [pendingPoints, selectedDate]);
 
   // BroadcastChannel pour synchroniser la fenêtre popup de carte
@@ -2117,6 +2135,11 @@ export default function DailyPlanningPage() {
 
       // Retirer des pending points
       const newPendingPoints = pendingPointsRef.current.filter((_, i) => i !== pendingIndex);
+
+      // Marquer comme dispatché côté backend si c'est un point Google Calendar
+      if (pendingPoint._backendId) {
+        pendingPointsService.markDispatched(pendingPoint._backendId).catch(console.error);
+      }
 
       // Sauvegarder pour rollback
       const rollbackTournees = currentTournees;
@@ -2812,9 +2835,16 @@ export default function DailyPlanningPage() {
         notifyMapPopup();
       }
 
-      // Retirer les points dispatchés de la liste pending
+      // Retirer les points dispatchés de la liste pending + marquer backend
       if (result.totalDispatched > 0) {
         const dispatchedIndices = new Set(result.dispatched.map(d => d.pointIndex));
+        // Marquer les points backend comme dispatchés
+        dispatchedIndices.forEach(idx => {
+          const point = validPendingPoints[idx];
+          if (point?._backendId) {
+            pendingPointsService.markDispatched(point._backendId).catch(console.error);
+          }
+        });
         setPendingPoints((prev) =>
           prev.filter((_, index) => {
             // Trouver l'index dans validPendingPoints
