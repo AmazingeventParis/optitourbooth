@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Dialog, Transition, Menu } from '@headlessui/react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import {
   HomeIcon,
   UserGroupIcon,
@@ -28,6 +28,8 @@ import clsx from 'clsx';
 interface SidebarProps {
   open?: boolean;
   onClose?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 const navigation: Array<{
@@ -48,7 +50,7 @@ const navigation: Array<{
   { name: 'Paramètres', href: '/parametres', icon: Cog6ToothIcon, roles: ['admin'] },
 ];
 
-function SidebarContent() {
+function SidebarContent({ collapsed, onToggleCollapse }: { collapsed?: boolean; onToggleCollapse?: () => void }) {
   const { user, logout, startImpersonation } = useAuthStore();
 
   // Filtrer les liens selon le rôle de l'utilisateur
@@ -82,11 +84,11 @@ function SidebarContent() {
   };
 
   return (
-    <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-primary-900 px-6 pb-4">
-      {/* Logo + bouton menu mobile */}
+    <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-primary-900 px-3 pb-4">
+      {/* Logo + bouton collapse */}
       <div className="flex h-16 shrink-0 items-center justify-between">
-        <div className="flex items-center">
-          <div className="h-10 w-10 bg-white rounded-lg flex items-center justify-center">
+        <div className={clsx('flex items-center', collapsed && 'justify-center w-full')}>
+          <div className="h-10 w-10 bg-white rounded-lg flex items-center justify-center flex-shrink-0">
             <svg
               className="h-6 w-6 text-primary-600"
               fill="none"
@@ -101,7 +103,7 @@ function SidebarContent() {
               />
             </svg>
           </div>
-          <span className="ml-3 text-xl font-bold text-white">OptiTour</span>
+          {!collapsed && <span className="ml-3 text-xl font-bold text-white">OptiTour</span>}
         </div>
       </div>
 
@@ -109,17 +111,19 @@ function SidebarContent() {
       <nav className="flex flex-1 flex-col">
         <ul role="list" className="flex flex-1 flex-col gap-y-7">
           <li>
-            <ul role="list" className="-mx-2 space-y-1">
+            <ul role="list" className="-mx-1 space-y-1">
               {filteredNavigation.map((item) => (
                 <li key={item.name}>
                   <NavLink
                     to={item.href}
+                    title={collapsed ? item.name : undefined}
                     className={({ isActive }) =>
                       clsx(
                         isActive
                           ? 'bg-primary-800 text-white'
                           : 'text-primary-200 hover:text-white hover:bg-primary-800',
-                        'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                        'group flex items-center rounded-md p-2 text-sm leading-6 font-semibold',
+                        collapsed ? 'justify-center' : 'gap-x-3'
                       )
                     }
                   >
@@ -127,7 +131,7 @@ function SidebarContent() {
                       className="h-6 w-6 shrink-0"
                       aria-hidden="true"
                     />
-                    {item.name}
+                    {!collapsed && item.name}
                   </NavLink>
                 </li>
               ))}
@@ -137,10 +141,14 @@ function SidebarContent() {
                 <li>
                   <button
                     onClick={() => navigate('/chauffeur')}
-                    className="w-full text-primary-200 hover:text-white hover:bg-primary-800 group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold"
+                    title={collapsed ? 'Interface Chauffeur' : undefined}
+                    className={clsx(
+                      'w-full text-primary-200 hover:text-white hover:bg-primary-800 group flex items-center rounded-md p-2 text-sm leading-6 font-semibold',
+                      collapsed ? 'justify-center' : 'gap-x-3'
+                    )}
                   >
                     <TruckIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
-                    Interface Chauffeur
+                    {!collapsed && 'Interface Chauffeur'}
                   </button>
                 </li>
               )}
@@ -150,14 +158,18 @@ function SidebarContent() {
                 <li>
                   <button
                     onClick={() => setShowChauffeurPicker(!showChauffeurPicker)}
-                    className="w-full text-amber-300 hover:text-white hover:bg-primary-800 group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold"
+                    title={collapsed ? 'Mode Chauffeur' : undefined}
+                    className={clsx(
+                      'w-full text-amber-300 hover:text-white hover:bg-primary-800 group flex items-center rounded-md p-2 text-sm leading-6 font-semibold',
+                      collapsed ? 'justify-center' : 'gap-x-3'
+                    )}
                   >
                     <EyeIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
-                    Mode Chauffeur
+                    {!collapsed && 'Mode Chauffeur'}
                   </button>
 
                 {/* Chauffeur Picker Dropdown */}
-                {showChauffeurPicker && (
+                {showChauffeurPicker && !collapsed && (
                   <div className="mt-1 mx-1 bg-primary-800 rounded-lg p-2 max-h-60 overflow-y-auto">
                     {isLoadingChauffeurs ? (
                       <div className="flex justify-center py-3">
@@ -186,19 +198,46 @@ function SidebarContent() {
             </ul>
           </li>
 
+          {/* Bouton collapse (desktop uniquement) */}
+          {onToggleCollapse && (
+            <li>
+              <button
+                onClick={onToggleCollapse}
+                className="w-full flex items-center justify-center rounded-md p-2 text-primary-300 hover:text-white hover:bg-primary-800 transition-colors"
+                title={collapsed ? 'Développer le menu' : 'Réduire le menu'}
+              >
+                {collapsed ? (
+                  <ChevronRightIcon className="h-5 w-5" />
+                ) : (
+                  <>
+                    <ChevronLeftIcon className="h-5 w-5 mr-2" />
+                    <span className="text-sm font-medium">Réduire</span>
+                  </>
+                )}
+              </button>
+            </li>
+          )}
+
           {/* Profil utilisateur avec menu déconnexion */}
           <li className="mt-auto">
             <Menu as="div" className="relative">
-              <Menu.Button className="w-full flex items-center gap-x-3 rounded-md bg-primary-800 p-3 text-sm hover:bg-primary-700 transition-colors cursor-pointer">
-                {user && <Avatar user={user} size="md" />}
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-semibold text-white truncate">
-                    {user?.prenom} {user?.nom}
-                  </p>
-                  <p className="text-xs text-primary-300 truncate capitalize">
-                    {user?.roles.join(', ')}
-                  </p>
-                </div>
+              <Menu.Button
+                className={clsx(
+                  'w-full flex items-center rounded-md bg-primary-800 p-3 text-sm hover:bg-primary-700 transition-colors cursor-pointer',
+                  collapsed ? 'justify-center' : 'gap-x-3'
+                )}
+              >
+                {user && <Avatar user={user} size={collapsed ? 'sm' : 'md'} />}
+                {!collapsed && (
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-semibold text-white truncate">
+                      {user?.prenom} {user?.nom}
+                    </p>
+                    <p className="text-xs text-primary-300 truncate capitalize">
+                      {user?.roles.join(', ')}
+                    </p>
+                  </div>
+                )}
               </Menu.Button>
 
               <Transition
@@ -254,7 +293,7 @@ function SidebarContent() {
   );
 }
 
-export default function Sidebar({ open, onClose }: SidebarProps) {
+export default function Sidebar({ open, onClose, collapsed, onToggleCollapse }: SidebarProps) {
   // Version mobile avec Dialog
   if (open !== undefined && onClose) {
     return (
@@ -316,5 +355,5 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   }
 
   // Version desktop
-  return <SidebarContent />;
+  return <SidebarContent collapsed={collapsed} onToggleCollapse={onToggleCollapse} />;
 }
