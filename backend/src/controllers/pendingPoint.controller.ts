@@ -148,6 +148,6 @@ export async function syncGoogleCalendar(_req: Request, res: Response): Promise<
     const result = await syncGoogleCalendarEvents();
     apiResponse.success(res, result);
   } catch (error) {
-    apiResponse.error(res, `Erreur sync Google Calendar: ${(error as Error).message}`);
+    apiResponse.error(res, 'SYNC_ERROR', `Erreur sync Google Calendar: ${(error as Error).message}`, 500);
   }
 }

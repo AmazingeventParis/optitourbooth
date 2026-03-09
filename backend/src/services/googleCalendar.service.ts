@@ -179,7 +179,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
   }
 
   console.log(`[Google Calendar] Sync terminée: ${created} upserts, ${errors} erreurs`);
-  return { found: lirEvents.length, created, updated, errors };
+  return { found: allLirEvents.length, created, updated, errors };
 }
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
