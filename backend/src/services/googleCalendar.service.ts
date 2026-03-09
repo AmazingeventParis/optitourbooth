@@ -17,8 +17,6 @@ const LIR_TAG_TO_PRODUIT: Record<string, string> = {
   'AIRCAM': 'Aircam',
   'SPINNER': 'Spinner',
   'SMAKK': 'Smakk',
-  'PREM': 'Vegas',       // Premium = Vegas
-  'PREMIUM': 'Vegas',
 };
 
 // Calendrier Smakk → tous les événements sont du produit Smakk
