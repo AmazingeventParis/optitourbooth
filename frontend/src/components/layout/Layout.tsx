@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import { socketService } from '@/services/socket.service';
 import { useNotificationStore } from '@/store/notificationStore';
+import { useAuthStore } from '@/store/authStore';
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar_collapsed';
 
@@ -13,10 +14,19 @@ export default function Layout() {
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
   });
   const addNotification = useNotificationStore((s) => s.addNotification);
+  const token = useAuthStore((s) => s.token);
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
   }, [collapsed]);
+
+  // Connecter le socket pour recevoir les notifications en temps réel
+  useEffect(() => {
+    if (!token) return;
+    socketService.connect(token).catch((err) => {
+      console.error('[Layout] Socket connection failed:', err);
+    });
+  }, [token]);
 
   // Écouter les événements de préparation en temps réel
   useEffect(() => {

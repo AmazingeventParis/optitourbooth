@@ -31,7 +31,7 @@ interface IncidentReport {
 
 interface JwtPayload {
   userId: string;
-  role: string;
+  roles: string[];
 }
 
 // Instance Socket.io
@@ -65,7 +65,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
       // Stocker les infos utilisateur dans le socket
       socket.data.userId = decoded.userId;
-      socket.data.role = decoded.role;
+      socket.data.roles = decoded.roles;
 
       next();
     } catch {
@@ -75,14 +75,17 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
   // Gestion des connexions
   io.on('connection', (socket: Socket) => {
-    const { userId, role } = socket.data;
+    const { userId, roles } = socket.data;
+    const role = Array.isArray(roles) ? roles.join(',') : roles;
     console.log(`🔌 Socket connecté: ${userId} (${role})`);
 
     // Rejoindre les rooms appropriées
     socket.join(`user:${userId}`);
-    if (role === 'admin') {
+    const userRoles = Array.isArray(roles) ? roles : [];
+    if (userRoles.includes('admin') || userRoles.includes('superadmin')) {
       socket.join('admins');
-    } else if (role === 'chauffeur') {
+    }
+    if (userRoles.includes('chauffeur')) {
       socket.join('chauffeurs');
     }
 
@@ -91,7 +94,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
     // Mise à jour de position GPS
     socket.on('position:update', async (data: PositionUpdate) => {
       // Allow both chauffeurs and admins (for impersonation)
-      if (role !== 'chauffeur' && role !== 'admin') return;
+      if (!userRoles.includes('chauffeur') && !userRoles.includes('admin')) return;
 
       // Use impersonatedUserId if provided (admin impersonating), otherwise use userId
       const effectiveChauffeurId = data.impersonatedUserId || userId;
@@ -117,7 +120,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
     // Changement de statut d'un point
     socket.on('point:status', async (data: PointStatusUpdate) => {
-      if (role !== 'chauffeur') return;
+      if (!userRoles.includes('chauffeur')) return;
 
       // Broadcast aux admins
       io?.to('admins').emit('point:updated', {
@@ -131,7 +134,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
     // Déclaration d'incident
     socket.on('incident:report', async (data: IncidentReport) => {
-      if (role !== 'chauffeur') return;
+      if (!userRoles.includes('chauffeur')) return;
 
       // Broadcast aux admins (alerte)
       io?.to('admins').emit('incident:alert', {
@@ -146,7 +149,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
     // Réassignation d'un point
     socket.on('point:reassign', async (data: { pointId: string; newChauffeurId: string; oldChauffeurId: string }) => {
-      if (role !== 'admin') return;
+      if (!userRoles.includes('admin')) return;
 
       // Notifier l'ancien chauffeur
       io?.to(`user:${data.oldChauffeurId}`).emit('tournee:updated', {
@@ -166,7 +169,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
     // Demande de toutes les positions
     socket.on('positions:getAll', async () => {
-      if (role !== 'admin') return;
+      if (!userRoles.includes('admin')) return;
 
       const positions = await cacheHelpers.getAllPositions();
       socket.emit('positions:all', positions);
