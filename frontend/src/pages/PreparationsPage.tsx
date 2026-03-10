@@ -1238,14 +1238,6 @@ export default function PreparationsPage() {
             </div>
           </div>
 
-          {/* Bouton Créer en bas aussi pour le mode édition */}
-          {!isViewMode && (
-            <div className="pt-4">
-              <Button className="w-full" onClick={handleCreatePreparation} isLoading={isSaving}>
-                Créer
-              </Button>
-            </div>
-          )}
         </div>
       </Modal>
     </div>
