@@ -49,6 +49,22 @@ export const pendingPointsService = {
     await api.patch(`/pending-points/${id}/use-in-preparation`);
   },
 
+  async createManual(data: {
+    date: string;
+    clientName: string;
+    type: string;
+    adresse?: string;
+    produitNom?: string;
+    creneauDebut?: string;
+    creneauFin?: string;
+    notes?: string;
+    contactNom?: string;
+    contactTelephone?: string;
+  }): Promise<BackendPendingPoint> {
+    const response = await api.post<ApiResponse<BackendPendingPoint>>('/pending-points/manual', data);
+    return response.data.data;
+  },
+
   async markDispatched(id: string): Promise<void> {
     await api.patch(`/pending-points/${id}/dispatch`);
   },

@@ -1636,14 +1636,8 @@ export default function DailyPlanningPage() {
   useEffect(() => {
     isDateChanging.current = true;
 
-    // Charger les points locaux (localStorage)
-    const saved = localStorage.getItem(`pending-points-${selectedDate}`);
-    let localPoints: ImportParsedPoint[] = [];
-    if (saved) {
-      try { localPoints = JSON.parse(saved); } catch { /* ignore */ }
-    }
-
-    // Charger aussi les points backend (Google Calendar, etc.)
+    // Charger les points backend (Google Calendar, imports manuels, etc.)
+    const localPoints: ImportParsedPoint[] = [];
     pendingPointsService.listByDate(selectedDate).then(async (backendPoints) => {
       // Convertir les points backend sans résolution client (rapide, pas d'erreur possible)
       const converted: ImportParsedPoint[] = backendPoints.map((bp) => {
@@ -1726,12 +1720,36 @@ export default function DailyPlanningPage() {
     });
   }, [selectedDate, produits]);
 
-  // Sauvegarder les pending points dans localStorage quand ils changent
-  // Ne sauvegarder que les points locaux (pas ceux venant du backend)
+  // Synchroniser les points locaux vers le backend pour qu'ils soient visibles par tous les admins
   useEffect(() => {
     if (isDateChanging.current) return;
     const localOnly = pendingPoints.filter(p => !p._backendId);
-    localStorage.setItem(`pending-points-${selectedDate}`, JSON.stringify(localOnly));
+    // Plus besoin de localStorage — tout est en backend
+    localStorage.removeItem(`pending-points-${selectedDate}`);
+
+    // Sync les points locaux vers le backend
+    localOnly.forEach(async (point) => {
+      try {
+        const created = await pendingPointsService.createManual({
+          date: selectedDate,
+          clientName: point.clientName,
+          type: point.type || 'livraison',
+          adresse: point.adresse,
+          produitNom: point.produitName,
+          creneauDebut: point.creneauDebut,
+          creneauFin: point.creneauFin,
+          notes: point.notes,
+          contactNom: point.contactNom,
+          contactTelephone: point.contactTelephone,
+        });
+        // Mettre à jour le point avec son _backendId
+        setPendingPoints(prev => prev.map(p =>
+          p === point ? { ...p, _backendId: created.id } : p
+        ));
+      } catch (e) {
+        console.error('Erreur sync pending point vers backend:', e);
+      }
+    });
   }, [pendingPoints, selectedDate]);
 
   // BroadcastChannel pour synchroniser la fenêtre popup de carte

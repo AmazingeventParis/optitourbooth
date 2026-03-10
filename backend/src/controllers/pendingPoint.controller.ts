@@ -77,6 +77,36 @@ export async function createPendingPoints(req: Request, res: Response): Promise<
 }
 
 /**
+ * POST /api/pending-points/manual - Créer un point à dispatcher manuellement (admin)
+ */
+export async function createManualPendingPoint(req: Request, res: Response): Promise<void> {
+  const { date, clientName, adresse, type, produitNom, creneauDebut, creneauFin, notes, contactNom, contactTelephone } = req.body;
+
+  if (!date || !clientName || !type) {
+    apiResponse.badRequest(res, 'Champs requis: date, clientName, type');
+    return;
+  }
+
+  const point = await prisma.pendingPoint.create({
+    data: {
+      date: ensureDateUTC(date),
+      clientName,
+      adresse: adresse || null,
+      type,
+      produitNom: produitNom || null,
+      creneauDebut: creneauDebut || null,
+      creneauFin: creneauFin || null,
+      notes: notes || null,
+      contactNom: contactNom || null,
+      contactTelephone: contactTelephone || null,
+      source: 'manual',
+    },
+  });
+
+  apiResponse.success(res, point);
+}
+
+/**
  * GET /api/pending-points?date=YYYY-MM-DD - Lister les points à dispatcher pour une date
  */
 export async function listPendingPoints(req: Request, res: Response): Promise<void> {

@@ -10,6 +10,7 @@ const router = Router();
 router.post('/', apiKeyAuth, asyncHandler(controller.createPendingPoints));
 
 // API interne (Frontend) - authentification JWT
+router.post('/manual', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.createManualPendingPoint));
 router.get('/', authenticate, requireRole('preparateur', 'admin', 'warehouse', 'superadmin'), asyncHandler(controller.listPendingPoints));
 router.get('/calendar-events', authenticate, requireRole('preparateur', 'warehouse', 'admin', 'superadmin'), asyncHandler(controller.listCalendarEvents));
 router.delete('/:id', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.deletePendingPoint));
