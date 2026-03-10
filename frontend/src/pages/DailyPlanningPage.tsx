@@ -1720,37 +1720,33 @@ export default function DailyPlanningPage() {
     });
   }, [selectedDate, produits]);
 
-  // Synchroniser les points locaux vers le backend pour qu'ils soient visibles par tous les admins
-  useEffect(() => {
-    if (isDateChanging.current) return;
-    const localOnly = pendingPoints.filter(p => !p._backendId);
-    // Plus besoin de localStorage — tout est en backend
-    localStorage.removeItem(`pending-points-${selectedDate}`);
-
-    // Sync les points locaux vers le backend
-    localOnly.forEach(async (point) => {
-      try {
-        const created = await pendingPointsService.createManual({
-          date: selectedDate,
-          clientName: point.clientName,
-          type: point.type || 'livraison',
-          adresse: point.adresse,
-          produitNom: point.produitName,
-          creneauDebut: point.creneauDebut,
-          creneauFin: point.creneauFin,
-          notes: point.notes,
-          contactNom: point.contactNom,
-          contactTelephone: point.contactTelephone,
-        });
-        // Mettre à jour le point avec son _backendId
-        setPendingPoints(prev => prev.map(p =>
-          p === point ? { ...p, _backendId: created.id } : p
-        ));
-      } catch (e) {
-        console.error('Erreur sync pending point vers backend:', e);
-      }
-    });
-  }, [pendingPoints, selectedDate]);
+  // Helper : ajouter un pending point et le sync vers le backend
+  const syncPointToBackend = useCallback(async (point: ImportParsedPoint, date: string) => {
+    try {
+      const created = await pendingPointsService.createManual({
+        date,
+        clientName: point.clientName,
+        type: point.type || 'livraison',
+        adresse: point.adresse,
+        produitNom: point.produitName,
+        creneauDebut: point.creneauDebut,
+        creneauFin: point.creneauFin,
+        notes: point.notes,
+        contactNom: point.contactNom,
+        contactTelephone: point.contactTelephone,
+      });
+      // Mettre à jour le point avec son _backendId
+      setPendingPoints(prev => prev.map(p =>
+        p.clientName === point.clientName && p.type === point.type && !p._backendId
+          ? { ...p, _backendId: created.id }
+          : p
+      ));
+      return created.id;
+    } catch (e) {
+      console.error('Erreur sync pending point vers backend:', e);
+      return null;
+    }
+  }, []);
 
   // BroadcastChannel pour synchroniser la fenêtre popup de carte
   const broadcastChannel = useRef<BroadcastChannel | null>(null);
@@ -3109,24 +3105,14 @@ export default function DailyPlanningPage() {
         // Ajouter le point livraison à la date de livraison
         if (livraisonDate === selectedDate) {
           setPendingPoints(prev => [...prev, pointLivraison]);
-        } else {
-          const key = `pending-points-${livraisonDate}`;
-          let existing: ImportParsedPoint[] = [];
-          try { const s = localStorage.getItem(key); if (s) existing = JSON.parse(s); } catch { /* ignore */ }
-          existing.push(pointLivraison);
-          localStorage.setItem(key, JSON.stringify(existing));
         }
+        syncPointToBackend(pointLivraison, livraisonDate);
 
         // Ajouter le point ramassage à la date de récupération
         if (ramassageDate === selectedDate) {
           setPendingPoints(prev => [...prev, pointRamassage]);
-        } else {
-          const key = `pending-points-${ramassageDate}`;
-          let existing: ImportParsedPoint[] = [];
-          try { const s = localStorage.getItem(key); if (s) existing = JSON.parse(s); } catch { /* ignore */ }
-          existing.push(pointRamassage);
-          localStorage.setItem(key, JSON.stringify(existing));
         }
+        syncPointToBackend(pointRamassage, ramassageDate);
 
         const msgs: string[] = [];
         if (livraisonDate === selectedDate) msgs.push('Livraison ajoutée');
@@ -3142,6 +3128,7 @@ export default function DailyPlanningPage() {
           creneauFin: addPendingFormData.creneauFin || '',
         };
         setPendingPoints([...pendingPoints, newPoint]);
+        syncPointToBackend(newPoint, selectedDate);
         toastSuccess('Point ajouté');
       }
 
@@ -3234,9 +3221,12 @@ export default function DailyPlanningPage() {
       await tourneesService.delete(tourneeToDelete);
       setTournees(current => current.filter(t => t.id !== tourneeToDelete));
 
-      // Remonter les points dans "à dispatcher"
+      // Remonter les points dans "à dispatcher" et sync vers backend
       if (pointsToRestore.length > 0) {
         setPendingPoints(current => [...current, ...pointsToRestore]);
+        for (const pt of pointsToRestore) {
+          syncPointToBackend(pt, selectedDate);
+        }
       }
 
       toastSuccess('Tournée supprimée', pointsToRestore.length > 0
