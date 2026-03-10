@@ -439,8 +439,8 @@ export default function PreparationsPage() {
                     {notif.title}
                   </p>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">{notif.body}</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">
-                    {format(new Date(notif.createdAt), "dd/MM HH:mm", { locale: fr })}
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {format(new Date(notif.createdAt), "dd MMMM yyyy 'à' HH:mm", { locale: fr })}
                   </p>
                 </div>
               </div>
