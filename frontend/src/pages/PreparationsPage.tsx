@@ -127,9 +127,11 @@ export default function PreparationsPage() {
     const refresh = () => fetchMachines(true);
     socketService.on('preparation:created', refresh);
     socketService.on('preparation:updated', refresh);
+    socketService.on('machines:updated', refresh);
     return () => {
       socketService.off('preparation:created', refresh);
       socketService.off('preparation:updated', refresh);
+      socketService.off('machines:updated', refresh);
     };
   }, [fetchMachines]);
 

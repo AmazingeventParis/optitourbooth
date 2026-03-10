@@ -153,6 +153,9 @@ export const markMachineDefect = async (req: Request, res: Response) => {
       },
     });
 
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
+
     return res.json(machine);
   } catch (error) {
     console.error('Error marking machine defect:', error);
@@ -194,6 +197,9 @@ export const markMachineOutOfService = async (req: Request, res: Response) => {
       },
     });
 
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
+
     return res.json(preparation);
   } catch (error) {
     console.error('Error marking machine out of service:', error);
@@ -228,6 +234,9 @@ export const clearMachineDefect = async (req: Request, res: Response) => {
         },
       },
     });
+
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
 
     return res.json(machine);
   } catch (error) {
@@ -284,6 +293,9 @@ export const restoreMachineToService = async (req: Request, res: Response) => {
         },
       },
     });
+
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
 
     return res.json(machine);
   } catch (error) {

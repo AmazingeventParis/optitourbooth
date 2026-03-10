@@ -236,6 +236,7 @@ export const createPreparation = async (req: Request, res: Response) => {
       preparateur,
       createdAt: preparation.createdAt,
     });
+    socketEmit.toAdmins('machines:updated', {});
 
     // Persister la notification en base pour tous les admins
     const { createForAdmins } = await import('./notification.controller.js');
@@ -299,6 +300,7 @@ export const updatePreparation = async (req: Request, res: Response) => {
         preparateur: preparation.preparateur,
         updatedAt: preparation.updatedAt,
       });
+      socketEmit.toAdmins('machines:updated', {});
 
       // Persister la notification en base
       const { createForAdmins } = await import('./notification.controller.js');
@@ -342,6 +344,12 @@ export const deletePreparation = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Preparation not found' });
     }
 
+    // Récupérer les infos de la machine avant suppression pour la notif
+    const fullPrep = await prisma.preparation.findUnique({
+      where: { id },
+      include: { machine: true },
+    });
+
     // Supprimer la préparation
     await prisma.preparation.delete({
       where: { id },
@@ -370,6 +378,25 @@ export const deletePreparation = async (req: Request, res: Response) => {
       }
     }
 
+    // Notifier les admins en temps réel
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
+    if (fullPrep) {
+      const machineName = `${fullPrep.machine.type} ${fullPrep.machine.numero}`;
+      const { createForAdmins } = await import('./notification.controller.js');
+      createForAdmins(req.user?.tenantId || null, {
+        type: 'preparation_updated',
+        title: 'Préparation annulée',
+        body: `${machineName} (${fullPrep.client}) — annulée`,
+        metadata: {
+          client: fullPrep.client,
+          machine: machineName,
+          statut: 'annulée',
+          preparateur: fullPrep.preparateur,
+        },
+      }).catch((err: any) => console.error('Erreur création notif DB:', err));
+    }
+
     return res.status(204).send();
   } catch (error) {
     console.error('Error deleting preparation:', error);
@@ -394,6 +421,9 @@ export const markAsReady = async (req: Request, res: Response) => {
         machine: true,
       },
     });
+
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
 
     return res.json(preparation);
   } catch (error) {
@@ -423,6 +453,9 @@ export const markPhotosUnloaded = async (req: Request, res: Response) => {
         machine: true,
       },
     });
+
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
 
     return res.json(preparation);
   } catch (error) {
@@ -478,6 +511,9 @@ export const markMachineDefect = async (req: Request, res: Response) => {
       },
     });
 
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
+
     return res.json(machine);
   } catch (error) {
     console.error('Error marking machine defect:', error);
@@ -510,6 +546,9 @@ export const markOutOfService = async (req: Request, res: Response) => {
         machine: true,
       },
     });
+
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
 
     return res.json(preparation);
   } catch (error) {
