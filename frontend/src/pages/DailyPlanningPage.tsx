@@ -2694,44 +2694,90 @@ export default function DailyPlanningPage() {
   };
 
   // Sauvegarder les modifications du point pending
+  const [isSavingEditPending, setIsSavingEditPending] = useState(false);
   const handleSaveEditPending = async () => {
     if (editingPendingIndex === null) return;
+    setIsSavingEditPending(true);
 
-    const existingPoint = pendingPoints[editingPendingIndex];
-    const updatedPoints = [...pendingPoints];
-    updatedPoints[editingPendingIndex] = {
-      ...existingPoint,
-      ...editPendingFormData,
-      produitName: formatGroupedProducts(editPendingSelectedProduits),
-      produitId: editPendingSelectedProduits[0]?.id,
-      produitsIds: editPendingSelectedProduits.length > 0 ? editPendingSelectedProduits : undefined,
-      produitFound: editPendingSelectedProduits.length > 0,
-    };
+    try {
+      const existingPoint = pendingPoints[editingPendingIndex];
+      const clientName = (editPendingFormData.clientName || '').trim();
+      const adresse = (editPendingFormData.adresse || '').trim();
 
-    // Si c'est un point backend, persister les modifications
-    if (existingPoint._backendId) {
-      try {
-        await pendingPointsService.update(existingPoint._backendId, {
-          clientName: editPendingFormData.clientName,
-          adresse: editPendingFormData.adresse,
-          type: editPendingFormData.type,
-          creneauDebut: editPendingFormData.creneauDebut || undefined,
-          creneauFin: editPendingFormData.creneauFin || undefined,
-          contactNom: editPendingFormData.contactNom || undefined,
-          contactTelephone: editPendingFormData.contactTelephone || undefined,
-          notes: editPendingFormData.notes || undefined,
-          produitNom: editPendingSelectedProduits[0]?.nom || undefined,
-        });
-      } catch {
-        toastError('Erreur', 'Impossible de sauvegarder les modifications');
+      if (!clientName) {
+        toastError('Erreur', 'Le nom du client est requis');
+        setIsSavingEditPending(false);
+        return;
       }
-    }
 
-    setPendingPoints(updatedPoints);
-    setIsEditPendingModalOpen(false);
-    setEditingPendingIndex(null);
-    setEditPendingSelectedProduits([]);
-    toastSuccess('Point modifié');
+      // Résoudre le client (rechercher ou créer)
+      let clientId = existingPoint.clientId;
+      let clientFound = existingPoint.clientFound;
+
+      // Re-résoudre si pas de clientId ou si le nom a changé
+      if (!clientId || clientName.toLowerCase() !== (existingPoint.clientName || '').toLowerCase()) {
+        try {
+          const results = await clientsService.search(clientName);
+          const exact = results.find(c => c.nom.toLowerCase() === clientName.toLowerCase());
+          if (exact) {
+            clientId = exact.id;
+          } else {
+            const created = await clientsService.create({
+              nom: clientName,
+              adresse: adresse || 'Adresse à définir',
+            });
+            if (adresse) {
+              try { await clientsService.geocode(created.id); } catch { /* ignore */ }
+            }
+            clientId = created.id;
+          }
+          clientFound = true;
+        } catch {
+          toastError('Erreur', `Impossible de créer le client "${clientName}"`);
+          setIsSavingEditPending(false);
+          return;
+        }
+      }
+
+      const updatedPoints = [...pendingPoints];
+      updatedPoints[editingPendingIndex] = {
+        ...existingPoint,
+        ...editPendingFormData,
+        clientId,
+        clientFound,
+        produitName: formatGroupedProducts(editPendingSelectedProduits),
+        produitId: editPendingSelectedProduits[0]?.id,
+        produitsIds: editPendingSelectedProduits.length > 0 ? editPendingSelectedProduits : undefined,
+        produitFound: editPendingSelectedProduits.length > 0,
+      };
+
+      // Si c'est un point backend, persister les modifications
+      if (existingPoint._backendId) {
+        try {
+          await pendingPointsService.update(existingPoint._backendId, {
+            clientName: editPendingFormData.clientName,
+            adresse: editPendingFormData.adresse,
+            type: editPendingFormData.type,
+            creneauDebut: editPendingFormData.creneauDebut || undefined,
+            creneauFin: editPendingFormData.creneauFin || undefined,
+            contactNom: editPendingFormData.contactNom || undefined,
+            contactTelephone: editPendingFormData.contactTelephone || undefined,
+            notes: editPendingFormData.notes || undefined,
+            produitNom: editPendingSelectedProduits[0]?.nom || undefined,
+          });
+        } catch {
+          toastError('Erreur', 'Impossible de sauvegarder les modifications');
+        }
+      }
+
+      setPendingPoints(updatedPoints);
+      setIsEditPendingModalOpen(false);
+      setEditingPendingIndex(null);
+      setEditPendingSelectedProduits([]);
+      toastSuccess('Point modifié');
+    } finally {
+      setIsSavingEditPending(false);
+    }
   };
 
   // Ouvrir le modal de duplication pour un point en tournée
@@ -4127,12 +4173,26 @@ export default function DailyPlanningPage() {
         size="lg"
       >
         <div className="space-y-4">
-          <Input
-            label="Nom du client"
-            value={editPendingFormData.clientName || ''}
-            onChange={(e) => setEditPendingFormData({ ...editPendingFormData, clientName: e.target.value })}
-            required
-          />
+          {/* Indicateur d'erreurs */}
+          {editingPendingIndex !== null && pendingPoints[editingPendingIndex] && !pendingPoints[editingPendingIndex].clientId && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0" />
+              <span>Client non résolu. Vérifiez le nom du client puis enregistrez pour résoudre automatiquement.</span>
+            </div>
+          )}
+
+          <div>
+            <Input
+              label="Nom du client"
+              value={editPendingFormData.clientName || ''}
+              onChange={(e) => setEditPendingFormData({ ...editPendingFormData, clientName: e.target.value })}
+              required
+              className={!editPendingFormData.clientName?.trim() ? '!border-red-400 !ring-red-400' : ''}
+            />
+            {!editPendingFormData.clientName?.trim() && (
+              <p className="mt-1 text-xs text-red-500">Le nom du client est requis</p>
+            )}
+          </div>
 
           <Input
             label="Société"
@@ -4140,19 +4200,24 @@ export default function DailyPlanningPage() {
             onChange={(e) => setEditPendingFormData({ ...editPendingFormData, societe: e.target.value })}
           />
 
-          <AddressAutocomplete
-            label="Adresse"
-            value={editPendingFormData.adresse || ''}
-            onChange={(val) => setEditPendingFormData({ ...editPendingFormData, adresse: val })}
-            onSelect={(result: AddressResult) => {
-              setEditPendingFormData((prev) => ({
-                ...prev,
-                adresse: result.source === 'api' ? result.label : result.adresse,
-              }));
-            }}
-            searchClients={(q) => clientsService.search(q)}
-            placeholder="Tapez une adresse..."
-          />
+          <div>
+            <AddressAutocomplete
+              label="Adresse"
+              value={editPendingFormData.adresse || ''}
+              onChange={(val) => setEditPendingFormData({ ...editPendingFormData, adresse: val })}
+              onSelect={(result: AddressResult) => {
+                setEditPendingFormData((prev) => ({
+                  ...prev,
+                  adresse: result.source === 'api' ? result.label : result.adresse,
+                }));
+              }}
+              searchClients={(q) => clientsService.search(q)}
+              placeholder="Tapez une adresse..."
+            />
+            {!editPendingFormData.adresse?.trim() && (
+              <p className="mt-1 text-xs text-amber-500">Adresse recommandée pour le géocodage</p>
+            )}
+          </div>
 
           <Select
             label="Type"
@@ -4264,8 +4329,8 @@ export default function DailyPlanningPage() {
             <Button variant="secondary" onClick={() => setIsEditPendingModalOpen(false)}>
               Annuler
             </Button>
-            <Button onClick={handleSaveEditPending}>
-              Enregistrer
+            <Button onClick={handleSaveEditPending} disabled={isSavingEditPending || !editPendingFormData.clientName?.trim()}>
+              {isSavingEditPending ? 'Enregistrement...' : 'Enregistrer'}
             </Button>
           </div>
         </div>
