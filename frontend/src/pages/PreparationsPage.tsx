@@ -733,12 +733,14 @@ export default function PreparationsPage() {
         </div>
         </div>
 
-        {/* Colonne fil d'actualité */}
+        {/* Colonne fil d'actualité - admin uniquement */}
+        {user?.roles.includes('admin') && (
         <div className="hidden lg:block w-80 shrink-0">
           <div className="sticky top-6">
             <ActivityFeed />
           </div>
         </div>
+        )}
       </div>
     );
   }
