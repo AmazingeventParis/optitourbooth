@@ -327,16 +327,16 @@ export const clientController = {
       return;
     }
 
-    // Recherche insensible aux accents via unaccent()
+    // Recherche insensible à la casse via ILIKE
     const searchTerm = `%${q}%`;
     const clients = await prisma.$queryRawUnsafe<unknown[]>(
       `SELECT "id", "nom", "societe", "adresse", "codePostal", "ville", "latitude", "longitude"
        FROM "clients"
        WHERE "actif" = true
          AND (
-           unaccent(LOWER("nom")) LIKE unaccent(LOWER($1))
-           OR unaccent(LOWER(COALESCE("societe", ''))) LIKE unaccent(LOWER($1))
-           OR unaccent(LOWER(COALESCE("ville", ''))) LIKE unaccent(LOWER($1))
+           "nom" ILIKE $1
+           OR COALESCE("societe", '') ILIKE $1
+           OR COALESCE("ville", '') ILIKE $1
          )
        ORDER BY "nom" ASC
        LIMIT 10`,
