@@ -1090,31 +1090,8 @@ export default function PreparationsPage() {
                           <p className="text-sm text-gray-900">{new Date(prep.dateEvenement).toLocaleDateString('fr-FR')}</p>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Préparateur</label>
-                          <div className="flex flex-wrap gap-2">
-                            {preparateurs.map((p) => (
-                              <button
-                                key={p.id}
-                                type="button"
-                                onClick={() => {
-                                  preparationsService.update(prep.id, { preparateur: p.prenom })
-                                    .then(() => {
-                                      fetchMachines();
-                                      success('Préparateur mis à jour');
-                                    })
-                                    .catch((err) => showError('Erreur', (err as Error).message));
-                                }}
-                                className={clsx(
-                                  'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
-                                  prep.preparateur === p.prenom
-                                    ? 'bg-primary-600 text-white shadow-sm'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                )}
-                              >
-                                {p.prenom}
-                              </button>
-                            ))}
-                          </div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Préparateur</label>
+                          <p className="text-sm text-gray-900">{prep.preparateur || '—'}</p>
                         </div>
                         {/* Annuler cet événement */}
                         {prep.statut === 'prete' && (
