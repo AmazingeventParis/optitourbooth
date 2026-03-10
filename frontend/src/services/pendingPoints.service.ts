@@ -40,6 +40,11 @@ export const pendingPointsService = {
     return response.data.data;
   },
 
+  async update(id: string, data: Partial<Omit<BackendPendingPoint, 'id' | 'source' | 'externalId'>>): Promise<BackendPendingPoint> {
+    const response = await api.patch<ApiResponse<BackendPendingPoint>>(`/pending-points/${id}`, data);
+    return response.data.data;
+  },
+
   async markUsedInPreparation(id: string): Promise<void> {
     await api.patch(`/pending-points/${id}/use-in-preparation`);
   },

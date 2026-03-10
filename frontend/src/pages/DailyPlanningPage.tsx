@@ -1643,14 +1643,52 @@ export default function DailyPlanningPage() {
     }
 
     // Charger aussi les points backend (Google Calendar, etc.)
-    pendingPointsService.listByDate(selectedDate).then(backendPoints => {
-      const converted: ImportParsedPoint[] = backendPoints.map(bp => {
+    pendingPointsService.listByDate(selectedDate).then(async (backendPoints) => {
+      // Résoudre les clients par nom (cache pour éviter les appels dupliqués)
+      const clientCache: Record<string, { id: string; nom: string; adresse?: string } | null> = {};
+
+      const resolveClient = async (name: string, adresse?: string): Promise<{ id: string; nom: string } | null> => {
+        if (clientCache[name] !== undefined) return clientCache[name];
+        try {
+          const results = await clientsService.search(name);
+          const exact = results.find(c => c.nom.toLowerCase() === name.toLowerCase());
+          if (exact) {
+            clientCache[name] = { id: exact.id, nom: exact.nom };
+            return clientCache[name];
+          }
+          // Client non trouvé → auto-créer puis géocoder
+          const created = await clientsService.create({
+            nom: name,
+            adresse: adresse || '',
+          });
+          // Géocoder pour avoir les coordonnées sur la carte
+          if (adresse) {
+            try { await clientsService.geocode(created.id); } catch { /* ignore */ }
+          }
+          clientCache[name] = { id: created.id, nom: created.nom };
+          return clientCache[name];
+        } catch {
+          clientCache[name] = null;
+          return null;
+        }
+      };
+
+      const converted: ImportParsedPoint[] = await Promise.all(backendPoints.map(async (bp) => {
         // Matcher le produit par nom
         const matchedProduit = bp.produitNom
           ? produits.find(p => p.nom.toLowerCase() === bp.produitNom!.toLowerCase())
           : undefined;
+
+        // Résoudre le client
+        const client = await resolveClient(bp.clientName, bp.adresse || undefined);
+
+        const errors: string[] = [];
+        if (!matchedProduit && bp.produitNom) errors.push(`Produit "${bp.produitNom}" non trouvé`);
+        if (!client) errors.push(`Client "${bp.clientName}" non trouvé`);
+
         return {
           clientName: bp.clientName,
+          clientId: client?.id,
           adresse: bp.adresse,
           type: bp.type || 'livraison',
           produitName: matchedProduit?.nom || bp.produitNom || undefined,
@@ -1661,12 +1699,12 @@ export default function DailyPlanningPage() {
           notes: bp.notes,
           contactNom: bp.contactNom,
           contactTelephone: bp.contactTelephone,
-          clientFound: true,
+          clientFound: !!client,
           produitFound: !!matchedProduit,
-          errors: !matchedProduit && bp.produitNom ? [`Produit "${bp.produitNom}" non trouvé`] : [],
+          errors,
           _backendId: bp.id,
         };
-      });
+      }));
       setPendingPoints([...localPoints, ...converted]);
       setTimeout(() => { isDateChanging.current = false; }, 0);
     }).catch(() => {
@@ -2627,18 +2665,39 @@ export default function DailyPlanningPage() {
   };
 
   // Sauvegarder les modifications du point pending
-  const handleSaveEditPending = () => {
+  const handleSaveEditPending = async () => {
     if (editingPendingIndex === null) return;
 
+    const existingPoint = pendingPoints[editingPendingIndex];
     const updatedPoints = [...pendingPoints];
     updatedPoints[editingPendingIndex] = {
-      ...updatedPoints[editingPendingIndex],
+      ...existingPoint,
       ...editPendingFormData,
       produitName: formatGroupedProducts(editPendingSelectedProduits),
       produitId: editPendingSelectedProduits[0]?.id,
       produitsIds: editPendingSelectedProduits.length > 0 ? editPendingSelectedProduits : undefined,
       produitFound: editPendingSelectedProduits.length > 0,
     };
+
+    // Si c'est un point backend, persister les modifications
+    if (existingPoint._backendId) {
+      try {
+        await pendingPointsService.update(existingPoint._backendId, {
+          clientName: editPendingFormData.clientName,
+          adresse: editPendingFormData.adresse,
+          type: editPendingFormData.type,
+          creneauDebut: editPendingFormData.creneauDebut || undefined,
+          creneauFin: editPendingFormData.creneauFin || undefined,
+          contactNom: editPendingFormData.contactNom || undefined,
+          contactTelephone: editPendingFormData.contactTelephone || undefined,
+          notes: editPendingFormData.notes || undefined,
+          produitNom: editPendingSelectedProduits[0]?.nom || undefined,
+        });
+      } catch {
+        toastError('Erreur', 'Impossible de sauvegarder les modifications');
+      }
+    }
+
     setPendingPoints(updatedPoints);
     setIsEditPendingModalOpen(false);
     setEditingPendingIndex(null);

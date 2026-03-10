@@ -39,8 +39,8 @@ interface ParsedDescription {
 // Regex pour numéros de téléphone français
 const PHONE_REGEX = /(?:0[1-9])[\s.\-]?(?:\d{2}[\s.\-]?){4}/g;
 
-// Regex pour créneaux horaires: "10h-14h", "10H00-12H00", "10h à 14h", "entre 14h et 18h"
-const TIME_SLOT_REGEX = /(\d{1,2})\s*[hH]\s*(\d{0,2})\s*(?:-|à|a|et|ET|and)\s*(\d{1,2})\s*[hH]\s*(\d{0,2})/i;
+// Regex pour créneaux horaires: "10h-14h", "10H00-12H00", "10h à 14h", "entre 14h et 18h", "10:00-14:00"
+const TIME_SLOT_REGEX = /(\d{1,2})\s*[hH:]\s*(\d{0,2})\s*(?:-|–|à|a|et|ET|and|>)\s*(\d{1,2})\s*[hH:]\s*(\d{0,2})/i;
 
 // Regex pour adresse française (numéro + type de voie)
 const STREET_TYPES = 'rue|avenue|av\\.?|bd\\.?|boulevard|place|pl\\.?|allée|all\\.?|chemin|ch\\.?|impasse|imp\\.?|passage|pass\\.?|quai|cours|route|rte\\.?|voie|square|sq\\.?|résidence|rés\\.?|cité|lot\\.?|lotissement|parvis|esplanade|promenade|rond[- ]point|carrefour|hameau|lieu[- ]dit|zone|za|zi';
@@ -111,18 +111,16 @@ function parseDescription(rawDescription: string): ParsedDescription {
       continue;
     }
 
-    // Créneau livraison avec label
-    if ((lineUpper.startsWith('LIVRAISON') || lineUpper.startsWith('LIV')) && line.includes(':')) {
+    // Créneau livraison avec label (avec ou sans ':')
+    if ((lineUpper.startsWith('LIVRAISON') || lineUpper.startsWith('LIV') || lineUpper.includes('LIVRAISON'))) {
       const match = line.match(TIME_SLOT_REGEX);
-      if (match) creneauLivraison = formatTimeSlot(match);
-      continue;
+      if (match) { creneauLivraison = formatTimeSlot(match); continue; }
     }
 
-    // Créneau récupération avec label
-    if ((lineUpper.startsWith('RECUP') || lineUpper.startsWith('RÉCUP') || lineUpper.startsWith('RAMASSAGE')) && line.includes(':')) {
+    // Créneau récupération avec label (avec ou sans ':')
+    if ((lineUpper.startsWith('RECUP') || lineUpper.startsWith('RÉCUP') || lineUpper.startsWith('RAMASSAGE') || lineUpper.includes('RECUP') || lineUpper.includes('RÉCUP') || lineUpper.includes('RAMASSAGE'))) {
       const match = line.match(TIME_SLOT_REGEX);
-      if (match) creneauRecuperation = formatTimeSlot(match);
-      continue;
+      if (match) { creneauRecuperation = formatTimeSlot(match); continue; }
     }
 
     // Contact avec label
@@ -157,14 +155,8 @@ function parseDescription(rawDescription: string): ParsedDescription {
 
     // Adresse (par type de voie ou code postal)
     if (!adresse && isAddressLine(line)) {
-      // Si la ligne précédente ressemble à un nom de lieu (pas un créneau, pas une date, pas un téléphone)
-      // l'inclure comme complément d'adresse (ex: "restaurant CHEZ ERNEST" avant "4 Imp. de Joinville")
-      if (notesLines.length > 0) {
-        const prevNote = notesLines[notesLines.length - 1];
-        if (prevNote && !isDateLine(prevNote) && !TIME_SLOT_REGEX.test(prevNote) && !PHONE_REGEX.test(prevNote) && prevNote.length < 60) {
-          addressParts.push(notesLines.pop()!);
-        }
-      }
+      // Ne PAS inclure le nom d'établissement (ex: "restaurant CHEZ ERNEST")
+      // car les noms de lieux ne sont pas reconnus par le géocodeur
       addressParts.push(line);
       // Regarder si la ligne suivante complète l'adresse (code postal sur ligne séparée)
       if (i + 1 < lines.length) {
@@ -187,9 +179,22 @@ function parseDescription(rawDescription: string): ParsedDescription {
     notesLines.push(line);
   }
 
-  // Assembler l'adresse
+  // Assembler l'adresse (nettoyer pour le géocodeur)
   if (!adresse && addressParts.length > 0) {
     adresse = addressParts.join(', ');
+    // Nettoyer : si l'adresse contient un numéro + voie, extraire seulement la partie géocodable
+    // Ex: "restaurant CHEZ ERNEST, 4 Imp. de Joinville, 75019 Paris" → "4 Imp. de Joinville, 75019 Paris"
+    const streetMatch = adresse.match(new RegExp(`(\\d+\\s*[,.]?\\s*(?:${STREET_TYPES})[^,]*(?:,\\s*\\d{5}\\s+[A-ZÀ-Ü][a-zA-ZÀ-ü\\s-]*)?)`, 'i'));
+    if (streetMatch) {
+      adresse = streetMatch[1]!.trim();
+      // Ajouter le code postal s'il est dans une autre partie
+      if (!/\d{5}/.test(adresse)) {
+        const postalMatch = addressParts.join(', ').match(/(\d{5}\s+[A-ZÀ-Ü][a-zA-ZÀ-ü\s-]+)/);
+        if (postalMatch) {
+          adresse += ', ' + postalMatch[1]!.trim();
+        }
+      }
+    }
   }
 
   // Associer les créneaux aux types livraison/récupération

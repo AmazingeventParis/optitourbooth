@@ -120,6 +120,38 @@ export async function deletePendingPoint(req: Request, res: Response): Promise<v
 }
 
 /**
+ * PATCH /api/pending-points/:id - Mettre à jour un pending point (édition frontend)
+ */
+export async function updatePendingPoint(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+  const { clientName, adresse, type, creneauDebut, creneauFin, contactNom, contactTelephone, notes, produitNom } = req.body;
+
+  try {
+    const updated = await prisma.pendingPoint.update({
+      where: { id },
+      data: {
+        ...(clientName !== undefined && { clientName }),
+        ...(adresse !== undefined && { adresse }),
+        ...(type !== undefined && { type }),
+        ...(creneauDebut !== undefined && { creneauDebut }),
+        ...(creneauFin !== undefined && { creneauFin }),
+        ...(contactNom !== undefined && { contactNom }),
+        ...(contactTelephone !== undefined && { contactTelephone }),
+        ...(notes !== undefined && { notes }),
+        ...(produitNom !== undefined && { produitNom }),
+      },
+    });
+    apiResponse.success(res, updated);
+  } catch (error) {
+    if ((error as any).code === 'P2025') {
+      apiResponse.notFound(res, 'Point non trouvé');
+      return;
+    }
+    throw error;
+  }
+}
+
+/**
  * PATCH /api/pending-points/:id/dispatch - Marquer comme dispatché
  */
 export async function markDispatched(req: Request, res: Response): Promise<void> {
