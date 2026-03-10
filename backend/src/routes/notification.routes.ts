@@ -4,11 +4,27 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { apiResponse } from '../utils/index.js';
 import { config } from '../config/index.js';
 import { notificationService } from '../services/notification.service.js';
+import * as notifController from '../controllers/notification.controller.js';
 
 const router = Router();
 
 // All routes require authentication
 router.use(authenticate);
+
+/**
+ * GET /api/notifications - List user's notifications
+ */
+router.get('/', asyncHandler(notifController.listNotifications));
+
+/**
+ * PATCH /api/notifications/mark-all-read - Mark all as read
+ */
+router.patch('/mark-all-read', asyncHandler(notifController.markAllAsRead));
+
+/**
+ * PATCH /api/notifications/:id/read - Mark single as read
+ */
+router.patch('/:id/read', asyncHandler(notifController.markAsRead));
 
 /**
  * GET /api/notifications/vapid-public-key

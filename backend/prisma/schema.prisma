@@ -126,6 +126,7 @@ model User {
   tournees          Tournee[]
   positions         Position[]
   pushSubscriptions PushSubscription[]
+  notifications     Notification[]
 
   @@index([actif]) // Requêtes fréquentes: utilisateurs actifs
   @@index([tenantId])
@@ -477,6 +478,24 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// Notifications in-app persistantes
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String   // 'preparation_created', 'preparation_updated', etc.
+  title     String
+  body      String
+  metadata  Json?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
 }
 
 /// Sessions de refresh token

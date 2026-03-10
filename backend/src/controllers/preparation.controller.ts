@@ -226,15 +226,26 @@ export const createPreparation = async (req: Request, res: Response) => {
     });
 
     // Notifier tous les admins en temps réel via Socket.io
+    const machineName = `${preparation.machine.type} ${preparation.machine.numero}`;
     const { socketEmit } = await import('../config/socket.js');
     socketEmit.toAdmins('preparation:created', {
       id: preparation.id,
-      machine: `${preparation.machine.type} ${preparation.machine.numero}`,
+      machine: machineName,
       client,
       dateEvenement,
       preparateur,
       createdAt: preparation.createdAt,
     });
+
+    // Persister la notification en base pour tous les admins
+    const { createForAdmins } = await import('./notification.controller.js');
+    const dateEvtStr = new Date(dateEvenement).toLocaleDateString('fr-FR');
+    createForAdmins(req.user?.tenantId || null, {
+      type: 'preparation_created',
+      title: 'Nouvelle préparation',
+      body: `${machineName} préparée pour ${client}`,
+      metadata: { client, dateEvenement: dateEvtStr, machine: machineName, preparateur },
+    }).catch((err: any) => console.error('Erreur création notif DB:', err));
 
     return res.status(201).json(preparation);
   } catch (error) {
@@ -274,15 +285,34 @@ export const updatePreparation = async (req: Request, res: Response) => {
 
     // Notifier les admins des changements de statut
     if (statut) {
+      const machineName = `${preparation.machine.type} ${preparation.machine.numero}`;
+      const statutLabels: Record<string, string> = {
+        prete: 'prête', en_cours: 'en cours', a_decharger: 'à décharger',
+        archivee: 'archivée', defaut: 'en défaut', hors_service: 'hors service',
+      };
       const { socketEmit } = await import('../config/socket.js');
       socketEmit.toAdmins('preparation:updated', {
         id: preparation.id,
-        machine: `${preparation.machine.type} ${preparation.machine.numero}`,
+        machine: machineName,
         client: preparation.client,
         statut,
         preparateur: preparation.preparateur,
         updatedAt: preparation.updatedAt,
       });
+
+      // Persister la notification en base
+      const { createForAdmins } = await import('./notification.controller.js');
+      createForAdmins(req.user?.tenantId || null, {
+        type: 'preparation_updated',
+        title: 'Mise à jour',
+        body: `${machineName} (${preparation.client}) → ${statutLabels[statut] || statut}`,
+        metadata: {
+          client: preparation.client,
+          machine: machineName,
+          statut: statutLabels[statut] || statut,
+          preparateur: preparation.preparateur,
+        },
+      }).catch((err: any) => console.error('Erreur création notif DB:', err));
     }
 
     return res.json(preparation);

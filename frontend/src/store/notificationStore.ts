@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { notificationsService, DbNotification } from '@/services/notifications.service';
 
 export interface AppNotification {
   id: string;
@@ -11,8 +11,22 @@ export interface AppNotification {
   createdAt: number;
 }
 
+function dbToApp(n: DbNotification): AppNotification {
+  return {
+    id: n.id,
+    type: n.type as AppNotification['type'],
+    title: n.title,
+    body: n.body,
+    metadata: n.metadata || undefined,
+    read: n.read,
+    createdAt: new Date(n.createdAt).getTime(),
+  };
+}
+
 interface NotificationState {
   notifications: AppNotification[];
+  loading: boolean;
+  fetchNotifications: () => Promise<void>;
   addNotification: (notif: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
@@ -21,44 +35,57 @@ interface NotificationState {
 }
 
 export const useNotificationStore = create<NotificationState>()(
-  persist(
-    (set, get) => ({
-      notifications: [],
+  (set, get) => ({
+    notifications: [],
+    loading: false,
 
-      addNotification: (notif) => {
-        const newNotif: AppNotification = {
-          ...notif,
-          id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          read: false,
-          createdAt: Date.now(),
-        };
-        set((state) => ({
-          notifications: [newNotif, ...state.notifications].slice(0, 50), // Keep last 50
-        }));
-      },
+    fetchNotifications: async () => {
+      try {
+        set({ loading: true });
+        const data = await notificationsService.list(50);
+        set({ notifications: data.notifications.map(dbToApp), loading: false });
+      } catch (err) {
+        console.error('Erreur chargement notifications:', err);
+        set({ loading: false });
+      }
+    },
 
-      markAsRead: (id) => {
-        set((state) => ({
-          notifications: state.notifications.map((n) =>
-            n.id === id ? { ...n, read: true } : n
-          ),
-        }));
-      },
+    addNotification: (notif) => {
+      // Ajouter en temps réel (socket) — pas besoin de sauvegarder en DB, c'est déjà fait côté backend
+      const newNotif: AppNotification = {
+        ...notif,
+        id: `rt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        read: false,
+        createdAt: Date.now(),
+      };
+      set((state) => ({
+        notifications: [newNotif, ...state.notifications].slice(0, 100),
+      }));
+    },
 
-      markAllAsRead: () => {
-        set((state) => ({
-          notifications: state.notifications.map((n) => ({ ...n, read: true })),
-        }));
-      },
+    markAsRead: (id) => {
+      set((state) => ({
+        notifications: state.notifications.map((n) =>
+          n.id === id ? { ...n, read: true } : n
+        ),
+      }));
+      // Sync avec la DB (ignorer les notifs temps réel non persistées)
+      if (!id.startsWith('rt-')) {
+        notificationsService.markAsRead(id).catch(() => {});
+      }
+    },
 
-      clearAll: () => set({ notifications: [] }),
+    markAllAsRead: () => {
+      set((state) => ({
+        notifications: state.notifications.map((n) => ({ ...n, read: true })),
+      }));
+      notificationsService.markAllAsRead().catch(() => {});
+    },
 
-      unreadCount: () => {
-        return get().notifications.filter((n) => !n.read).length;
-      },
-    }),
-    {
-      name: 'optitour-notifications',
-    }
-  )
+    clearAll: () => set({ notifications: [] }),
+
+    unreadCount: () => {
+      return get().notifications.filter((n) => !n.read).length;
+    },
+  })
 );

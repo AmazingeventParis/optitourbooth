@@ -14,11 +14,18 @@ export default function Layout() {
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
   });
   const addNotification = useNotificationStore((s) => s.addNotification);
+  const fetchNotifications = useNotificationStore((s) => s.fetchNotifications);
   const token = useAuthStore((s) => s.token);
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
   }, [collapsed]);
+
+  // Charger les notifications depuis la DB au login
+  useEffect(() => {
+    if (!token) return;
+    fetchNotifications();
+  }, [token, fetchNotifications]);
 
   // Connecter le socket pour recevoir les notifications en temps réel
   useEffect(() => {
@@ -29,6 +36,7 @@ export default function Layout() {
   }, [token]);
 
   // Écouter les événements de préparation en temps réel
+  // Les notifs socket servent à afficher instantanément — elles seront dédupliquées au prochain fetchNotifications
   useEffect(() => {
     const handlePrepCreated = (data: { machine: string; client: string; preparateur: string; dateEvenement: string }) => {
       const dateEvt = data.dateEvenement ? new Date(data.dateEvenement).toLocaleDateString('fr-FR') : '';
@@ -43,6 +51,8 @@ export default function Layout() {
           preparateur: data.preparateur,
         },
       });
+      // Rafraîchir depuis la DB après un court délai pour remplacer le doublon temps réel par la version DB
+      setTimeout(() => fetchNotifications(), 2000);
     };
 
     const handlePrepUpdated = (data: { machine: string; client: string; statut: string; preparateur?: string }) => {
@@ -65,6 +75,7 @@ export default function Layout() {
           preparateur: data.preparateur || '',
         },
       });
+      setTimeout(() => fetchNotifications(), 2000);
     };
 
     socketService.on('preparation:created', handlePrepCreated);
@@ -74,7 +85,7 @@ export default function Layout() {
       socketService.off('preparation:created', handlePrepCreated);
       socketService.off('preparation:updated', handlePrepUpdated);
     };
-  }, [addNotification]);
+  }, [addNotification, fetchNotifications]);
 
   return (
     <div className="min-h-screen bg-gray-50">
