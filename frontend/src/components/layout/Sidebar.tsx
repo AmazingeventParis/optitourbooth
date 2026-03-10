@@ -18,6 +18,7 @@ import {
   Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore, User } from '@/store/authStore';
+import { useNotificationStore } from '@/store/notificationStore';
 import { useChauffeurs } from '@/hooks/queries/useUsers';
 import { useInstallPWA } from '@/hooks/useInstallPWA';
 import { useToast } from '@/hooks/useToast';
@@ -52,6 +53,9 @@ const navigation: Array<{
 
 function SidebarContent({ collapsed, onToggleCollapse }: { collapsed?: boolean; onToggleCollapse?: () => void }) {
   const { user, logout, startImpersonation } = useAuthStore();
+  const prepNotifCount = useNotificationStore((s) =>
+    s.notifications.filter((n) => !n.read && (n.type === 'preparation_created' || n.type === 'preparation_updated')).length
+  );
 
   // Filtrer les liens selon le rôle de l'utilisateur
   const filteredNavigation = navigation.filter((item) =>
@@ -122,7 +126,7 @@ function SidebarContent({ collapsed, onToggleCollapse }: { collapsed?: boolean; 
                         isActive
                           ? 'bg-primary-800 text-white'
                           : 'text-primary-200 hover:text-white hover:bg-primary-800',
-                        'group flex items-center rounded-md p-2 text-sm leading-6 font-semibold',
+                        'group flex items-center rounded-md p-2 text-sm leading-6 font-semibold relative',
                         collapsed ? 'justify-center' : 'gap-x-3'
                       )
                     }
@@ -132,6 +136,14 @@ function SidebarContent({ collapsed, onToggleCollapse }: { collapsed?: boolean; 
                       aria-hidden="true"
                     />
                     {!collapsed && item.name}
+                    {item.href === '/preparations' && prepNotifCount > 0 && (
+                      <span className={clsx(
+                        'ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 text-[11px] font-bold text-white',
+                        collapsed && 'absolute -top-1 -right-1 h-4 min-w-[16px] text-[10px]'
+                      )}>
+                        {prepNotifCount}
+                      </span>
+                    )}
                   </NavLink>
                 </li>
               ))}

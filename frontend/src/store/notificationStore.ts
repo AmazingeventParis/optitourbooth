@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 
 export interface AppNotification {
   id: string;
-  type: 'tournee_assigned' | 'point_modified' | 'message' | 'info';
+  type: 'tournee_assigned' | 'point_modified' | 'message' | 'info' | 'preparation_created' | 'preparation_updated';
   title: string;
   body: string;
   read: boolean;

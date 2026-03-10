@@ -241,6 +241,17 @@ export const createPreparation = async (req: Request, res: Response) => {
       },
     });
 
+    // Notifier tous les admins en temps réel via Socket.io
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('preparation:created', {
+      id: preparation.id,
+      machine: `${preparation.machine.type} ${preparation.machine.numero}`,
+      client,
+      dateEvenement,
+      preparateur,
+      createdAt: preparation.createdAt,
+    });
+
     return res.status(201).json(preparation);
   } catch (error) {
     console.error('Error creating preparation:', error);
@@ -276,6 +287,19 @@ export const updatePreparation = async (req: Request, res: Response) => {
         machine: true,
       },
     });
+
+    // Notifier les admins des changements de statut
+    if (statut) {
+      const { socketEmit } = await import('../config/socket.js');
+      socketEmit.toAdmins('preparation:updated', {
+        id: preparation.id,
+        machine: `${preparation.machine.type} ${preparation.machine.numero}`,
+        client: preparation.client,
+        statut,
+        preparateur: preparation.preparateur,
+        updatedAt: preparation.updatedAt,
+      });
+    }
 
     return res.json(preparation);
   } catch (error) {

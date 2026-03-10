@@ -5,6 +5,7 @@ import { preparationsService } from '@/services/preparations.service';
 import { pendingPointsService, CalendarEvent } from '@/services/pendingPoints.service';
 import { useToast } from '@/hooks/useToast';
 import { useAuthStore } from '@/store/authStore';
+import { useNotificationStore, AppNotification } from '@/store/notificationStore';
 import { usePreparateurs } from '@/hooks/queries/useUsers';
 import { Machine, MachineType, Preparation, PreparationStatut } from '@/types';
 import { format, parseISO } from 'date-fns';
@@ -19,6 +20,8 @@ import {
   CpuChipIcon,
   XMarkIcon,
   MagnifyingGlassIcon,
+  BellIcon,
+  BellAlertIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -92,6 +95,17 @@ export default function PreparationsPage() {
   const [isViewMode, setIsViewMode] = useState(false);
   const [defautText, setDefautText] = useState('');
   const [horsServiceText, setHorsServiceText] = useState('');
+
+  // Fil d'actualité
+  const [showActivityFeed, setShowActivityFeed] = useState(false);
+  const prepNotifications = useNotificationStore((s) =>
+    s.notifications.filter((n) => n.type === 'preparation_created' || n.type === 'preparation_updated')
+  );
+  const unreadPrepCount = useNotificationStore((s) =>
+    s.notifications.filter((n) => !n.read && (n.type === 'preparation_created' || n.type === 'preparation_updated')).length
+  );
+  const markAsRead = useNotificationStore((s) => s.markAsRead);
+  const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
 
   useEffect(() => {
     fetchMachines();
@@ -542,20 +556,90 @@ export default function PreparationsPage() {
     );
   }
 
+  // Composant fil d'actualité
+  const ActivityFeed = () => (
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+        <div className="flex items-center gap-2">
+          <BellAlertIcon className="h-5 w-5 text-primary-600" />
+          <h3 className="font-semibold text-sm text-gray-900">Fil d'actualité</h3>
+          {unreadPrepCount > 0 && (
+            <span className="px-2 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full">{unreadPrepCount}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {unreadPrepCount > 0 && (
+            <button onClick={markAllAsRead} className="text-xs text-primary-600 hover:text-primary-800 font-medium">
+              Tout marquer lu
+            </button>
+          )}
+          <button onClick={() => setShowActivityFeed(false)} className="text-gray-400 hover:text-gray-600">
+            <XMarkIcon className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+      <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
+        {prepNotifications.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-gray-400">Aucune notification</p>
+        ) : (
+          prepNotifications.slice(0, 30).map((notif: AppNotification) => (
+            <div
+              key={notif.id}
+              onClick={() => markAsRead(notif.id)}
+              className={clsx(
+                'px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors',
+                !notif.read && 'bg-blue-50/50'
+              )}
+            >
+              <div className="flex items-start gap-2">
+                {!notif.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <p className={clsx('text-sm', !notif.read ? 'font-semibold text-gray-900' : 'text-gray-700')}>
+                    {notif.title}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">{notif.body}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    {format(new Date(notif.createdAt), "dd/MM HH:mm", { locale: fr })}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
   // Vue de sélection du type (pas de type sélectionné)
   if (!selectedType) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Gestion des Préparations</h1>
-          <Button variant="secondary" onClick={() => {
-            setIsArchiveMode(true);
-            fetchArchive();
-          }}>
-            <ArchiveBoxIcon className="h-5 w-5 mr-2" />
-            Archive
-          </Button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowActivityFeed(!showActivityFeed)}
+              className="relative p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              title="Fil d'actualité"
+            >
+              {unreadPrepCount > 0 ? <BellAlertIcon className="h-5 w-5 text-primary-600" /> : <BellIcon className="h-5 w-5" />}
+              {unreadPrepCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white px-1">
+                  {unreadPrepCount}
+                </span>
+              )}
+            </button>
+            <Button variant="secondary" onClick={() => {
+              setIsArchiveMode(true);
+              fetchArchive();
+            }}>
+              <ArchiveBoxIcon className="h-5 w-5 mr-2" />
+              Archive
+            </Button>
+          </div>
         </div>
+
+        {showActivityFeed && <ActivityFeed />}
 
         <div className="text-center mb-8">
           <p className="text-gray-600">Sélectionnez un type de machine pour gérer les préparations</p>

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { Bars3Icon } from '@heroicons/react/24/outline';
+import { socketService } from '@/services/socket.service';
+import { useNotificationStore } from '@/store/notificationStore';
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar_collapsed';
 
@@ -10,10 +12,47 @@ export default function Layout() {
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
   });
+  const addNotification = useNotificationStore((s) => s.addNotification);
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
   }, [collapsed]);
+
+  // Écouter les événements de préparation en temps réel
+  useEffect(() => {
+    const handlePrepCreated = (data: { machine: string; client: string; preparateur: string; dateEvenement: string }) => {
+      const date = data.dateEvenement ? new Date(data.dateEvenement).toLocaleDateString('fr-FR') : '';
+      addNotification({
+        type: 'preparation_created',
+        title: 'Nouvelle préparation',
+        body: `${data.machine} préparée pour ${data.client}${date ? ` le ${date}` : ''} par ${data.preparateur}`,
+      });
+    };
+
+    const handlePrepUpdated = (data: { machine: string; client: string; statut: string }) => {
+      const statutLabels: Record<string, string> = {
+        prete: 'prête',
+        en_cours: 'en cours',
+        a_decharger: 'à décharger',
+        archivee: 'archivée',
+        defaut: 'en défaut',
+        hors_service: 'hors service',
+      };
+      addNotification({
+        type: 'preparation_updated',
+        title: 'Préparation mise à jour',
+        body: `${data.machine} (${data.client}) → ${statutLabels[data.statut] || data.statut}`,
+      });
+    };
+
+    socketService.on('preparation:created', handlePrepCreated);
+    socketService.on('preparation:updated', handlePrepUpdated);
+
+    return () => {
+      socketService.off('preparation:created', handlePrepCreated);
+      socketService.off('preparation:updated', handlePrepUpdated);
+    };
+  }, [addNotification]);
 
   return (
     <div className="min-h-screen bg-gray-50">
