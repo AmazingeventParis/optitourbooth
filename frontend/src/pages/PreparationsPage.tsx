@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, Button, Modal, Input, Badge } from '@/components/ui';
 import { machinesService } from '@/services/machines.service';
 import { preparationsService } from '@/services/preparations.service';
 import { pendingPointsService, CalendarEvent } from '@/services/pendingPoints.service';
+import { socketService } from '@/services/socket.service';
 import { useToast } from '@/hooks/useToast';
 import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore, AppNotification } from '@/store/notificationStore';
@@ -105,21 +106,32 @@ export default function PreparationsPage() {
   const markAsRead = useNotificationStore((s) => s.markAsRead);
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
 
-  useEffect(() => {
-    fetchMachines();
-  }, []);
-
-  const fetchMachines = async () => {
-    setIsLoading(true);
+  const fetchMachines = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const data = await machinesService.list({ actif: true });
       setMachines(data);
     } catch (err) {
-      showError('Erreur', (err as Error).message);
+      if (!silent) showError('Erreur', (err as Error).message);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchMachines();
+  }, [fetchMachines]);
+
+  // Rafraîchir les machines en temps réel sur les événements de préparation
+  useEffect(() => {
+    const refresh = () => fetchMachines(true);
+    socketService.on('preparation:created', refresh);
+    socketService.on('preparation:updated', refresh);
+    return () => {
+      socketService.off('preparation:created', refresh);
+      socketService.off('preparation:updated', refresh);
+    };
+  }, [fetchMachines]);
 
   const fetchArchive = async () => {
     try {
