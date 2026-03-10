@@ -956,16 +956,10 @@ export default function PreparationsPage() {
           {/* Section événements */}
           {!isViewMode ? (
             <>
-              {/* Bouton Ajouter un événement */}
-              <div className="pb-4 border-b border-gray-200">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleAddNewEvent}
-                >
-                  + Ajouter un événement
-                </Button>
-              </div>
+              {/* Bouton Créer en haut */}
+              <Button className="w-full" onClick={handleCreatePreparation} isLoading={isSaving}>
+                Créer
+              </Button>
 
               {/* Sélection du préparateur */}
               <div>
@@ -989,8 +983,21 @@ export default function PreparationsPage() {
                 </div>
               </div>
 
-              {/* Liste des événements */}
-              {evenements.map((evt, index) => (
+              {/* Bouton Ajouter un événement */}
+              <div className="pb-4 border-b border-gray-200">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleAddNewEvent}
+                >
+                  + Ajouter un événement
+                </Button>
+              </div>
+
+              {/* Liste des événements (dernier ajouté en haut) */}
+              {[...evenements].reverse().map((evt, revIndex) => {
+                const index = evenements.length - 1 - revIndex;
+                return (
                 <div key={index} className="space-y-3 p-4 bg-gray-50 rounded-lg relative">
                   {evenements.length > 1 && (
                     <button
@@ -1077,7 +1084,8 @@ export default function PreparationsPage() {
                     disabled={!!evt.pendingPointId}
                   />
                 </div>
-              ))}
+              );
+              })}
             </>
           ) : (
             <>
@@ -1230,16 +1238,14 @@ export default function PreparationsPage() {
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
-            <Button variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>
-              Fermer
-            </Button>
-            {!isViewMode && (
-              <Button className="flex-1" onClick={handleCreatePreparation} isLoading={isSaving}>
+          {/* Bouton Créer en bas aussi pour le mode édition */}
+          {!isViewMode && (
+            <div className="pt-4">
+              <Button className="w-full" onClick={handleCreatePreparation} isLoading={isSaving}>
                 Créer
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </Modal>
     </div>
