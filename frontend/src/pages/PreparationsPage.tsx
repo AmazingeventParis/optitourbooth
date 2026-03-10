@@ -878,9 +878,7 @@ export default function PreparationsPage() {
                     statut === 'hors_service' && 'bg-red-50 text-red-700'
                   )}
                 >
-                  {statut === 'prete' && preparation
-                    ? `préparée par ${preparation.preparateur?.split(' ')[0] || '?'}`
-                    : statutInfo.label}
+                  {statutInfo.label}
                 </span>
               </div>
 
