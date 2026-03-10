@@ -372,10 +372,13 @@ export default function PreparationsPage() {
     setEvenements([...evenements, { dateEvenement: '', client: '' }]);
   };
 
+  const getPreparationsForMachine = (machine: Machine): Preparation[] => {
+    return machine.preparations || [];
+  };
+
   const getPreparationForMachine = (machine: Machine): Preparation | undefined => {
-    return machine.preparations && machine.preparations.length > 0
-      ? machine.preparations[0]
-      : undefined;
+    const preps = getPreparationsForMachine(machine);
+    return preps.length > 0 ? preps[0] : undefined;
   };
 
   const getMachineStatut = (machine: Machine): PreparationStatut => {
@@ -817,7 +820,8 @@ export default function PreparationsPage() {
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2">
         {filteredMachines.map((machine) => {
           const statut = getMachineStatut(machine);
-          const preparation = getPreparationForMachine(machine);
+          const allPreps = getPreparationsForMachine(machine);
+          const preparation = allPreps[0];
           const statutInfo = statutConfig[statut];
 
           return (
@@ -877,51 +881,24 @@ export default function PreparationsPage() {
                 </span>
               </div>
 
-              {/* Infos préparation */}
-              {preparation && (
+              {/* Infos préparations */}
+              {allPreps.length > 0 && (
                 <div className="space-y-1">
-                  <div className="pt-1.5 border-t border-gray-100">
-                    <p className="text-[10px] font-bold text-gray-800 truncate leading-tight" title={preparation.client}>
-                      {preparation.client}
-                    </p>
-                    <p className="text-[9px] text-gray-500 mt-0.5">
-                      {format(parseISO(preparation.dateEvenement), 'd MMM', { locale: fr })}
-                    </p>
-                  </div>
-
-                  {/* Préparateur */}
-                  <div className="pt-1 border-t border-gray-100">
-                    <div className="flex flex-wrap gap-0.5">
-                      {preparateurs.map((p) => {
-                        const isSelected = preparation.preparateur === p.prenom;
-                        return (
-                          <button
-                            key={p.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isSaving) return;
-                              preparationsService.update(preparation.id, { preparateur: p.prenom })
-                                .then(() => { fetchMachines(); })
-                                .catch((err) => showError('Erreur', (err as Error).message));
-                            }}
-                            className={clsx(
-                              'text-[8px] px-1 py-0.5 rounded font-medium transition-all leading-tight',
-                              isSelected
-                                ? 'bg-primary-600 text-white'
-                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                            )}
-                            title={`${p.prenom} ${p.nom}`}
-                          >
-                            {p.prenom}
-                          </button>
-                        );
-                      })}
+                  {allPreps.map((prep, idx) => (
+                    <div key={prep.id} className={clsx('pt-1.5', idx === 0 ? 'border-t border-gray-100' : 'border-t border-dashed border-gray-200')}>
+                      <p className="text-[10px] font-bold text-gray-800 truncate leading-tight" title={prep.client}>
+                        {prep.client}
+                      </p>
+                      <p className="text-[9px] text-gray-500 mt-0.5">
+                        {format(parseISO(prep.dateEvenement), 'd MMM', { locale: fr })}
+                        {prep.preparateur && <span className="ml-1 text-gray-400">• {prep.preparateur.split(' ')[0]}</span>}
+                      </p>
                     </div>
-                  </div>
+                  ))}
 
-                  {/* Actions rapides */}
+                  {/* Actions rapides sur la première prep */}
                   <div className="flex gap-1">
-                    {statut === 'en_preparation' && (
+                    {statut === 'en_preparation' && preparation && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -934,7 +911,7 @@ export default function PreparationsPage() {
                         <CheckCircleIcon className="h-3 w-3 mx-auto" />
                       </button>
                     )}
-                    {statut === 'a_decharger' && (
+                    {statut === 'a_decharger' && preparation && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -947,9 +924,6 @@ export default function PreparationsPage() {
                         <PhotoIcon className="h-3 w-3 mx-auto" />
                       </button>
                     )}
-                    {/* Boutons manuels supprimés - transitions automatiques */}
-                    {/* - "prete" → "en_cours" : automatique le jour de l'événement */}
-                    {/* - "en_cours" → "a_decharger" : automatique le lendemain du dernier événement */}
                   </div>
                 </div>
               )}
@@ -1093,48 +1067,67 @@ export default function PreparationsPage() {
             </>
           ) : (
             <>
-              {/* Affichage en mode visualisation */}
+              {/* Affichage en mode visualisation - tous les événements */}
               {(() => {
-                const prep = getPreparationForMachine(selectedMachine!);
-                if (!prep) return null;
+                const allPreps = getPreparationsForMachine(selectedMachine!);
+                if (allPreps.length === 0) return <p className="text-sm text-gray-500">Aucun événement</p>;
                 return (
-                  <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Date de l'événement</label>
-                      <p className="text-sm text-gray-900">{new Date(prep.dateEvenement).toLocaleDateString('fr-FR')}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
-                      <p className="text-sm text-gray-900">{prep.client}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Préparateur</label>
-                      <div className="flex flex-wrap gap-2">
-                        {preparateurs.map((p) => (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => {
-                              preparationsService.update(prep.id, { preparateur: p.prenom })
-                                .then(() => {
-                                  setSelectedPreparateur(p.prenom);
-                                  fetchMachines();
-                                  success('Préparateur mis à jour');
-                                })
-                                .catch((err) => showError('Erreur', (err as Error).message));
-                            }}
-                            className={clsx(
-                              'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
-                              prep.preparateur === p.prenom
-                                ? 'bg-primary-600 text-white shadow-sm'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            )}
+                  <div className="space-y-3">
+                    {allPreps.map((prep, idx) => (
+                      <div key={prep.id} className="p-4 bg-gray-50 rounded-lg space-y-3">
+                        {allPreps.length > 1 && (
+                          <p className="text-xs font-bold text-primary-600">Événement {idx + 1}</p>
+                        )}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
+                          <p className="text-sm text-gray-900">{prep.client}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Date de l'événement</label>
+                          <p className="text-sm text-gray-900">{new Date(prep.dateEvenement).toLocaleDateString('fr-FR')}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Préparateur</label>
+                          <div className="flex flex-wrap gap-2">
+                            {preparateurs.map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => {
+                                  preparationsService.update(prep.id, { preparateur: p.prenom })
+                                    .then(() => {
+                                      fetchMachines();
+                                      success('Préparateur mis à jour');
+                                    })
+                                    .catch((err) => showError('Erreur', (err as Error).message));
+                                }}
+                                className={clsx(
+                                  'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                                  prep.preparateur === p.prenom
+                                    ? 'bg-primary-600 text-white shadow-sm'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                )}
+                              >
+                                {p.prenom}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {/* Annuler cet événement */}
+                        {prep.statut === 'prete' && (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => handleCancelPreparation(prep.id)}
+                            disabled={isSaving}
                           >
-                            {p.prenom}
-                          </button>
-                        ))}
+                            <XMarkIcon className="h-4 w-4 mr-1" />
+                            Annuler cet événement
+                          </Button>
+                        )}
                       </div>
-                    </div>
+                    ))}
                   </div>
                 );
               })()}
@@ -1143,28 +1136,6 @@ export default function PreparationsPage() {
 
           {/* Boutons d'action - Toujours visibles */}
           <div className="border-t border-gray-200 pt-4 space-y-3">
-            {/* Annuler la préparation (statut prête uniquement) */}
-            {isViewMode && selectedMachine && getMachineStatut(selectedMachine) === 'prete' && (
-              <div>
-                {(() => {
-                  const prep = getPreparationForMachine(selectedMachine!);
-                  if (!prep) return null;
-                  return (
-                    <Button
-                      variant="danger"
-                      className="w-full"
-                      onClick={() => handleCancelPreparation(prep.id)}
-                      disabled={isSaving}
-                      isLoading={isSaving}
-                    >
-                      <XMarkIcon className="h-5 w-5 mr-2" />
-                      Annuler la préparation
-                    </Button>
-                  );
-                })()}
-              </div>
-            )}
-
             {/* Photos déchargées */}
             {isViewMode && (
               <div>

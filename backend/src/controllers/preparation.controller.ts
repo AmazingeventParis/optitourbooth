@@ -209,23 +209,6 @@ export const createPreparation = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Machine not found' });
     }
 
-    // Vérifier qu'il n'y a pas déjà une préparation active pour cette machine
-    const existingPreparation = await prisma.preparation.findFirst({
-      where: {
-        machineId,
-        statut: {
-          in: ['en_preparation', 'prete', 'en_cours', 'a_decharger'],
-        },
-      },
-    });
-
-    if (existingPreparation) {
-      return res.status(409).json({
-        error: 'Cette machine a déjà une préparation active',
-        preparation: existingPreparation,
-      });
-    }
-
     // Créer la préparation directement en statut "prete"
     const preparation = await prisma.preparation.create({
       data: {
