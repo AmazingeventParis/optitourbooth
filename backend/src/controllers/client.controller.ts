@@ -330,7 +330,7 @@ export const clientController = {
     // Recherche insensible à la casse via ILIKE
     const searchTerm = `%${q}%`;
     const clients = await prisma.$queryRawUnsafe<unknown[]>(
-      `SELECT "id", "nom", "societe", "adresse", "codePostal", "ville", "latitude", "longitude"
+      `SELECT "id", "nom", "societe", "adresse", "code_postal" AS "codePostal", "ville", "latitude", "longitude"
        FROM "clients"
        WHERE "actif" = true
          AND (
