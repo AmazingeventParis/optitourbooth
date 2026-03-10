@@ -1645,16 +1645,43 @@ export default function DailyPlanningPage() {
 
     // Charger aussi les points backend (Google Calendar, etc.)
     pendingPointsService.listByDate(selectedDate).then(async (backendPoints) => {
-      // Résoudre les clients par nom (cache pour éviter les appels dupliqués)
-      const clientCache: Record<string, { id: string; nom: string; adresse?: string } | null> = {};
+      // Convertir les points backend sans résolution client (rapide, pas d'erreur possible)
+      const converted: ImportParsedPoint[] = backendPoints.map((bp) => {
+        const matchedProduit = bp.produitNom
+          ? produits.find(p => p.nom.toLowerCase() === bp.produitNom!.toLowerCase())
+          : undefined;
 
+        return {
+          clientName: bp.clientName,
+          adresse: bp.adresse,
+          type: bp.type || 'livraison',
+          produitName: matchedProduit?.nom || bp.produitNom || undefined,
+          produitId: matchedProduit?.id,
+          produitsIds: matchedProduit ? [{ id: matchedProduit.id, nom: matchedProduit.nom }] : undefined,
+          creneauDebut: bp.creneauDebut,
+          creneauFin: bp.creneauFin,
+          notes: bp.notes,
+          contactNom: bp.contactNom,
+          contactTelephone: bp.contactTelephone,
+          clientFound: false,
+          produitFound: !!matchedProduit,
+          errors: !matchedProduit && bp.produitNom ? [`Produit "${bp.produitNom}" non trouvé`] : [],
+          _backendId: bp.id,
+        };
+      });
+
+      const allPoints = [...localPoints, ...converted];
+      setPendingPoints(allPoints);
+      setTimeout(() => { isDateChanging.current = false; }, 0);
+
+      // Résoudre les clients en arrière-plan (ne bloque pas l'affichage)
+      const clientCache: Record<string, { id: string; nom: string } | null> = {};
       const resolveClient = async (name: string, adresse?: string): Promise<{ id: string; nom: string } | null> => {
         if (clientCache[name] !== undefined) return clientCache[name];
         try {
           const results = await clientsService.search(name);
           const exact = results.find(c => c.nom.toLowerCase() === name.toLowerCase());
           if (exact) {
-            // Si le client n'a pas de coordonnées, mettre à jour l'adresse et géocoder
             if ((!exact.latitude || !exact.longitude) && adresse) {
               try {
                 await clientsService.update(exact.id, { adresse });
@@ -1665,11 +1692,7 @@ export default function DailyPlanningPage() {
             return clientCache[name];
           }
           // Client non trouvé → auto-créer puis géocoder
-          const created = await clientsService.create({
-            nom: name,
-            adresse: adresse || '',
-          });
-          // Géocoder pour avoir les coordonnées sur la carte
+          const created = await clientsService.create({ nom: name, adresse: adresse || '' });
           if (adresse) {
             try { await clientsService.geocode(created.id); } catch { /* ignore */ }
           }
@@ -1681,41 +1704,23 @@ export default function DailyPlanningPage() {
         }
       };
 
-      const converted: ImportParsedPoint[] = await Promise.all(backendPoints.map(async (bp) => {
-        // Matcher le produit par nom
-        const matchedProduit = bp.produitNom
-          ? produits.find(p => p.nom.toLowerCase() === bp.produitNom!.toLowerCase())
-          : undefined;
-
-        // Résoudre le client
+      // Résoudre chaque client individuellement (pas de Promise.all pour éviter crash global)
+      const resolvedPoints = [...allPoints];
+      let changed = false;
+      for (let idx = localPoints.length; idx < resolvedPoints.length; idx++) {
+        const bp = resolvedPoints[idx];
+        if (!bp || bp.clientId) continue;
         const client = await resolveClient(bp.clientName, bp.adresse || undefined);
-
-        const errors: string[] = [];
-        if (!matchedProduit && bp.produitNom) errors.push(`Produit "${bp.produitNom}" non trouvé`);
-        if (!client) errors.push(`Client "${bp.clientName}" non trouvé`);
-
-        return {
-          clientName: bp.clientName,
-          clientId: client?.id,
-          adresse: bp.adresse,
-          type: bp.type || 'livraison',
-          produitName: matchedProduit?.nom || bp.produitNom || undefined,
-          produitId: matchedProduit?.id,
-          produitsIds: matchedProduit ? [{ id: matchedProduit.id, nom: matchedProduit.nom }] : undefined,
-          creneauDebut: bp.creneauDebut,
-          creneauFin: bp.creneauFin,
-          notes: bp.notes,
-          contactNom: bp.contactNom,
-          contactTelephone: bp.contactTelephone,
-          clientFound: !!client,
-          produitFound: !!matchedProduit,
-          errors,
-          _backendId: bp.id,
-        };
-      }));
-      setPendingPoints([...localPoints, ...converted]);
-      setTimeout(() => { isDateChanging.current = false; }, 0);
-    }).catch(() => {
+        if (client) {
+          resolvedPoints[idx] = { ...bp, clientId: client.id, clientFound: true };
+          changed = true;
+        }
+      }
+      if (changed) {
+        setPendingPoints(resolvedPoints);
+      }
+    }).catch((err) => {
+      console.error('Erreur chargement pending points:', err);
       setPendingPoints(localPoints);
       setTimeout(() => { isDateChanging.current = false; }, 0);
     });
