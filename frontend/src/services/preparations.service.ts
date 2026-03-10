@@ -17,6 +17,7 @@ interface CreatePreparationData {
   client: string;
   preparateur: string;
   notes?: string;
+  pendingPointId?: string;
 }
 
 interface UpdatePreparationData {

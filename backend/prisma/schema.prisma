@@ -538,6 +538,9 @@ model Preparation {
   // Notes
   notes               String?           @db.Text
 
+  // Lien avec l'événement Google Agenda
+  pendingPointId      String?           @map("pending_point_id")
+
   // Dates
   datePreparation     DateTime          @default(now()) @map("date_preparation")
   dateArchivage       DateTime?         @map("date_archivage")

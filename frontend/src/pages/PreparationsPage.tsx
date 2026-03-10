@@ -197,6 +197,7 @@ export default function PreparationsPage() {
           client: evt.client,
           preparateur,
           notes: undefined,
+          pendingPointId: evt.pendingPointId,
         });
         // Marquer l'événement calendrier comme utilisé
         if (evt.pendingPointId) {

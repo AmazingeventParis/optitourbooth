@@ -191,7 +191,7 @@ export const getPreparation = async (req: Request, res: Response) => {
  */
 export const createPreparation = async (req: Request, res: Response) => {
   try {
-    const { machineId, dateEvenement, client, preparateur, notes } = req.body;
+    const { machineId, dateEvenement, client, preparateur, notes, pendingPointId } = req.body;
 
     // Validation
     if (!machineId || !dateEvenement || !client || !preparateur) {
@@ -217,6 +217,7 @@ export const createPreparation = async (req: Request, res: Response) => {
         client,
         preparateur,
         notes,
+        pendingPointId: pendingPointId || null,
         statut: 'prete',
       },
       include: {
@@ -301,9 +302,43 @@ export const deletePreparation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
+    // Récupérer la préparation pour savoir si elle a un pendingPointId
+    const preparation = await prisma.preparation.findUnique({
+      where: { id },
+      select: { pendingPointId: true },
+    });
+
+    if (!preparation) {
+      return res.status(404).json({ error: 'Preparation not found' });
+    }
+
+    // Supprimer la préparation
     await prisma.preparation.delete({
       where: { id },
     });
+
+    // Remettre le pending point comme disponible
+    if (preparation.pendingPointId) {
+      try {
+        const point = await prisma.pendingPoint.update({
+          where: { id: preparation.pendingPointId },
+          data: { usedInPreparation: false },
+        });
+        // Remettre aussi le point associé (livraison/ramassage)
+        if (point.externalId) {
+          const eventIdBase = point.externalId.replace(/_livraison$/, '').replace(/_ramassage$/, '');
+          await prisma.pendingPoint.updateMany({
+            where: {
+              externalId: { startsWith: eventIdBase },
+              usedInPreparation: true,
+            },
+            data: { usedInPreparation: false },
+          });
+        }
+      } catch (e) {
+        console.error('Error restoring pending point:', e);
+      }
+    }
 
     return res.status(204).send();
   } catch (error) {
