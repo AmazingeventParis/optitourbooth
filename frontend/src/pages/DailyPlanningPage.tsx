@@ -4233,12 +4233,12 @@ export default function DailyPlanningPage() {
           <div className="grid grid-cols-2 gap-4">
             <TimeSelect
               label="Créneau début"
-              value={editPendingFormData.creneauDebut}
+              value={editPendingFormData.creneauDebut || ''}
               onChange={(value) => setEditPendingFormData({ ...editPendingFormData, creneauDebut: value })}
             />
             <TimeSelect
               label="Créneau fin"
-              value={editPendingFormData.creneauFin}
+              value={editPendingFormData.creneauFin || ''}
               onChange={(value) => setEditPendingFormData({ ...editPendingFormData, creneauFin: value })}
             />
           </div>
