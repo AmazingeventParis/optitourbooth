@@ -42,8 +42,15 @@ const PHONE_REGEX = /(?:0[1-9])[\s.\-]?(?:\d{2}[\s.\-]?){4}/g;
 // Regex pour créneaux horaires: "10h-14h", "10H00-12H00", "10h à 14h", "entre 14h et 18h"
 const TIME_SLOT_REGEX = /(\d{1,2})\s*[hH]\s*(\d{0,2})\s*(?:-|à|a|et|ET|and)\s*(\d{1,2})\s*[hH]\s*(\d{0,2})/i;
 
-// Regex pour adresse française (numéro + rue/avenue/boulevard...)
-const ADDRESS_REGEX = /\d+\s*[,.]?\s*(?:rue|avenue|av\.|bd|boulevard|place|allée|chemin|impasse|passage|quai|cours|route)\s+[^\n,]+(?:,\s*\d{5}\s*[^\n,]+)?/i;
+// Regex pour adresse française (numéro + type de voie)
+const STREET_TYPES = 'rue|avenue|av\\.?|bd\\.?|boulevard|place|pl\\.?|allée|all\\.?|chemin|ch\\.?|impasse|imp\\.?|passage|pass\\.?|quai|cours|route|rte\\.?|voie|square|sq\\.?|résidence|rés\\.?|cité|lot\\.?|lotissement|parvis|esplanade|promenade|rond[- ]point|carrefour|hameau|lieu[- ]dit|zone|za|zi';
+const ADDRESS_REGEX = new RegExp(`\\d+\\s*[,.]?\\s*(?:${STREET_TYPES})\\s+[^\\n]+`, 'i');
+
+// Regex pour code postal français (5 chiffres + ville)
+const POSTAL_CODE_REGEX = /\d{5}\s+[A-ZÀ-Ü][a-zA-ZÀ-ü\s-]+/;
+
+// Regex pour détecter une ligne de date française (lundi 18 mars 2026, 18/03/2026, etc.)
+const DATE_LINE_REGEX = /(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+\d{1,2}\s+(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+\d{4}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}/i;
 
 function cleanHtml(text: string): string {
   return text
@@ -59,91 +66,120 @@ function cleanHtml(text: string): string {
     .trim();
 }
 
+function isAddressLine(line: string): boolean {
+  // Détection par type de voie (numéro + rue/avenue/imp./etc.)
+  if (ADDRESS_REGEX.test(line)) return true;
+  // Détection par code postal français (75019 Paris, 92100 Boulogne, etc.)
+  if (POSTAL_CODE_REGEX.test(line)) return true;
+  // Détection d'un code postal seul dans la ligne
+  if (/\b\d{5}\b/.test(line) && /[A-ZÀ-Ü]/.test(line)) {
+    // Vérifier que ce n'est pas un numéro de téléphone
+    if (!PHONE_REGEX.test(line)) return true;
+  }
+  return false;
+}
+
+function isDateLine(line: string): boolean {
+  return DATE_LINE_REGEX.test(line);
+}
+
 function parseDescription(rawDescription: string): ParsedDescription {
   const text = cleanHtml(rawDescription);
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
   let adresse: string | null = null;
+  const addressParts: string[] = [];
   let contactNom: string | null = null;
   let contactTelephone: string | null = null;
   let creneauLivraison: string | null = null;
   let creneauRecuperation: string | null = null;
   const notesLines: string[] = [];
-  const timeSlots: string[] = [];
+
+  // Structure pour associer créneaux aux dates
+  const dateTimeSlots: Array<{ date: string | null; slot: string }> = [];
+  let lastDateLine: string | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     const lineUpper = line.toUpperCase();
 
-    // Extraction adresse avec label
+    // === LABELS EXPLICITES (prioritaires) ===
+
+    // Adresse avec label
     if (lineUpper.startsWith('ADRESSE') && line.includes(':')) {
       adresse = line.substring(line.indexOf(':') + 1).trim();
       continue;
     }
 
-    // Extraction créneau livraison avec label
-    if (lineUpper.startsWith('LIVRAISON') && line.includes(':')) {
+    // Créneau livraison avec label
+    if ((lineUpper.startsWith('LIVRAISON') || lineUpper.startsWith('LIV')) && line.includes(':')) {
       const match = line.match(TIME_SLOT_REGEX);
-      if (match) {
-        creneauLivraison = formatTimeSlot(match);
-      }
+      if (match) creneauLivraison = formatTimeSlot(match);
       continue;
     }
 
-    // Extraction créneau récupération avec label
-    if ((lineUpper.startsWith('RECUP') || lineUpper.startsWith('RÉCUP')) && line.includes(':')) {
+    // Créneau récupération avec label
+    if ((lineUpper.startsWith('RECUP') || lineUpper.startsWith('RÉCUP') || lineUpper.startsWith('RAMASSAGE')) && line.includes(':')) {
       const match = line.match(TIME_SLOT_REGEX);
-      if (match) {
-        creneauRecuperation = formatTimeSlot(match);
-      }
+      if (match) creneauRecuperation = formatTimeSlot(match);
       continue;
     }
 
-    // Extraction contact avec label
+    // Contact avec label
     if (lineUpper.startsWith('CONTACT') && line.includes(':')) {
       const contactPart = line.substring(line.indexOf(':') + 1).trim();
-      const phones = contactPart.match(PHONE_REGEX);
-      if (phones) {
-        contactTelephone = phones[0].replace(/[\s.\-]/g, '');
-      }
-      // Nom avant le téléphone
-      const nameBeforePhone = contactPart.replace(PHONE_REGEX, '').replace(/[/,]/g, '').trim();
-      if (nameBeforePhone && nameBeforePhone.length > 2) {
-        contactNom = nameBeforePhone;
-      }
+      extractContact(contactPart);
       continue;
     }
 
-    // Détection d'adresse sans label (numéro + rue)
-    if (!adresse) {
-      const addrMatch = line.match(ADDRESS_REGEX);
-      if (addrMatch) {
-        adresse = line;
-        continue;
-      }
+    // === DÉTECTION AUTOMATIQUE ===
+
+    // Ligne de date (Mercredi 18 mars 2026, 18/03/2026, etc.)
+    if (isDateLine(line)) {
+      lastDateLine = line;
+      continue;
     }
 
-    // Détection de créneaux horaires dans les lignes
+    // Créneau horaire
     const timeMatch = line.match(TIME_SLOT_REGEX);
     if (timeMatch) {
-      timeSlots.push(formatTimeSlot(timeMatch));
+      dateTimeSlots.push({ date: lastDateLine, slot: formatTimeSlot(timeMatch) });
+      lastDateLine = null;
       continue;
     }
 
-    // Détection de numéro de téléphone (avec potentiellement un nom avant)
+    // Numéro de téléphone (avec potentiellement un nom avant)
     const phoneMatches = line.match(PHONE_REGEX);
     if (phoneMatches && phoneMatches[0] && !contactTelephone) {
-      contactTelephone = phoneMatches[0].replace(/[\s.\-]/g, '');
-      // Le texte avant le téléphone est probablement le nom du contact
-      const phoneIdx = line.indexOf(phoneMatches[0]);
-      const beforePhone = (phoneIdx > 0 ? line.substring(0, phoneIdx) : '').replace(/[,/]/g, '').trim();
-      if (beforePhone && beforePhone.length > 2 && !contactNom) {
-        // Filtrer les lignes qui ne sont pas des noms (mots-clés)
-        const lowerBefore = beforePhone.toLowerCase();
-        if (!lowerBefore.includes('code') && !lowerBefore.includes('parking') && !lowerBefore.includes('rdc')) {
-          contactNom = beforePhone;
+      extractContact(line);
+      continue;
+    }
+
+    // Adresse (par type de voie ou code postal)
+    if (!adresse && isAddressLine(line)) {
+      // Si la ligne précédente ressemble à un nom de lieu (pas un créneau, pas une date, pas un téléphone)
+      // l'inclure comme complément d'adresse (ex: "restaurant CHEZ ERNEST" avant "4 Imp. de Joinville")
+      if (notesLines.length > 0) {
+        const prevNote = notesLines[notesLines.length - 1];
+        if (prevNote && !isDateLine(prevNote) && !TIME_SLOT_REGEX.test(prevNote) && !PHONE_REGEX.test(prevNote) && prevNote.length < 60) {
+          addressParts.push(notesLines.pop()!);
         }
       }
+      addressParts.push(line);
+      // Regarder si la ligne suivante complète l'adresse (code postal sur ligne séparée)
+      if (i + 1 < lines.length) {
+        const nextLine = lines[i + 1]!.trim();
+        if (/^\d{5}\s/.test(nextLine) && !addressParts.some(p => /\d{5}/.test(p))) {
+          addressParts.push(nextLine);
+          i++;
+        }
+      }
+      continue;
+    }
+
+    // Ligne avec code postal qui pourrait compléter l'adresse
+    if (addressParts.length > 0 && !adresse && /^\d{5}\s/.test(line)) {
+      addressParts.push(line);
       continue;
     }
 
@@ -151,12 +187,19 @@ function parseDescription(rawDescription: string): ParsedDescription {
     notesLines.push(line);
   }
 
-  // Si on a des créneaux non labelisés, le 1er = livraison, le 2nd = récupération
-  if (!creneauLivraison && timeSlots.length > 0) {
-    creneauLivraison = timeSlots[0] ?? null;
+  // Assembler l'adresse
+  if (!adresse && addressParts.length > 0) {
+    adresse = addressParts.join(', ');
   }
-  if (!creneauRecuperation && timeSlots.length > 1) {
-    creneauRecuperation = timeSlots[1] ?? null;
+
+  // Associer les créneaux aux types livraison/récupération
+  if (dateTimeSlots.length > 0) {
+    if (!creneauLivraison) {
+      creneauLivraison = dateTimeSlots[0]?.slot ?? null;
+    }
+    if (!creneauRecuperation && dateTimeSlots.length > 1) {
+      creneauRecuperation = dateTimeSlots[1]?.slot ?? null;
+    }
   }
 
   return {
@@ -167,6 +210,22 @@ function parseDescription(rawDescription: string): ParsedDescription {
     creneauRecuperation,
     notes: notesLines.filter(l => l.length > 1).join(' | '),
   };
+
+  function extractContact(text: string) {
+    const phones = text.match(PHONE_REGEX);
+    if (phones && phones[0]) {
+      contactTelephone = phones[0].replace(/[\s.\-]/g, '');
+    }
+    // Nom = texte avant le téléphone (sans ponctuation parasite)
+    const nameText = text.replace(PHONE_REGEX, '').replace(/[/,;:]/g, '').trim();
+    if (nameText && nameText.length > 2 && !contactNom) {
+      const lower = nameText.toLowerCase();
+      // Filtrer les mots-clés qui ne sont pas des noms
+      if (!lower.includes('code') && !lower.includes('parking') && !lower.includes('rdc') && !lower.includes('digicode')) {
+        contactNom = nameText;
+      }
+    }
+  }
 }
 
 function formatTimeSlot(match: RegExpMatchArray): string {
