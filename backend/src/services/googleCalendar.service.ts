@@ -532,7 +532,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactTelephone,
           notes,
           calendarId,
-          dispatched: livAlreadyInTournee ? true : undefined,
+          // Ne pas écraser dispatched sur update : l'utilisateur peut l'avoir remis à false
         },
         create: {
           date: ensureDateUTC(startDate),
@@ -582,7 +582,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactTelephone,
           notes,
           calendarId,
-          dispatched: recAlreadyInTournee ? true : undefined,
+          // Ne pas écraser dispatched sur update : l'utilisateur peut l'avoir remis à false
         },
         create: {
           date: ensureDateUTC(endDate),
