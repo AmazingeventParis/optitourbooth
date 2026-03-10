@@ -1654,6 +1654,13 @@ export default function DailyPlanningPage() {
           const results = await clientsService.search(name);
           const exact = results.find(c => c.nom.toLowerCase() === name.toLowerCase());
           if (exact) {
+            // Si le client n'a pas de coordonnées, mettre à jour l'adresse et géocoder
+            if ((!exact.latitude || !exact.longitude) && adresse) {
+              try {
+                await clientsService.update(exact.id, { adresse });
+                await clientsService.geocode(exact.id);
+              } catch { /* ignore */ }
+            }
             clientCache[name] = { id: exact.id, nom: exact.nom };
             return clientCache[name];
           }
