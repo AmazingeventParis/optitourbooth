@@ -442,14 +442,15 @@ export default function PreparationsPage() {
                   <div className="flex-1 min-w-0">
                     {m ? (
                       <>
-                        <p className={clsx('text-sm truncate', !notif.read ? 'font-semibold text-gray-900' : 'text-gray-700')}>
+                        <p className={clsx('text-[13px]', !notif.read ? 'font-bold text-gray-900' : 'font-semibold text-gray-700')}>
                           {m.client}
                         </p>
-                        <div className="mt-1 space-y-0.5 text-xs text-gray-500">
-                          {m.dateEvenement && <p>Événement : {m.dateEvenement}</p>}
-                          {m.machine && <p>Borne : {m.machine}</p>}
-                          {m.preparateur && <p>Préparateur : {m.preparateur}</p>}
-                          {m.statut && <p>Statut : {m.statut}</p>}
+                        <div className="mt-0.5 text-[11px] text-gray-500 leading-relaxed">
+                          {m.dateEvenement && <div>{m.dateEvenement}</div>}
+                          {m.machine && <div>{m.machine}</div>}
+                          {m.preparateur && <div>{m.preparateur}</div>}
+                          {m.statut && <div>{m.statut}</div>}
+                          <div className="text-gray-400">{format(new Date(notif.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}</div>
                         </div>
                       </>
                     ) : (
@@ -457,12 +458,12 @@ export default function PreparationsPage() {
                         <p className={clsx('text-sm', !notif.read ? 'font-semibold text-gray-900' : 'text-gray-700')}>
                           {notif.title}
                         </p>
-                        <p className="text-xs text-gray-500 mt-0.5 truncate">{notif.body}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{notif.body}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          {format(new Date(notif.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}
+                        </p>
                       </>
                     )}
-                    <p className="text-[10px] text-gray-400 mt-1">
-                      {format(new Date(notif.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}
-                    </p>
                   </div>
                 </div>
               </div>
