@@ -6,6 +6,7 @@ export interface AppNotification {
   type: 'tournee_assigned' | 'point_modified' | 'message' | 'info' | 'preparation_created' | 'preparation_updated';
   title: string;
   body: string;
+  metadata?: Record<string, string>;
   read: boolean;
   createdAt: number;
 }

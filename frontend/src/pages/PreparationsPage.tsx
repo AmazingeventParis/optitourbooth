@@ -423,29 +423,48 @@ export default function PreparationsPage() {
         {prepNotifications.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-gray-400">Aucune notification</p>
         ) : (
-          prepNotifications.slice(0, 50).map((notif: AppNotification) => (
-            <div
-              key={notif.id}
-              onClick={() => markAsRead(notif.id)}
-              className={clsx(
-                'px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors',
-                !notif.read && 'bg-blue-50/50'
-              )}
-            >
-              <div className="flex items-start gap-2">
-                {!notif.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
-                <div className="flex-1 min-w-0">
-                  <p className={clsx('text-sm', !notif.read ? 'font-semibold text-gray-900' : 'text-gray-700')}>
-                    {notif.title}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">{notif.body}</p>
-                  <p className="text-[11px] text-gray-400 mt-1">
-                    {format(new Date(notif.createdAt), "dd MMMM yyyy 'à' HH:mm", { locale: fr })}
-                  </p>
+          prepNotifications.slice(0, 50).map((notif: AppNotification) => {
+            const m = notif.metadata;
+            return (
+              <div
+                key={notif.id}
+                onClick={() => markAsRead(notif.id)}
+                className={clsx(
+                  'px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors',
+                  !notif.read && 'bg-blue-50/50'
+                )}
+              >
+                <div className="flex items-start gap-2">
+                  {!notif.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    {m ? (
+                      <>
+                        <p className={clsx('text-sm truncate', !notif.read ? 'font-semibold text-gray-900' : 'text-gray-700')}>
+                          {m.client}
+                        </p>
+                        <div className="mt-1 space-y-0.5 text-xs text-gray-500">
+                          {m.dateEvenement && <p>Événement : {m.dateEvenement}</p>}
+                          {m.machine && <p>Borne : {m.machine}</p>}
+                          {m.preparateur && <p>Préparateur : {m.preparateur}</p>}
+                          {m.statut && <p>Statut : {m.statut}</p>}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className={clsx('text-sm', !notif.read ? 'font-semibold text-gray-900' : 'text-gray-700')}>
+                          {notif.title}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">{notif.body}</p>
+                      </>
+                    )}
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      {format(new Date(notif.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

@@ -31,15 +31,21 @@ export default function Layout() {
   // Écouter les événements de préparation en temps réel
   useEffect(() => {
     const handlePrepCreated = (data: { machine: string; client: string; preparateur: string; dateEvenement: string }) => {
-      const date = data.dateEvenement ? new Date(data.dateEvenement).toLocaleDateString('fr-FR') : '';
+      const dateEvt = data.dateEvenement ? new Date(data.dateEvenement).toLocaleDateString('fr-FR') : '';
       addNotification({
         type: 'preparation_created',
         title: 'Nouvelle préparation',
-        body: `${data.machine} préparée pour ${data.client}${date ? ` le ${date}` : ''} par ${data.preparateur}`,
+        body: `${data.machine} préparée pour ${data.client}`,
+        metadata: {
+          client: data.client,
+          dateEvenement: dateEvt,
+          machine: data.machine,
+          preparateur: data.preparateur,
+        },
       });
     };
 
-    const handlePrepUpdated = (data: { machine: string; client: string; statut: string }) => {
+    const handlePrepUpdated = (data: { machine: string; client: string; statut: string; preparateur?: string }) => {
       const statutLabels: Record<string, string> = {
         prete: 'prête',
         en_cours: 'en cours',
@@ -50,8 +56,14 @@ export default function Layout() {
       };
       addNotification({
         type: 'preparation_updated',
-        title: 'Préparation mise à jour',
+        title: 'Mise à jour',
         body: `${data.machine} (${data.client}) → ${statutLabels[data.statut] || data.statut}`,
+        metadata: {
+          client: data.client,
+          machine: data.machine,
+          statut: statutLabels[data.statut] || data.statut,
+          preparateur: data.preparateur || '',
+        },
       });
     };
 
