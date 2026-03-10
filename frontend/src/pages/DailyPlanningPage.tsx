@@ -62,6 +62,7 @@ import {
   TrashIcon,
   ShareIcon,
   DocumentDuplicateIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 
 // Couleurs hex pour la légende de la carte
@@ -272,7 +273,7 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
         !productColor && !isSelected && 'bg-white',
         isDragging && 'opacity-50 ring-2 ring-orange-500 ring-offset-2',
         isOverlay && 'shadow-2xl ring-2 ring-orange-500 border-orange-500',
-        !point.clientFound && point.adresse && 'border-blue-300 bg-blue-50',
+        !point.clientId && !isSelected && '!border-red-300 !bg-red-50',
         isSelected && 'ring-2 ring-amber-400 border-amber-400 bg-amber-50'
       )}
     >
@@ -293,8 +294,8 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
         )}>
           <typeConfig.icon className="h-3.5 w-3.5" />
         </div>
-        {!point.clientFound && point.adresse && (
-          <PlusIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
+        {!point.clientId && (
+          <ExclamationTriangleIcon className="h-4 w-4 text-red-500 flex-shrink-0" title="Client non résolu — glissez pour créer automatiquement" />
         )}
       </div>
       {/* Ligne 2: produit + créneau */}
@@ -2076,10 +2077,32 @@ export default function DailyPlanningPage() {
       let pendingPoint = activeData.pendingPoint as ImportParsedPoint;
       const pendingIndex = activeData.index as number;
 
-      // Vérifier que le client existe (devrait toujours être le cas maintenant)
+      // Si pas de clientId, essayer de résoudre/créer le client à la volée
       if (!pendingPoint.clientId) {
-        toastError('Erreur', 'Ce point n\'a pas de client associé');
-        return;
+        try {
+          const results = await clientsService.search(pendingPoint.clientName);
+          const exact = results.find(c => c.nom.toLowerCase() === pendingPoint.clientName.toLowerCase());
+          let client = exact;
+          if (!client) {
+            // Auto-créer le client
+            client = await clientsService.create({
+              nom: pendingPoint.clientName,
+              adresse: pendingPoint.adresse || 'Adresse à définir',
+            });
+            // Géocoder
+            if (pendingPoint.adresse) {
+              try { client = await clientsService.geocode(client.id); } catch { /* ignore */ }
+            }
+          }
+          pendingPoint = { ...pendingPoint, clientId: client.id, clientFound: true };
+          // Mettre à jour le point dans la liste
+          const updatedPendingPoints = [...pendingPointsRef.current];
+          updatedPendingPoints[pendingIndex] = pendingPoint;
+          setPendingPoints(updatedPendingPoints);
+        } catch (err) {
+          toastError('Erreur', `Impossible de créer le client "${pendingPoint.clientName}": ${(err as Error).message}`);
+          return;
+        }
       }
 
       // Déterminer la tournée cible
@@ -3162,7 +3185,7 @@ export default function DailyPlanningPage() {
     })),
   ], [chauffeurs]);
 
-  const validPendingPoints = pendingPoints.filter(p => p.clientFound);
+  const validPendingPoints = pendingPoints.filter(p => p.clientFound && p.clientId);
   const pendingPointIds = pendingPoints.map((_, i) => `pending-${i}`);
 
   return (
