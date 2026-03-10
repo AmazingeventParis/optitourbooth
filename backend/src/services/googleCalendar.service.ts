@@ -31,61 +31,103 @@ interface ParsedDescription {
   adresse: string | null;
   contactNom: string | null;
   contactTelephone: string | null;
-  creneauLivraison: string | null;  // ex: "10h-14h"
+  creneauLivraison: string | null;  // ex: "10:00-17:00"
   creneauRecuperation: string | null;
   notes: string;
 }
 
-// Regex pour numéros de téléphone français
-const PHONE_REGEX = /(?:0[1-9])[\s.\-]?(?:\d{2}[\s.\-]?){4}/g;
+// === REGEX ===
 
-// Regex pour créneaux horaires: "10h-14h", "10H00-12H00", "10h à 14h", "entre 14h et 18h", "10:00-14:00"
-const TIME_SLOT_REGEX = /(\d{1,2})\s*[hH:]\s*(\d{0,2})\s*(?:-|–|à|a|et|ET|and|>)\s*(\d{1,2})\s*[hH:]\s*(\d{0,2})/i;
+// Téléphone français : 06 12 34 56 78, 06.12.34.56.78, 0612345678, +33 6 12 34 56 78
+const PHONE_REGEX = /(?:\+33\s?[1-9]|0[1-9])[\s.\-]?(?:\d{2}[\s.\-]?){4}/g;
 
-// Regex pour adresse française (numéro + type de voie)
-const STREET_TYPES = 'rue|avenue|av\\.?|bd\\.?|boulevard|place|pl\\.?|allée|all\\.?|chemin|ch\\.?|impasse|imp\\.?|passage|pass\\.?|quai|cours|route|rte\\.?|voie|square|sq\\.?|résidence|rés\\.?|cité|lot\\.?|lotissement|parvis|esplanade|promenade|rond[- ]point|carrefour|hameau|lieu[- ]dit|zone|za|zi';
-const ADDRESS_REGEX = new RegExp(`\\d+\\s*[,.]?\\s*(?:${STREET_TYPES})\\s+[^\\n]+`, 'i');
+// Créneau horaire : "10h-17h", "10H00-12H00", "10h à 14h", "entre 14h et 18h",
+// "10:00-14:00", "de 9h30 à 11h", "9h - 12h", "10h>14h"
+const TIME_SLOT_REGEX = /(\d{1,2})\s*[hH:]\s*(\d{0,2})\s*(?:-|–|—|à|a|et|>)\s*(\d{1,2})\s*[hH:]\s*(\d{0,2})/i;
 
-// Regex pour code postal français (5 chiffres + ville)
-const POSTAL_CODE_REGEX = /\d{5}\s+[A-ZÀ-Ü][a-zA-ZÀ-ü\s-]+/;
+// Heure simple : "10h", "14h30", "9H00" (sans plage, pour cas isolés)
+const SINGLE_TIME_REGEX = /\b(\d{1,2})\s*[hH:]\s*(\d{0,2})\b/;
 
-// Regex pour détecter une ligne de date française (lundi 18 mars 2026, 18/03/2026, etc.)
-const DATE_LINE_REGEX = /(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+\d{1,2}\s+(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+\d{4}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}/i;
+// Types de voies françaises (exhaustif)
+const STREET_TYPES = 'rue|avenue|av\\.?|bd\\.?|boulevard|place|pl\\.?|allée|all\\.?|chemin|ch\\.?|impasse|imp\\.?|passage|pass\\.?|quai|cours|route|rte\\.?|voie|square|sq\\.?|résidence|rés\\.?|cité|lot\\.?|lotissement|parvis|esplanade|promenade|rond[- ]?point|carrefour|hameau|lieu[- ]?dit|zone|za|zi|sentier|sente|villa|cour|galerie|mail|terre[- ]?plein|montée|rampe|traverse|ruelle|venelle|drève|chemin de|faubourg|fg\\.?';
+const ADDRESS_REGEX = new RegExp(`\\d+\\s*[,.]?\\s*(?:${STREET_TYPES})\\b`, 'i');
+
+// Code postal français : 75002 PARIS, 92100 Boulogne-Billancourt
+const POSTAL_CODE_REGEX = /\b\d{5}\s+[A-ZÀ-Ü][a-zA-ZÀ-ü\s-]+/;
+
+// Date française longue : "Vendredi 13 mars 2026", "lundi 5 janvier 2025"
+const DATE_FR_LONG = /(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+\d{1,2}\s+(?:janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[ûu]t|septembre|octobre|novembre|d[ée]cembre)\s+\d{4}/i;
+
+// Date numérique : "18/03/2026", "18.03.2026", "18-03-2026", "2026-03-18"
+const DATE_NUMERIC = /\b\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}\b|\b\d{4}[/.\-]\d{1,2}[/.\-]\d{1,2}\b/;
+
+// Mots-clés livraison
+const LIVRAISON_KEYWORDS = /\b(?:livraison|liv\.?|installation|install\.?|mise\s+en\s+place|montage|livrer)\b/i;
+
+// Mots-clés récupération
+const RECUPERATION_KEYWORDS = /\b(?:r[ée]cup[ée]?ration|r[ée]cup\.?|ramassage|d[ée]montage|retrait|enlèvement|r[ée]cup[ée]?rer|reprendre)\b/i;
+
+// Mots-clés de labels à ignorer (pas des noms de contacts)
+const NOT_CONTACT_KEYWORDS = /\b(?:code|parking|rdc|digicode|interphone|badge|portail|barrière|accès|étage|bâtiment|bat|porte|escalier|ascenseur|entrée|sortie|livraison|récup|ramassage|adresse|horaire|créneau|rdv|rendez.vous)\b/i;
+
+// === FONCTIONS UTILITAIRES ===
 
 function cleanHtml(text: string): string {
   return text
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/?(p|div|span|b|i|u|strong|em|a|ul|li|ol|table|tr|td|th|thead|tbody)[^>]*>/gi, '\n')
+    .replace(/<\/?(p|div|span|b|i|u|strong|em|a|ul|li|ol|table|tr|td|th|thead|tbody|h[1-6]|blockquote|pre|hr|img|figure|figcaption)[^>]*>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
     .replace(/&#?\w+;/g, '')
-    .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+// Normaliser les espaces multiples, tabulations
+function normalizeSpaces(text: string): string {
+  return text.replace(/[\t ]+/g, ' ').trim();
+}
+
+function containsDate(line: string): boolean {
+  return DATE_FR_LONG.test(line) || DATE_NUMERIC.test(line);
+}
+
+function containsTimeSlot(line: string): boolean {
+  return TIME_SLOT_REGEX.test(line);
+}
+
+function containsPhone(line: string): boolean {
+  return PHONE_REGEX.test(line);
 }
 
 function isAddressLine(line: string): boolean {
   // Détection par type de voie (numéro + rue/avenue/imp./etc.)
   if (ADDRESS_REGEX.test(line)) return true;
-  // Détection par code postal français (75019 Paris, 92100 Boulogne, etc.)
+  // Code postal + ville (75019 Paris, 92100 Boulogne)
   if (POSTAL_CODE_REGEX.test(line)) return true;
-  // Détection d'un code postal seul dans la ligne
-  if (/\b\d{5}\b/.test(line) && /[A-ZÀ-Ü]/.test(line)) {
-    // Vérifier que ce n'est pas un numéro de téléphone
-    if (!PHONE_REGEX.test(line)) return true;
+  // Code postal seul avec un nom de ville (pas un téléphone)
+  if (/\b\d{5}\b/.test(line) && /[A-ZÀ-Ü]/.test(line) && !containsPhone(line) && !containsDate(line)) {
+    return true;
   }
   return false;
 }
 
-function isDateLine(line: string): boolean {
-  return DATE_LINE_REGEX.test(line);
+function isPostalCodeLine(line: string): boolean {
+  return /^\d{5}\s+[A-ZÀ-Üa-zà-ü]/.test(line) && !containsPhone(line);
+}
+
+function extractTimeSlotFromLine(line: string): string | null {
+  const match = line.match(TIME_SLOT_REGEX);
+  return match ? formatTimeSlot(match) : null;
 }
 
 function parseDescription(rawDescription: string): ParsedDescription {
   const text = cleanHtml(rawDescription);
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const lines = text.split('\n').map(l => normalizeSpaces(l)).filter(l => l.length > 0);
 
   let adresse: string | null = null;
   const addressParts: string[] = [];
@@ -95,139 +137,189 @@ function parseDescription(rawDescription: string): ParsedDescription {
   let creneauRecuperation: string | null = null;
   const notesLines: string[] = [];
 
-  // Structure pour associer créneaux aux dates
-  const dateTimeSlots: Array<{ date: string | null; slot: string }> = [];
-  let lastDateLine: string | null = null;
+  // Créneaux collectés avec contexte (date ou mot-clé associé)
+  const collectedSlots: Array<{ slot: string; context: 'livraison' | 'recuperation' | 'unknown' }> = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     const lineUpper = line.toUpperCase();
 
-    // === LABELS EXPLICITES (prioritaires) ===
+    // === 1. LABELS EXPLICITES (prioritaires) ===
 
-    // Adresse avec label
-    if (lineUpper.startsWith('ADRESSE') && line.includes(':')) {
-      adresse = line.substring(line.indexOf(':') + 1).trim();
+    // "Adresse : ..."
+    if (/^ADRESSE\s*[:=]/i.test(line)) {
+      adresse = line.replace(/^ADRESSE\s*[:=]\s*/i, '').trim();
       continue;
     }
 
-    // Créneau livraison avec label (avec ou sans ':')
-    if ((lineUpper.startsWith('LIVRAISON') || lineUpper.startsWith('LIV') || lineUpper.includes('LIVRAISON'))) {
-      const match = line.match(TIME_SLOT_REGEX);
-      if (match) { creneauLivraison = formatTimeSlot(match); continue; }
+    // "Livraison : 10h-17h" ou "Livraison le 13 mars 10h-17h"
+    if (LIVRAISON_KEYWORDS.test(line)) {
+      const slot = extractTimeSlotFromLine(line);
+      if (slot) {
+        creneauLivraison = slot;
+        continue;
+      }
     }
 
-    // Créneau récupération avec label (avec ou sans ':')
-    if ((lineUpper.startsWith('RECUP') || lineUpper.startsWith('RÉCUP') || lineUpper.startsWith('RAMASSAGE') || lineUpper.includes('RECUP') || lineUpper.includes('RÉCUP') || lineUpper.includes('RAMASSAGE'))) {
-      const match = line.match(TIME_SLOT_REGEX);
-      if (match) { creneauRecuperation = formatTimeSlot(match); continue; }
+    // "Récupération : 10h-17h" ou "Ramassage 14h-18h"
+    if (RECUPERATION_KEYWORDS.test(line)) {
+      const slot = extractTimeSlotFromLine(line);
+      if (slot) {
+        creneauRecuperation = slot;
+        continue;
+      }
     }
 
-    // Contact avec label
-    if (lineUpper.startsWith('CONTACT') && line.includes(':')) {
-      const contactPart = line.substring(line.indexOf(':') + 1).trim();
-      extractContact(contactPart);
+    // "Contact : Nom 06..."
+    if (/^CONTACT\s*[:=]/i.test(line)) {
+      extractContact(line.replace(/^CONTACT\s*[:=]\s*/i, ''));
       continue;
     }
 
-    // === DÉTECTION AUTOMATIQUE ===
-
-    // Ligne de date (Mercredi 18 mars 2026, 18/03/2026, etc.)
-    if (isDateLine(line)) {
-      lastDateLine = line;
+    // === 2. LIGNES COMBINÉES DATE+CRÉNEAU ===
+    // Ex: "Vendredi 13 mars 2026- 10h-17h", "13/03/2026 10h-17h"
+    if (containsDate(line) && containsTimeSlot(line)) {
+      const slot = extractTimeSlotFromLine(line);
+      if (slot) {
+        // Déterminer le contexte par mots-clés sur la même ligne
+        let context: 'livraison' | 'recuperation' | 'unknown' = 'unknown';
+        if (LIVRAISON_KEYWORDS.test(line)) context = 'livraison';
+        else if (RECUPERATION_KEYWORDS.test(line)) context = 'recuperation';
+        collectedSlots.push({ slot, context });
+      }
       continue;
     }
 
-    // Créneau horaire
-    const timeMatch = line.match(TIME_SLOT_REGEX);
-    if (timeMatch) {
-      dateTimeSlots.push({ date: lastDateLine, slot: formatTimeSlot(timeMatch) });
-      lastDateLine = null;
+    // === 3. LIGNE DE DATE SEULE (garder en mémoire pour la ligne suivante) ===
+    if (containsDate(line) && !containsTimeSlot(line) && !isAddressLine(line)) {
+      // Vérifier si la ligne suivante contient un créneau
+      if (i + 1 < lines.length && containsTimeSlot(lines[i + 1]!)) {
+        const nextLine = normalizeSpaces(lines[i + 1]!);
+        const slot = extractTimeSlotFromLine(nextLine);
+        if (slot) {
+          let context: 'livraison' | 'recuperation' | 'unknown' = 'unknown';
+          if (LIVRAISON_KEYWORDS.test(line) || LIVRAISON_KEYWORDS.test(nextLine)) context = 'livraison';
+          else if (RECUPERATION_KEYWORDS.test(line) || RECUPERATION_KEYWORDS.test(nextLine)) context = 'recuperation';
+          collectedSlots.push({ slot, context });
+          i++; // Skip la ligne suivante (créneau déjà traité)
+        }
+      }
       continue;
     }
 
-    // Numéro de téléphone (avec potentiellement un nom avant)
-    const phoneMatches = line.match(PHONE_REGEX);
-    if (phoneMatches && phoneMatches[0] && !contactTelephone) {
+    // === 4. CRÉNEAU HORAIRE SEUL ===
+    if (containsTimeSlot(line) && !isAddressLine(line)) {
+      const slot = extractTimeSlotFromLine(line);
+      if (slot) {
+        let context: 'livraison' | 'recuperation' | 'unknown' = 'unknown';
+        if (LIVRAISON_KEYWORDS.test(line)) context = 'livraison';
+        else if (RECUPERATION_KEYWORDS.test(line)) context = 'recuperation';
+        collectedSlots.push({ slot, context });
+      }
+      continue;
+    }
+
+    // === 5. TÉLÉPHONE (+ potentiellement nom du contact) ===
+    if (containsPhone(line) && !isAddressLine(line)) {
       extractContact(line);
       continue;
     }
 
-    // Adresse (par type de voie ou code postal)
+    // === 6. ADRESSE ===
     if (!adresse && isAddressLine(line)) {
-      // Ne PAS inclure le nom d'établissement (ex: "restaurant CHEZ ERNEST")
-      // car les noms de lieux ne sont pas reconnus par le géocodeur
       addressParts.push(line);
-      // Regarder si la ligne suivante complète l'adresse (code postal sur ligne séparée)
-      if (i + 1 < lines.length) {
-        const nextLine = lines[i + 1]!.trim();
-        if (/^\d{5}\s/.test(nextLine) && !addressParts.some(p => /\d{5}/.test(p))) {
+      // Absorber les lignes suivantes qui complètent l'adresse
+      while (i + 1 < lines.length) {
+        const nextLine = normalizeSpaces(lines[i + 1]!);
+        if (isPostalCodeLine(nextLine) && !addressParts.some(p => /\d{5}/.test(p))) {
           addressParts.push(nextLine);
           i++;
+        } else if (isAddressLine(nextLine) && !containsDate(nextLine) && !containsPhone(nextLine)) {
+          addressParts.push(nextLine);
+          i++;
+        } else {
+          break;
         }
       }
       continue;
     }
 
-    // Ligne avec code postal qui pourrait compléter l'adresse
-    if (addressParts.length > 0 && !adresse && /^\d{5}\s/.test(line)) {
+    // === 7. CODE POSTAL SEUL (complément d'adresse) ===
+    if (isPostalCodeLine(line) && addressParts.length > 0 && !addressParts.some(p => /\d{5}/.test(p))) {
       addressParts.push(line);
       continue;
     }
 
-    // Le reste va dans les notes
+    // === 8. LE RESTE → NOTES ===
     notesLines.push(line);
   }
 
-  // Assembler l'adresse (nettoyer pour le géocodeur)
+  // === ASSEMBLAGE ADRESSE ===
   if (!adresse && addressParts.length > 0) {
-    adresse = addressParts.join(', ');
-    // Nettoyer : si l'adresse contient un numéro + voie, extraire seulement la partie géocodable
-    // Ex: "restaurant CHEZ ERNEST, 4 Imp. de Joinville, 75019 Paris" → "4 Imp. de Joinville, 75019 Paris"
-    const streetMatch = adresse.match(new RegExp(`(\\d+\\s*[,.]?\\s*(?:${STREET_TYPES})[^,]*(?:,\\s*\\d{5}\\s+[A-ZÀ-Ü][a-zA-ZÀ-ü\\s-]*)?)`, 'i'));
+    // Joindre les parties et extraire seulement la partie géocodable
+    const raw = addressParts.join(', ');
+    // Chercher numéro + voie
+    const streetMatch = raw.match(new RegExp(`(\\d+\\s*[,.]?\\s*(?:${STREET_TYPES})\\b[^,]*)`, 'i'));
     if (streetMatch) {
-      adresse = streetMatch[1]!.trim();
-      // Ajouter le code postal s'il est dans une autre partie
+      adresse = normalizeSpaces(streetMatch[1]!);
+      // Ajouter le code postal + ville s'il est dans une autre partie
       if (!/\d{5}/.test(adresse)) {
-        const postalMatch = addressParts.join(', ').match(/(\d{5}\s+[A-ZÀ-Ü][a-zA-ZÀ-ü\s-]+)/);
-        if (postalMatch) {
-          adresse += ', ' + postalMatch[1]!.trim();
-        }
+        const postalMatch = raw.match(/(\d{5}\s+[A-ZÀ-Üa-zà-ü][a-zA-ZÀ-ü\s-]*)/);
+        if (postalMatch) adresse += ', ' + normalizeSpaces(postalMatch[1]!);
       }
+    } else {
+      // Pas de numéro+voie trouvé, utiliser le code postal + ville comme adresse
+      const postalMatch = raw.match(/(\d{5}\s+[A-ZÀ-Üa-zà-ü][a-zA-ZÀ-ü\s-]*)/);
+      adresse = postalMatch ? normalizeSpaces(postalMatch[1]!) : normalizeSpaces(raw);
     }
   }
+  // Normaliser l'adresse finale
+  if (adresse) adresse = normalizeSpaces(adresse);
 
-  // Associer les créneaux aux types livraison/récupération
-  if (dateTimeSlots.length > 0) {
-    if (!creneauLivraison) {
-      creneauLivraison = dateTimeSlots[0]?.slot ?? null;
-    }
-    if (!creneauRecuperation && dateTimeSlots.length > 1) {
-      creneauRecuperation = dateTimeSlots[1]?.slot ?? null;
+  // === ATTRIBUTION DES CRÉNEAUX ===
+  // 1. Créneaux avec contexte explicite (mot-clé livraison/récup)
+  for (const cs of collectedSlots) {
+    if (cs.context === 'livraison' && !creneauLivraison) creneauLivraison = cs.slot;
+    if (cs.context === 'recuperation' && !creneauRecuperation) creneauRecuperation = cs.slot;
+  }
+  // 2. Créneaux sans contexte → 1er = livraison, 2e = récupération
+  const unknownSlots = collectedSlots.filter(cs => cs.context === 'unknown');
+  if (!creneauLivraison && unknownSlots.length > 0) creneauLivraison = unknownSlots[0]!.slot;
+  if (!creneauRecuperation && unknownSlots.length > 1) creneauRecuperation = unknownSlots[1]!.slot;
+
+  // === CONTACT : dernier recours dans les notes ===
+  if (!contactTelephone) {
+    for (const note of notesLines) {
+      if (containsPhone(note)) {
+        extractContact(note);
+        break;
+      }
     }
   }
 
   return {
     adresse,
-    contactNom,
+    contactNom: contactNom ? normalizeSpaces(contactNom) : null,
     contactTelephone,
     creneauLivraison,
     creneauRecuperation,
-    notes: notesLines.filter(l => l.length > 1).join(' | '),
+    notes: notesLines.filter(l => l.length > 1 && l !== contactNom).join(' | '),
   };
 
   function extractContact(text: string) {
+    // Reset le regex (flag g = stateful)
+    PHONE_REGEX.lastIndex = 0;
     const phones = text.match(PHONE_REGEX);
-    if (phones && phones[0]) {
+    if (phones && phones[0] && !contactTelephone) {
       contactTelephone = phones[0].replace(/[\s.\-]/g, '');
     }
-    // Nom = texte avant le téléphone (sans ponctuation parasite)
-    const nameText = text.replace(PHONE_REGEX, '').replace(/[/,;:]/g, '').trim();
+    // Nom = texte sans téléphone, sans ponctuation parasite
+    PHONE_REGEX.lastIndex = 0;
+    const nameText = text.replace(PHONE_REGEX, '').replace(/[/,;:()]/g, '').trim();
     if (nameText && nameText.length > 2 && !contactNom) {
-      const lower = nameText.toLowerCase();
-      // Filtrer les mots-clés qui ne sont pas des noms
-      if (!lower.includes('code') && !lower.includes('parking') && !lower.includes('rdc') && !lower.includes('digicode')) {
-        contactNom = nameText;
+      // Filtrer les mots-clés qui ne sont pas des noms de personnes
+      if (!NOT_CONTACT_KEYWORDS.test(nameText)) {
+        contactNom = normalizeSpaces(nameText);
       }
     }
   }
