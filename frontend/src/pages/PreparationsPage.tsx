@@ -475,8 +475,7 @@ export default function PreparationsPage() {
     });
 
     return (
-      <div className="flex gap-6">
-        <div className="flex-1 min-w-0 space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Archive des événements</h1>
           <Button variant="secondary" onClick={() => {
@@ -600,14 +599,6 @@ export default function PreparationsPage() {
             {filteredArchive.length} résultat{filteredArchive.length > 1 ? 's' : ''} sur {archivedPreparations.length} événement{archivedPreparations.length > 1 ? 's' : ''}
           </p>
         )}
-        </div>
-
-        {/* Colonne fil d'actualité */}
-        <div className="hidden lg:block w-80 shrink-0">
-          <div className="sticky top-6">
-            <ActivityFeed />
-          </div>
-        </div>
       </div>
     );
   }
@@ -736,9 +727,7 @@ export default function PreparationsPage() {
   const rgb = hexToRgb(machineColor);
 
   return (
-    <div className="flex gap-6">
-      {/* Contenu principal */}
-      <div className="flex-1 min-w-0 space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => setSelectedType(null)}>
@@ -1272,14 +1261,6 @@ export default function PreparationsPage() {
           </div>
         </div>
       </Modal>
-      </div>
-
-      {/* Colonne fil d'actualité */}
-      <div className="hidden lg:block w-80 shrink-0">
-        <div className="sticky top-6">
-          <ActivityFeed />
-        </div>
-      </div>
     </div>
   );
 }
