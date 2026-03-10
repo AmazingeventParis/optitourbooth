@@ -4231,17 +4231,15 @@ export default function DailyPlanningPage() {
           />
 
           <div className="grid grid-cols-2 gap-4">
-            <Input
+            <TimeSelect
               label="Créneau début"
-              value={editPendingFormData.creneauDebut || ''}
-              onChange={(e) => setEditPendingFormData({ ...editPendingFormData, creneauDebut: e.target.value })}
-              placeholder="09:00"
+              value={editPendingFormData.creneauDebut}
+              onChange={(value) => setEditPendingFormData({ ...editPendingFormData, creneauDebut: value })}
             />
-            <Input
+            <TimeSelect
               label="Créneau fin"
-              value={editPendingFormData.creneauFin || ''}
-              onChange={(e) => setEditPendingFormData({ ...editPendingFormData, creneauFin: e.target.value })}
-              placeholder="11:00"
+              value={editPendingFormData.creneauFin}
+              onChange={(value) => setEditPendingFormData({ ...editPendingFormData, creneauFin: value })}
             />
           </div>
 
