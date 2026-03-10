@@ -1838,7 +1838,13 @@ export default function DailyPlanningPage() {
         // Charger les clients un par un
         for (const clientId of clientIdsToLoad) {
           try {
-            const client = await clientsService.getById(clientId);
+            let client = await clientsService.getById(clientId);
+            // Si le client a une adresse mais pas de coordonnées, géocoder
+            if ((!client.latitude || !client.longitude) && client.adresse) {
+              try {
+                client = await clientsService.geocode(clientId);
+              } catch { /* geocoding failed, ignore */ }
+            }
             if (client.latitude && client.longitude) {
               cache.set(clientId, {
                 latitude: client.latitude,
