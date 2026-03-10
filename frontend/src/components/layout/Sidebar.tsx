@@ -53,8 +53,9 @@ const navigation: Array<{
 
 function SidebarContent({ collapsed, onToggleCollapse }: { collapsed?: boolean; onToggleCollapse?: () => void }) {
   const { user, logout, startImpersonation } = useAuthStore();
+  const isAdmin = user?.roles.some(r => r === 'admin' || r === 'superadmin');
   const prepNotifCount = useNotificationStore((s) =>
-    s.notifications.filter((n) => !n.read && (n.type === 'preparation_created' || n.type === 'preparation_updated')).length
+    isAdmin ? s.notifications.filter((n) => !n.read && (n.type === 'preparation_created' || n.type === 'preparation_updated')).length : 0
   );
 
   // Filtrer les liens selon le rôle de l'utilisateur
