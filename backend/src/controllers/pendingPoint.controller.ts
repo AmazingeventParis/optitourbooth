@@ -110,7 +110,19 @@ export async function createManualPendingPoint(req: Request, res: Response): Pro
  * GET /api/pending-points?date=YYYY-MM-DD - Lister les points à dispatcher pour une date
  */
 export async function listPendingPoints(req: Request, res: Response): Promise<void> {
-  const { date } = req.query;
+  const { date, search } = req.query;
+
+  // Mode recherche par nom (admin debug)
+  if (search && typeof search === 'string') {
+    const points = await prisma.pendingPoint.findMany({
+      where: {
+        clientName: { contains: search, mode: 'insensitive' },
+      },
+      orderBy: { date: 'asc' },
+    });
+    apiResponse.success(res, points);
+    return;
+  }
 
   if (!date || typeof date !== 'string') {
     apiResponse.badRequest(res, 'Paramètre "date" requis (YYYY-MM-DD)');
