@@ -233,7 +233,7 @@ export const tourneeController = {
               points: {
                 orderBy: { ordre: 'asc' },
                 include: {
-                  client: { select: { id: true, nom: true, societe: true, ville: true } },
+                  client: { select: { id: true, nom: true, societe: true, ville: true, adresse: true, codePostal: true, complementAdresse: true, telephone: true, contactNom: true, contactTelephone: true, latitude: true, longitude: true } },
                   produits: { include: { produit: { select: { id: true, nom: true } } } },
                 },
               },
@@ -348,10 +348,12 @@ export const tourneeController = {
                   societe: true,
                   adresse: true,
                   codePostal: true,
+                  complementAdresse: true,
                   ville: true,
                   latitude: true,
                   longitude: true,
                   telephone: true,
+                  contactNom: true,
                   contactTelephone: true,
                 },
               },
