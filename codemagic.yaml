@@ -24,7 +24,10 @@ workflows:
         script: |
           set -ex
           cd frontend
-          npx vite build --mode capacitor 2>&1
+          # Set env vars directly for the build
+          export VITE_API_URL="https://optitourbooth-api.swipego.app/api"
+          export VITE_CAPACITOR="true"
+          npx vite build
       - name: Sync Capacitor and install pods
         script: |
           cd frontend
