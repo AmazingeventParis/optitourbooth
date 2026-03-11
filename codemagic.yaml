@@ -3,8 +3,6 @@ workflows:
     name: iOS Build & TestFlight
     max_build_duration: 30
     instance_type: mac_mini_m2
-    integrations:
-      app_store_connect: Codemagic
     environment:
       groups:
         - apple_credentials
@@ -17,13 +15,6 @@ workflows:
       vars:
         VITE_API_URL: "https://optitourbooth-api.swipego.app/api"
         VITE_CAPACITOR: "true"
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: master
-          include: true
-      cancel_previous_builds: true
     scripts:
       - name: Install pnpm
         script: |
@@ -44,13 +35,30 @@ workflows:
         script: |
           cd frontend/ios/App
           pod install
-      - name: Set up code signing
+      - name: Set up App Store Connect key for signing
         script: |
+          # Write the .p8 key file from env var
+          mkdir -p ~/private_keys
+          echo -n "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+
+          # Initialize keychain for code signing
+          keychain initialize
+
+          # Fetch signing certificates and profiles from App Store Connect
+          app-store-connect fetch-signing-files \
+            "app.swipego.optitourbooth" \
+            --type IOS_APP_STORE \
+            --create
+
+          # Install fetched certificates to keychain
+          keychain add-certificates
+
+          # Set up provisioning profiles for Xcode
           xcode-project use-profiles
       - name: Increment build number
         script: |
           cd frontend/ios/App
-          LATEST_BUILD=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_CONNECT_APP_ID" || echo "0")
+          LATEST_BUILD=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_CONNECT_APP_ID" 2>/dev/null || echo "0")
           NEW_BUILD=$((LATEST_BUILD + 1))
           echo "Build number: $NEW_BUILD"
           agvtool new-version -all $NEW_BUILD
