@@ -60,6 +60,25 @@ router.post(
 );
 
 /**
+ * POST /api/notifications/subscribe-native
+ * Register a native APNs/FCM push token (from Capacitor app)
+ */
+router.post(
+  '/subscribe-native',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { token, platform } = req.body as { token: string; platform: string };
+
+    if (!token || !platform) {
+      apiResponse.badRequest(res, 'Token et platform requis');
+      return;
+    }
+
+    await notificationService.subscribeNative(req.user!.id, token, platform);
+    apiResponse.success(res, null, 'Token push natif enregistré');
+  })
+);
+
+/**
  * DELETE /api/notifications/unsubscribe
  * Unsubscribe an endpoint
  */

@@ -3,6 +3,8 @@ workflows:
     name: iOS Build & TestFlight
     max_build_duration: 30
     instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: Codemagic
     environment:
       groups:
         - apple_credentials
@@ -48,8 +50,10 @@ workflows:
       - name: Increment build number
         script: |
           cd frontend/ios/App
-          LATEST_BUILD=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_CONNECT_APP_ID" || echo 0)
-          agvtool new-version -all $((LATEST_BUILD + 1))
+          LATEST_BUILD=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_CONNECT_APP_ID" || echo "0")
+          NEW_BUILD=$((LATEST_BUILD + 1))
+          echo "Build number: $NEW_BUILD"
+          agvtool new-version -all $NEW_BUILD
       - name: Build iOS app
         script: |
           cd frontend/ios/App
@@ -65,4 +69,4 @@ workflows:
         auth: integration
         submit_to_testflight: true
         beta_groups:
-          - Chauffeurs
+          - External Testers

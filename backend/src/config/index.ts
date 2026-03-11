@@ -97,6 +97,6 @@ export const config = {
       'https://localhost',
       'capacitor://localhost',
       'http://localhost',
-    ],
+    ] as string[],
   },
 } as const;

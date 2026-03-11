@@ -199,7 +199,7 @@ export default function LoginPage() {
               Android
             </a>
             <a
-              href="https://testflight.apple.com/join/optitourbooth"
+              href="https://beta.itunes.apple.com/v1/app/6760407048"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 px-4 py-3 bg-white rounded-xl text-gray-900 font-medium text-sm hover:bg-gray-100 transition-colors shadow-md"

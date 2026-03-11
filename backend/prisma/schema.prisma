@@ -126,6 +126,7 @@ model User {
   tournees          Tournee[]
   positions         Position[]
   pushSubscriptions PushSubscription[]
+  nativePushTokens  NativePushToken[]
   notifications     Notification[]
 
   @@index([actif]) // Requêtes fréquentes: utilisateurs actifs
@@ -478,6 +479,23 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// Tokens push natifs (APNs pour iOS, FCM pour Android via Capacitor)
+model NativePushToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  platform  String   // 'ios' or 'android'
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("native_push_tokens")
 }
 
 /// Notifications in-app persistantes
