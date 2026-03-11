@@ -515,6 +515,16 @@ function EventCard({ event, onRename, onSendReviewLink, onSendGalleryDirect, onC
 
       {/* Bottom: Actions */}
       <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+        {booking?.galleryUrl && (
+          <Button variant="outline" size="sm" onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(booking.galleryUrl!);
+              toast.success('Lien Drive copié !');
+            } catch { toast.error('Impossible de copier'); }
+          }} title="Copier le lien Google Drive" className="flex-shrink-0">
+            <FolderOpenIcon className="h-4 w-4" />
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={onCopyLink} title="Copier le lien d'avis" className="flex-shrink-0">
           {booking ? <ClipboardDocumentIcon className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
         </Button>
