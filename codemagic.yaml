@@ -10,20 +10,24 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
+        NODE_ENV: "development"
         VITE_API_URL: "https://optitourbooth-api.swipego.app/api"
         VITE_CAPACITOR: "true"
     scripts:
       - name: Install dependencies
         script: |
-          export NODE_ENV=development
           cd frontend
-          npm install --include=dev --legacy-peer-deps
+          npm install --production=false --legacy-peer-deps
+          echo "Installed packages count:"
+          ls node_modules | wc -l
+          echo "TypeScript installed:"
+          ls -la node_modules/.bin/tsc 2>/dev/null || echo "NOT FOUND"
+          echo "Vite installed:"
+          ls -la node_modules/.bin/vite 2>/dev/null || echo "NOT FOUND"
       - name: Build web assets
         script: |
           cd frontend
-          export VITE_API_URL="https://optitourbooth-api.swipego.app/api"
-          export VITE_CAPACITOR="true"
-          ./node_modules/.bin/vite build 2>&1 | tee /tmp/vite-build.log
+          npx vite build
       - name: Sync Capacitor iOS
         script: |
           cd frontend
@@ -52,41 +56,13 @@ workflows:
       - name: Build iOS app
         script: |
           cd frontend/ios/App
-          # Create export options plist
-          cat > exportOptions.plist << PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>teamID</key>
-            <string>${APPLE_TEAM_ID}</string>
-            <key>uploadBitcode</key>
-            <false/>
-            <key>uploadSymbols</key>
-            <true/>
-          </dict>
-          </plist>
-          PLIST
-
-          # Archive
-          xcodebuild archive \
-            -workspace "App.xcworkspace" \
-            -scheme "App" \
-            -configuration Release \
-            -archivePath "$CM_BUILD_DIR/App.xcarchive" \
-            DEVELOPMENT_TEAM="${APPLE_TEAM_ID}" \
-            -allowProvisioningUpdates
-
-          # Export IPA
-          xcodebuild -exportArchive \
-            -archivePath "$CM_BUILD_DIR/App.xcarchive" \
-            -exportOptionsPlist exportOptions.plist \
-            -exportPath build/ios/ipa
+          xcode-project build-ipa \
+            --workspace "App.xcworkspace" \
+            --scheme "App" \
+            --archive-flags="DEVELOPMENT_TEAM=${APPLE_TEAM_ID}"
     artifacts:
       - frontend/ios/App/build/ios/ipa/*.ipa
-      - "*.xcarchive"
+      - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
     publishing:
       app_store_connect:
