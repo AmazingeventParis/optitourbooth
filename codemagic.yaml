@@ -15,42 +15,23 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
-          set -ex
           export NODE_ENV=development
           cd frontend
-          node -v
-          npm -v
-          # Force install ALL deps (including devDependencies needed for build)
           npm install --include=dev --legacy-peer-deps
-          # Verify vite is installed
-          ls node_modules/.bin/vite || echo "VITE NOT FOUND!"
-          npx vite --version
       - name: Build web assets
         script: |
           cd frontend
           export VITE_API_URL="https://optitourbooth-api.swipego.app/api"
           export VITE_CAPACITOR="true"
-          npx vite build 2>&1 | tee /tmp/vite-build.log || {
-            echo "=== VITE BUILD FAILED ==="
-            cat /tmp/vite-build.log
-            exit 1
-          }
+          npx vite build
       - name: Sync Capacitor iOS
         script: |
           cd frontend
-          npx cap sync ios 2>&1 | tee /tmp/cap-sync.log || {
-            echo "=== CAP SYNC FAILED ==="
-            cat /tmp/cap-sync.log
-            exit 1
-          }
+          npx cap sync ios
       - name: Install CocoaPods
         script: |
           cd frontend/ios/App
-          pod install 2>&1 | tee /tmp/pod-install.log || {
-            echo "=== POD INSTALL FAILED ==="
-            cat /tmp/pod-install.log
-            exit 1
-          }
+          pod install
       - name: Set up code signing
         script: |
           mkdir -p "$HOME/private_keys"
@@ -67,20 +48,46 @@ workflows:
           cd frontend/ios/App
           LATEST_BUILD=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_CONNECT_APP_ID" 2>/dev/null || echo "0")
           NEW_BUILD=$((LATEST_BUILD + 1))
-          echo "Build number: $NEW_BUILD"
           agvtool new-version -all $NEW_BUILD
       - name: Build iOS app
         script: |
           cd frontend/ios/App
-          xcode-project build-ipa \
-            --workspace "App.xcworkspace" \
-            --scheme "App"
+          # Create export options plist
+          cat > exportOptions.plist << PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+            <key>uploadBitcode</key>
+            <false/>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          # Archive
+          xcodebuild archive \
+            -workspace "App.xcworkspace" \
+            -scheme "App" \
+            -configuration Release \
+            -archivePath "$CM_BUILD_DIR/App.xcarchive" \
+            DEVELOPMENT_TEAM="${APPLE_TEAM_ID}" \
+            -allowProvisioningUpdates
+
+          # Export IPA
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/App.xcarchive" \
+            -exportOptionsPlist exportOptions.plist \
+            -exportPath build/ios/ipa
     artifacts:
       - frontend/ios/App/build/ios/ipa/*.ipa
+      - "*.xcarchive"
       - /tmp/xcodebuild_logs/*.log
-      - /tmp/vite-build.log
-      - /tmp/pod-install.log
-      - /tmp/cap-sync.log
     publishing:
       app_store_connect:
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
