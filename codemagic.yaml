@@ -13,11 +13,18 @@ workflows:
         VITE_API_URL: "https://optitourbooth-api.swipego.app/api"
         VITE_CAPACITOR: "true"
     scripts:
-      - name: Install dependencies and build web
+      - name: Install dependencies
         script: |
+          set -ex
           cd frontend
-          npm install --legacy-peer-deps
-          npx vite build --mode capacitor
+          node -v
+          npm -v
+          npm install --legacy-peer-deps 2>&1
+      - name: Build web assets
+        script: |
+          set -ex
+          cd frontend
+          npx vite build --mode capacitor 2>&1
       - name: Sync Capacitor and install pods
         script: |
           cd frontend
