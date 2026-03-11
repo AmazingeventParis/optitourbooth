@@ -3,51 +3,58 @@ import { socketService } from '@/services/socket.service';
 import { useNotificationStore } from '@/store/notificationStore';
 import toast from 'react-hot-toast';
 
+interface SocketNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  metadata?: Record<string, string>;
+  read: boolean;
+  createdAt: string;
+}
+
+const ICON_MAP: Record<string, string> = {
+  tournee_created: '🚛',
+  tournee_updated: '✏️',
+  point_added: '📍',
+  point_removed: '🗑️',
+  point_moved_in: '📥',
+  point_moved_out: '📤',
+  points_reordered: '🔀',
+  preparation_created: '📦',
+  preparation_updated: '📦',
+};
+
 /**
- * Hook that listens to socket events and creates in-app notifications
+ * Hook that listens to socket events and creates in-app notifications.
+ * Listens to `notification:new` which is emitted by the backend for all
+ * DB-backed notifications (tournee changes, point changes, etc.)
  */
 export function useInAppNotifications() {
-  const addNotification = useNotificationStore((s) => s.addNotification);
+  const addFromSocket = useNotificationStore((s) => s.addFromSocket);
 
   useEffect(() => {
-    const handleTourneeAssigned = (data: { tourneeId?: string; message?: string }) => {
-      const notif = {
-        type: 'tournee_assigned' as const,
-        title: 'Nouvelle tournée',
-        body: data.message || 'Une tournée vous a été assignée',
-      };
-      addNotification(notif);
-      toast(notif.body, { icon: '🚛' });
+    const handleNotification = (data: SocketNotification) => {
+      // Add to store (uses the DB id, so it won't duplicate on next fetch)
+      addFromSocket({
+        id: data.id,
+        type: data.type,
+        title: data.title,
+        body: data.body,
+        metadata: data.metadata,
+        read: false,
+        createdAt: data.createdAt,
+      });
+
+      // Show toast
+      const icon = ICON_MAP[data.type] || 'ℹ️';
+      toast(data.body, { icon });
     };
 
-    const handlePointModified = (data: { pointId?: string; message?: string }) => {
-      const notif = {
-        type: 'point_modified' as const,
-        title: 'Point modifié',
-        body: data.message || 'Un point de votre tournée a été modifié',
-      };
-      addNotification(notif);
-      toast(notif.body, { icon: '📍' });
-    };
-
-    const handleAdminMessage = (data: { message?: string; title?: string }) => {
-      const notif = {
-        type: 'message' as const,
-        title: data.title || 'Message',
-        body: data.message || 'Nouveau message',
-      };
-      addNotification(notif);
-      toast(notif.body, { icon: '💬' });
-    };
-
-    socketService.on('tournee:assigned', handleTourneeAssigned);
-    socketService.on('tournee:updated', handlePointModified);
-    socketService.on('admin:message', handleAdminMessage);
+    socketService.on('notification:new', handleNotification);
 
     return () => {
-      socketService.off('tournee:assigned', handleTourneeAssigned);
-      socketService.off('tournee:updated', handlePointModified);
-      socketService.off('admin:message', handleAdminMessage);
+      socketService.off('notification:new', handleNotification);
     };
-  }, [addNotification]);
+  }, [addFromSocket]);
 }

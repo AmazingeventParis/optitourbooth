@@ -29,6 +29,7 @@ import {
 import { useInstallPWA } from '@/hooks/useInstallPWA';
 import { useDarkMode } from '@/hooks/useDarkMode';
 import { useInAppNotifications } from '@/hooks/useInAppNotifications';
+import { useNotificationStore } from '@/store/notificationStore';
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import NotificationBadge from '@/components/ui/NotificationBadge';
 import clsx from 'clsx';
@@ -45,6 +46,13 @@ export default function ChauffeurLayout() {
 
   // In-app notifications from socket events
   useInAppNotifications();
+  const fetchNotifications = useNotificationStore((s) => s.fetchNotifications);
+
+  // Fetch DB-backed notifications on mount
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
   const [installBannerDismissed, setInstallBannerDismissed] = useState(false);
 
   // Check if onboarding is complete (skip for admins impersonating)
@@ -146,17 +154,18 @@ export default function ChauffeurLayout() {
     };
   }, [token, setConnected, checkActiveTournee, isImpersonating]);
 
-  // Listen for tournee updates from socket
+  // Listen for tournee updates from socket (both new notification:new and legacy tournee:updated)
   useEffect(() => {
     const handleTourneeUpdate = () => {
-      // Re-check active tournee when we get an update
       checkActiveTournee();
     };
 
     socketService.on('tournee:updated', handleTourneeUpdate);
+    socketService.on('notification:new', handleTourneeUpdate);
 
     return () => {
       socketService.off('tournee:updated', handleTourneeUpdate);
+      socketService.off('notification:new', handleTourneeUpdate);
     };
   }, [checkActiveTournee]);
 

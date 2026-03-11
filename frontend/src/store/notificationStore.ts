@@ -3,7 +3,7 @@ import { notificationsService, DbNotification } from '@/services/notifications.s
 
 export interface AppNotification {
   id: string;
-  type: 'tournee_assigned' | 'point_modified' | 'message' | 'info' | 'preparation_created' | 'preparation_updated';
+  type: string;
   title: string;
   body: string;
   metadata?: Record<string, string>;
@@ -14,7 +14,7 @@ export interface AppNotification {
 function dbToApp(n: DbNotification): AppNotification {
   return {
     id: n.id,
-    type: n.type as AppNotification['type'],
+    type: n.type,
     title: n.title,
     body: n.body,
     metadata: n.metadata || undefined,
@@ -28,6 +28,7 @@ interface NotificationState {
   loading: boolean;
   fetchNotifications: () => Promise<void>;
   addNotification: (notif: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => void;
+  addFromSocket: (notif: { id: string; type: string; title: string; body: string; metadata?: Record<string, string>; read: boolean; createdAt: string }) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   clearAll: () => void;
@@ -51,7 +52,6 @@ export const useNotificationStore = create<NotificationState>()(
     },
 
     addNotification: (notif) => {
-      // Ajouter en temps réel (socket) — pas besoin de sauvegarder en DB, c'est déjà fait côté backend
       const newNotif: AppNotification = {
         ...notif,
         id: `rt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -63,13 +63,36 @@ export const useNotificationStore = create<NotificationState>()(
       }));
     },
 
+    /**
+     * Add a notification received via socket (has a real DB id).
+     * Deduplicates against existing notifications.
+     */
+    addFromSocket: (notif) => {
+      const existing = get().notifications;
+      // Don't add if already present (e.g. from a recent fetchNotifications)
+      if (existing.some((n) => n.id === notif.id)) return;
+
+      const appNotif: AppNotification = {
+        id: notif.id,
+        type: notif.type,
+        title: notif.title,
+        body: notif.body,
+        metadata: notif.metadata,
+        read: notif.read,
+        createdAt: new Date(notif.createdAt).getTime(),
+      };
+      set((state) => ({
+        notifications: [appNotif, ...state.notifications].slice(0, 100),
+      }));
+    },
+
     markAsRead: (id) => {
       set((state) => ({
         notifications: state.notifications.map((n) =>
           n.id === id ? { ...n, read: true } : n
         ),
       }));
-      // Sync avec la DB (ignorer les notifs temps réel non persistées)
+      // Sync with DB (skip ephemeral RT notifications)
       if (!id.startsWith('rt-')) {
         notificationsService.markAsRead(id).catch(() => {});
       }
