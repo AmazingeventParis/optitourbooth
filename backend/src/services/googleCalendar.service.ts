@@ -1,7 +1,9 @@
 import { google } from 'googleapis';
+import crypto from 'crypto';
 import { prisma } from '../config/database.js';
 import { config } from '../config/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
+import { createDriveFolder, buildFolderName, isDriveConfigured } from './googleDrive.service.js';
 
 // Regex pour matcher (LIR), (LIR PREM), (LIR SALON), (LIR MIROIR), etc.
 const LIR_REGEX = /^\(LIR[^)]*\)/i;
@@ -610,6 +612,39 @@ export async function syncGoogleCalendarEvents(): Promise<{
     } catch (e) {
       console.error(`[Google Calendar] Erreur ramassage ${clientName}:`, e);
       errors++;
+    }
+
+    // Auto-create Google Drive folder + Booking for this event
+    if (isDriveConfigured() && eventId) {
+      try {
+        const existingBooking = await prisma.booking.findUnique({
+          where: { googleEventId: eventId },
+        });
+
+        if (!existingBooking) {
+          const folderName = buildFolderName(clientName, startDate, produitNom);
+          const { folderUrl } = await createDriveFolder(folderName);
+
+          const publicToken = crypto.randomBytes(24).toString('base64url');
+          await prisma.booking.create({
+            data: {
+              publicToken,
+              customerName: clientName,
+              customerPhone: contactTelephone || null,
+              eventDate: ensureDateUTC(startDate),
+              eventEndDate: ensureDateUTC(endDate),
+              produitNom: produitNom || null,
+              galleryUrl: folderUrl,
+              googleEventId: eventId,
+              googleReviewUrl: config.googleBusiness.defaultReviewUrl || null,
+              status: 'link_sent',
+            },
+          });
+          console.log(`[Google Calendar] 📁 Dossier Drive + Booking créés pour "${clientName}" → ${folderUrl}`);
+        }
+      } catch (e) {
+        console.error(`[Google Calendar] Erreur création dossier Drive pour ${clientName}:`, e);
+      }
     }
   }
 

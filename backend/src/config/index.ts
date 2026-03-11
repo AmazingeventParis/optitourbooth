@@ -70,6 +70,12 @@ export const config = {
     syncDaysAhead: parseInt(process.env.GOOGLE_CALENDAR_SYNC_DAYS_AHEAD || '30', 10),
   },
 
+  // Google Drive (gallery folders)
+  googleDrive: {
+    parentFolderId: process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || '1MEVCdxEGoAFoJz8AJKMLppBdI63yOl0s',
+    enabled: process.env.GOOGLE_DRIVE_ENABLED !== 'false', // enabled by default
+  },
+
   // Google Business Profile (Review system)
   googleBusiness: {
     oauthClientId: process.env.GOOGLE_BP_CLIENT_ID || '',
