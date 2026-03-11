@@ -632,6 +632,22 @@ export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) =>
 });
 
 /**
+ * POST /api/bookings/reset-gallery-urls
+ * Reset all galleryUrl fields so next sync recreates Drive folders in monthly subfolders
+ */
+export const resetGalleryUrls = asyncHandler(async (_req: Request, res: Response) => {
+  const result = await prisma.booking.updateMany({
+    where: { galleryUrl: { not: null } },
+    data: { galleryUrl: null },
+  });
+
+  return apiResponse.success(res, {
+    message: `${result.count} galleryUrl réinitialisées`,
+    count: result.count,
+  });
+});
+
+/**
  * GET /api/bookings/stats
  * Get booking statistics
  */

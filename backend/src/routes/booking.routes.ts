@@ -17,6 +17,7 @@ import {
   deleteBooking,
   manualSendGallery,
   sendLinkEmail,
+  resetGalleryUrls,
   updateReviewMatchStatus,
   getBookingStats,
 } from '../controllers/booking.controller.js';
@@ -76,6 +77,9 @@ router.post('/bookings/:id/send-gallery', authenticate, requireAdmin, manualSend
 
 // Send review link email to customer
 router.post('/bookings/:id/send-link-email', authenticate, requireAdmin, sendLinkEmail);
+
+// Reset all gallery URLs (to force Drive folder recreation in monthly subfolders)
+router.post('/bookings/reset-gallery-urls', authenticate, requireAdmin, resetGalleryUrls);
 
 // Update review match status
 router.patch('/bookings/review-matches/:matchId/status', authenticate, requireAdmin, updateReviewMatchStatus);
