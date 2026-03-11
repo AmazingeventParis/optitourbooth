@@ -19,7 +19,8 @@ workflows:
           cd frontend
           node -v
           npm -v
-          npm install --legacy-peer-deps 2>&1
+          # Force install ALL deps (including devDependencies needed for build)
+          NODE_ENV=development npm install --legacy-peer-deps
       - name: Build web assets
         script: |
           set -ex
