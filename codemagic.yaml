@@ -38,7 +38,11 @@ workflows:
       - name: Sync Capacitor iOS
         script: |
           cd frontend
-          npx cap sync ios
+          npx cap sync ios 2>&1 | tee /tmp/cap-sync.log || {
+            echo "=== CAP SYNC FAILED ==="
+            cat /tmp/cap-sync.log
+            exit 1
+          }
       - name: Install CocoaPods
         script: |
           cd frontend/ios/App
@@ -77,6 +81,7 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
       - /tmp/vite-build.log
       - /tmp/pod-install.log
+      - /tmp/cap-sync.log
     publishing:
       app_store_connect:
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
