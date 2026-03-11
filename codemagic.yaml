@@ -17,13 +17,17 @@ workflows:
       - name: Install dependencies
         script: |
           cd frontend
-          npm install --production=false --legacy-peer-deps
+          npm config set production false
+          npm config delete omit
+          npm install --include=dev --legacy-peer-deps
           echo "Installed packages count:"
           ls node_modules | wc -l
-          echo "TypeScript installed:"
+          echo "TypeScript:"
           ls -la node_modules/.bin/tsc 2>/dev/null || echo "NOT FOUND"
-          echo "Vite installed:"
+          echo "Vite:"
           ls -la node_modules/.bin/vite 2>/dev/null || echo "NOT FOUND"
+          echo "npm config list:"
+          npm config list
       - name: Build web assets
         script: |
           cd frontend
