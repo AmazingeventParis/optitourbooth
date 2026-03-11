@@ -8,12 +8,13 @@ import {
   LinkIcon,
   CheckCircleIcon,
   CalendarDaysIcon,
-  MapPinIcon,
-  PhoneIcon,
   StarIcon,
   EyeIcon,
   ArrowPathIcon,
   FolderOpenIcon,
+  PencilIcon,
+  CheckIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
@@ -54,11 +55,6 @@ export default function GaleriesClientsPage() {
   const [galleryUrlInput, setGalleryUrlInput] = useState('');
   const [sending, setSending] = useState(false);
 
-  // Gallery URL modal
-  const [galleryModal, setGalleryModal] = useState<CalendarEvent | null>(null);
-  const [galleryUrlEdit, setGalleryUrlEdit] = useState('');
-  const [savingGallery, setSavingGallery] = useState(false);
-
   // Send gallery directly modal
   const [sendGalleryModal, setSendGalleryModal] = useState<CalendarEvent | null>(null);
   const [sendGalleryEmail, setSendGalleryEmail] = useState('');
@@ -88,7 +84,6 @@ export default function GaleriesClientsPage() {
     try {
       let bookingId = ev.booking?.id;
 
-      // Create booking if not exists
       if (!bookingId) {
         const booking = await bookingsService.createFromEvent({
           googleEventId: ev.googleEventId,
@@ -102,12 +97,10 @@ export default function GaleriesClientsPage() {
         bookingId = booking.id;
       }
 
-      // Update gallery URL if provided and booking already existed
       if (ev.booking && galleryUrlInput && galleryUrlInput !== ev.booking.galleryUrl) {
         await bookingsService.update(bookingId, { galleryUrl: galleryUrlInput } as any);
       }
 
-      // Send email
       await bookingsService.sendLinkEmail(bookingId, sendEmail);
       toast.success(`Lien envoyé à ${sendEmail}`);
       setSendModal(null);
@@ -121,41 +114,8 @@ export default function GaleriesClientsPage() {
     }
   };
 
-  const handleSaveGalleryUrl = async (ev: CalendarEvent) => {
-    if (!galleryUrlEdit.trim()) {
-      toast.error('URL Google Drive requis');
-      return;
-    }
-    setSavingGallery(true);
-    try {
-      let bookingId = ev.booking?.id;
-      if (!bookingId) {
-        const booking = await bookingsService.createFromEvent({
-          googleEventId: ev.googleEventId,
-          customerName: ev.clientName,
-          eventDate: ev.startDate,
-          eventEndDate: ev.endDate,
-          produitNom: ev.produitNom || undefined,
-          galleryUrl: galleryUrlEdit,
-        });
-        bookingId = booking.id;
-      } else {
-        await bookingsService.update(bookingId, { galleryUrl: galleryUrlEdit } as any);
-      }
-      toast.success('Lien Google Drive enregistré');
-      setGalleryModal(null);
-      setGalleryUrlEdit('');
-      fetchEvents();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Erreur');
-    } finally {
-      setSavingGallery(false);
-    }
-  };
-
   const handleCopyLink = async (ev: CalendarEvent) => {
     if (!ev.booking?.publicUrl) {
-      // Create booking first
       try {
         const booking = await bookingsService.createFromEvent({
           googleEventId: ev.googleEventId,
@@ -209,7 +169,6 @@ export default function GaleriesClientsPage() {
         await bookingsService.update(bookingId, { galleryUrl: sendGalleryUrl, customerEmail: sendGalleryEmail } as any);
       }
 
-      // Trigger manual gallery send
       await bookingsService.sendGallery(bookingId);
       toast.success(`Galerie envoyée à ${sendGalleryEmail}`);
       setSendGalleryModal(null);
@@ -223,6 +182,17 @@ export default function GaleriesClientsPage() {
     }
   };
 
+  const handleRename = async (ev: CalendarEvent, newName: string) => {
+    if (!ev.booking?.id) return;
+    try {
+      await bookingsService.update(ev.booking.id, { customerName: newName } as any);
+      toast.success('Nom mis à jour');
+      fetchEvents();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erreur');
+    }
+  };
+
   const openSendModal = (ev: CalendarEvent) => {
     setSendEmail(ev.booking?.customerEmail || '');
     setGalleryUrlInput(ev.booking?.galleryUrl || '');
@@ -233,11 +203,6 @@ export default function GaleriesClientsPage() {
     setSendGalleryEmail(ev.booking?.customerEmail || '');
     setSendGalleryUrl(ev.booking?.galleryUrl || '');
     setSendGalleryModal(ev);
-  };
-
-  const openGalleryModal = (ev: CalendarEvent) => {
-    setGalleryUrlEdit(ev.booking?.galleryUrl || '');
-    setGalleryModal(ev);
   };
 
   const currentEvents = tab === 'upcoming' ? events.upcoming : events.past;
@@ -318,20 +283,20 @@ export default function GaleriesClientsPage() {
             <EventCard
               key={ev.googleEventId}
               event={ev}
+              onRename={(newName) => handleRename(ev, newName)}
               onSendReviewLink={() => openSendModal(ev)}
               onSendGalleryDirect={() => openSendGalleryModal(ev)}
               onCopyLink={() => handleCopyLink(ev)}
-              onSetGalleryUrl={() => openGalleryModal(ev)}
             />
           ))}
         </div>
       )}
 
-      {/* Send Email Modal */}
+      {/* Send Review Link Modal */}
       <Modal
         isOpen={!!sendModal}
         onClose={() => setSendModal(null)}
-        title={`Envoyer le lien — ${sendModal?.clientName}`}
+        title={`Envoyer le lien d'avis — ${sendModal?.booking?.customerName || sendModal?.clientName}`}
       >
         {sendModal && (
           <div className="space-y-4">
@@ -385,7 +350,7 @@ export default function GaleriesClientsPage() {
       <Modal
         isOpen={!!sendGalleryModal}
         onClose={() => setSendGalleryModal(null)}
-        title={`Envoyer la galerie — ${sendGalleryModal?.clientName}`}
+        title={`Envoyer la galerie — ${sendGalleryModal?.booking?.customerName || sendGalleryModal?.clientName}`}
       >
         {sendGalleryModal && (
           <div className="space-y-4">
@@ -423,87 +388,94 @@ export default function GaleriesClientsPage() {
           </div>
         )}
       </Modal>
-
-      {/* Gallery URL Modal */}
-      <Modal
-        isOpen={!!galleryModal}
-        onClose={() => setGalleryModal(null)}
-        title={`Galerie photos — ${galleryModal?.clientName}`}
-      >
-        {galleryModal && (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Renseignez le lien Google Drive contenant les photos du client.
-              Ce lien sera rendu accessible au client après son action (avis ou délai 24h).
-            </p>
-
-            <div>
-              <label className="label">Lien Google Drive *</label>
-              <Input
-                type="url"
-                value={galleryUrlEdit}
-                onChange={(e) => setGalleryUrlEdit(e.target.value)}
-                placeholder="https://drive.google.com/drive/folders/..."
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <Button variant="outline" onClick={() => setGalleryModal(null)}>Annuler</Button>
-              <Button onClick={() => handleSaveGalleryUrl(galleryModal)} disabled={savingGallery}>
-                <FolderOpenIcon className="h-4 w-4 mr-2" />
-                {savingGallery ? 'Enregistrement...' : 'Enregistrer'}
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }
 
-function EventCard({ event, onSendReviewLink, onSendGalleryDirect, onCopyLink, onSetGalleryUrl }: {
+function EventCard({ event, onRename, onSendReviewLink, onSendGalleryDirect, onCopyLink }: {
   event: CalendarEvent;
+  onRename: (newName: string) => void;
   onSendReviewLink: () => void;
   onSendGalleryDirect: () => void;
   onCopyLink: () => void;
-  onSetGalleryUrl: () => void;
 }) {
   const booking = event.booking;
   const statusInfo = booking ? STATUS_LABELS[booking.status] || { label: booking.status, color: 'bg-gray-100 text-gray-600' } : null;
+
+  // Editable name state
+  const displayName = booking?.customerName || event.clientName;
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(displayName);
+
+  const handleSaveRename = () => {
+    const trimmed = editName.trim();
+    if (!trimmed || trimmed === displayName) {
+      setEditing(false);
+      setEditName(displayName);
+      return;
+    }
+    onRename(trimmed);
+    setEditing(false);
+  };
+
+  const handleCancelRename = () => {
+    setEditing(false);
+    setEditName(displayName);
+  };
 
   return (
     <Card className="p-4">
       <div className="flex flex-col md:flex-row md:items-center gap-4">
         {/* Event Info */}
         <div className="flex-1 min-w-0">
+          {/* Client Name - editable */}
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-gray-900 truncate">{event.clientName}</h3>
-            {event.produitNom && (
-              <Badge variant="default" size="sm">{event.produitNom}</Badge>
+            {editing ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRename(); if (e.key === 'Escape') handleCancelRename(); }}
+                  className="border border-primary-300 rounded px-2 py-0.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  autoFocus
+                />
+                <button onClick={handleSaveRename} className="p-0.5 text-green-600 hover:text-green-700">
+                  <CheckIcon className="h-4 w-4" />
+                </button>
+                <button onClick={handleCancelRename} className="p-0.5 text-gray-400 hover:text-gray-600">
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <h3 className="font-semibold text-gray-900 truncate">{displayName}</h3>
+                {booking && (
+                  <button
+                    onClick={() => { setEditName(displayName); setEditing(true); }}
+                    className="p-0.5 text-gray-400 hover:text-primary-600"
+                    title="Modifier le nom du client"
+                  >
+                    <PencilIcon className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </>
             )}
             {statusInfo && (
-              <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full', statusInfo.color)}>
+              <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap', statusInfo.color)}>
                 {statusInfo.label}
               </span>
             )}
           </div>
 
+          {/* Date + Type de borne */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
             <span className="flex items-center gap-1">
               <CalendarDaysIcon className="h-4 w-4" />
               {formatDateRange(event.startDate, event.endDate)}
             </span>
-            {event.adresse && (
-              <span className="flex items-center gap-1 truncate">
-                <MapPinIcon className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">{event.adresse}</span>
-              </span>
-            )}
-            {event.contactTelephone && (
-              <a href={`tel:${event.contactTelephone}`} className="flex items-center gap-1 text-primary-600 hover:underline">
-                <PhoneIcon className="h-4 w-4" />
-                {event.contactTelephone}
-              </a>
+            {event.produitNom && (
+              <Badge variant="default" size="sm">{event.produitNom}</Badge>
             )}
           </div>
 
@@ -514,10 +486,10 @@ function EventCard({ event, onSendReviewLink, onSendGalleryDirect, onCopyLink, o
                 <span>Email: {booking.customerEmail}</span>
               )}
               {booking.galleryUrl && (
-                <span className="flex items-center gap-1 text-green-600">
+                <a href={booking.galleryUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-600 hover:underline">
                   <FolderOpenIcon className="h-3 w-3" />
-                  Drive configuré
-                </span>
+                  Drive
+                </a>
               )}
               {booking.emailSentAt && (
                 <span className="flex items-center gap-1">
@@ -543,9 +515,6 @@ function EventCard({ event, onSendReviewLink, onSendGalleryDirect, onCopyLink, o
 
         {/* Actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Button variant="outline" size="sm" onClick={onSetGalleryUrl} title="Configurer le lien Google Drive">
-            <FolderOpenIcon className="h-4 w-4" />
-          </Button>
           <Button variant="outline" size="sm" onClick={onCopyLink} title="Copier le lien d'avis">
             {booking ? <ClipboardDocumentIcon className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
           </Button>

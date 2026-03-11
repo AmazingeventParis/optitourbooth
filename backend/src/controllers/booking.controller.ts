@@ -7,6 +7,7 @@ import { config } from '../config/index.js';
 import { scheduleGalleryDispatch } from '../services/galleryDispatch.service.js';
 import { processNewReview } from '../services/reviewMatching.service.js';
 import { fetchReview, parsePubSubMessage, isGoogleBusinessConfigured } from '../services/googleBusiness.service.js';
+import { renameDriveFolder, buildFolderName, isDriveConfigured } from '../services/googleDrive.service.js';
 
 // ===========================
 // PUBLIC ROUTES (no auth)
@@ -341,6 +342,17 @@ export const updateBooking = asyncHandler(async (req: Request, res: Response) =>
     },
   });
 
+  // Rename Drive folder if customerName changed and a galleryUrl exists
+  if (customerName && customerName !== booking.customerName && booking.galleryUrl && isDriveConfigured()) {
+    try {
+      const dateStr = booking.eventDate.toISOString().substring(0, 10);
+      const newFolderName = buildFolderName(customerName, dateStr);
+      await renameDriveFolder(booking.galleryUrl, newFolderName);
+    } catch (e) {
+      console.error(`[Booking] Erreur renommage dossier Drive:`, e);
+    }
+  }
+
   return apiResponse.success(res, updated);
 });
 
@@ -526,6 +538,7 @@ export const listCalendarEvents = asyncHandler(async (_req: Request, res: Respon
         id: booking.id,
         publicToken: booking.publicToken,
         publicUrl: `${config.reviewSystem.publicBaseUrl}/r/${booking.publicToken}`,
+        customerName: booking.customerName,
         customerEmail: booking.customerEmail,
         customerPhone: booking.customerPhone,
         galleryUrl: booking.galleryUrl,

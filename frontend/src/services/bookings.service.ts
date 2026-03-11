@@ -87,6 +87,7 @@ export interface CalendarEvent {
     id: string;
     publicToken: string;
     publicUrl: string;
+    customerName: string;
     customerEmail: string | null;
     customerPhone: string | null;
     galleryUrl: string | null;

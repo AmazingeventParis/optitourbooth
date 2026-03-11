@@ -147,6 +147,30 @@ export function buildFolderName(clientName: string, startDate: string, _produitN
 }
 
 /**
+ * Rename an existing Google Drive folder.
+ * Extracts the folder ID from the galleryUrl.
+ */
+export async function renameDriveFolder(galleryUrl: string, newName: string): Promise<void> {
+  const match = galleryUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (!match) {
+    console.error(`[Google Drive] Impossible d'extraire l'ID du dossier depuis: ${galleryUrl}`);
+    return;
+  }
+
+  const folderId = match[1];
+  const drive = getDriveClient();
+  const sanitizedName = newName.replace(/[/\\:*?"<>|]/g, '_');
+
+  await drive.files.update({
+    fileId: folderId,
+    requestBody: { name: sanitizedName },
+    supportsAllDrives: true,
+  });
+
+  console.log(`[Google Drive] Dossier renommé: "${sanitizedName}" (${folderId})`);
+}
+
+/**
  * Check if Google Drive integration is configured and enabled
  */
 export function isDriveConfigured(): boolean {
