@@ -91,6 +91,12 @@ export const config = {
 
   // CORS
   cors: {
-    origin: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim()),
+    origin: [
+      ...(process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim()),
+      // Capacitor native app origins
+      'https://localhost',
+      'capacitor://localhost',
+      'http://localhost',
+    ],
   },
 } as const;
