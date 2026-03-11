@@ -59,6 +59,12 @@ export default function GaleriesClientsPage() {
   const [galleryUrlEdit, setGalleryUrlEdit] = useState('');
   const [savingGallery, setSavingGallery] = useState(false);
 
+  // Send gallery directly modal
+  const [sendGalleryModal, setSendGalleryModal] = useState<CalendarEvent | null>(null);
+  const [sendGalleryEmail, setSendGalleryEmail] = useState('');
+  const [sendGalleryUrl, setSendGalleryUrl] = useState('');
+  const [sendingGallery, setSendingGallery] = useState(false);
+
   const fetchEvents = useCallback(async () => {
     try {
       const data = await bookingsService.getCalendarEvents();
@@ -174,10 +180,59 @@ export default function GaleriesClientsPage() {
     }
   };
 
+  const handleSendGalleryDirect = async (ev: CalendarEvent) => {
+    if (!sendGalleryEmail.trim()) {
+      toast.error('Email requis');
+      return;
+    }
+    if (!sendGalleryUrl.trim()) {
+      toast.error('Lien Google Drive requis');
+      return;
+    }
+
+    setSendingGallery(true);
+    try {
+      let bookingId = ev.booking?.id;
+
+      if (!bookingId) {
+        const booking = await bookingsService.createFromEvent({
+          googleEventId: ev.googleEventId,
+          customerName: ev.clientName,
+          customerEmail: sendGalleryEmail,
+          eventDate: ev.startDate,
+          eventEndDate: ev.endDate,
+          produitNom: ev.produitNom || undefined,
+          galleryUrl: sendGalleryUrl,
+        });
+        bookingId = booking.id;
+      } else {
+        await bookingsService.update(bookingId, { galleryUrl: sendGalleryUrl, customerEmail: sendGalleryEmail } as any);
+      }
+
+      // Trigger manual gallery send
+      await bookingsService.sendGallery(bookingId);
+      toast.success(`Galerie envoyée à ${sendGalleryEmail}`);
+      setSendGalleryModal(null);
+      setSendGalleryEmail('');
+      setSendGalleryUrl('');
+      fetchEvents();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erreur lors de l\'envoi');
+    } finally {
+      setSendingGallery(false);
+    }
+  };
+
   const openSendModal = (ev: CalendarEvent) => {
-    setSendEmail(ev.booking?.customerEmail || ev.contactNom || '');
+    setSendEmail(ev.booking?.customerEmail || '');
     setGalleryUrlInput(ev.booking?.galleryUrl || '');
     setSendModal(ev);
+  };
+
+  const openSendGalleryModal = (ev: CalendarEvent) => {
+    setSendGalleryEmail(ev.booking?.customerEmail || '');
+    setSendGalleryUrl(ev.booking?.galleryUrl || '');
+    setSendGalleryModal(ev);
   };
 
   const openGalleryModal = (ev: CalendarEvent) => {
@@ -263,7 +318,8 @@ export default function GaleriesClientsPage() {
             <EventCard
               key={ev.googleEventId}
               event={ev}
-              onSend={() => openSendModal(ev)}
+              onSendReviewLink={() => openSendModal(ev)}
+              onSendGalleryDirect={() => openSendGalleryModal(ev)}
               onCopyLink={() => handleCopyLink(ev)}
               onSetGalleryUrl={() => openGalleryModal(ev)}
             />
@@ -325,6 +381,49 @@ export default function GaleriesClientsPage() {
         )}
       </Modal>
 
+      {/* Send Gallery Direct Modal */}
+      <Modal
+        isOpen={!!sendGalleryModal}
+        onClose={() => setSendGalleryModal(null)}
+        title={`Envoyer la galerie — ${sendGalleryModal?.clientName}`}
+      >
+        {sendGalleryModal && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Le client recevra directement le lien Google Drive contenant ses photos (sans passer par la page d'avis).
+            </p>
+
+            <div>
+              <label className="label">Email du client *</label>
+              <Input
+                type="email"
+                value={sendGalleryEmail}
+                onChange={(e) => setSendGalleryEmail(e.target.value)}
+                placeholder="client@email.com"
+              />
+            </div>
+
+            <div>
+              <label className="label">Lien Google Drive *</label>
+              <Input
+                type="url"
+                value={sendGalleryUrl}
+                onChange={(e) => setSendGalleryUrl(e.target.value)}
+                placeholder="https://drive.google.com/drive/folders/..."
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setSendGalleryModal(null)}>Annuler</Button>
+              <Button onClick={() => handleSendGalleryDirect(sendGalleryModal)} disabled={sendingGallery}>
+                <FolderOpenIcon className="h-4 w-4 mr-2" />
+                {sendingGallery ? 'Envoi...' : 'Envoyer la galerie'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Gallery URL Modal */}
       <Modal
         isOpen={!!galleryModal}
@@ -362,9 +461,10 @@ export default function GaleriesClientsPage() {
   );
 }
 
-function EventCard({ event, onSend, onCopyLink, onSetGalleryUrl }: {
+function EventCard({ event, onSendReviewLink, onSendGalleryDirect, onCopyLink, onSetGalleryUrl }: {
   event: CalendarEvent;
-  onSend: () => void;
+  onSendReviewLink: () => void;
+  onSendGalleryDirect: () => void;
   onCopyLink: () => void;
   onSetGalleryUrl: () => void;
 }) {
@@ -443,15 +543,19 @@ function EventCard({ event, onSend, onCopyLink, onSetGalleryUrl }: {
 
         {/* Actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Button variant="outline" size="sm" onClick={onSetGalleryUrl} title="Lien Google Drive">
+          <Button variant="outline" size="sm" onClick={onSetGalleryUrl} title="Configurer le lien Google Drive">
             <FolderOpenIcon className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={onCopyLink} title="Copier le lien client">
+          <Button variant="outline" size="sm" onClick={onCopyLink} title="Copier le lien d'avis">
             {booking ? <ClipboardDocumentIcon className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
           </Button>
-          <Button size="sm" onClick={onSend}>
-            <PaperAirplaneIcon className="h-4 w-4 mr-1" />
-            Envoyer
+          <Button variant="outline" size="sm" onClick={onSendReviewLink} title="Envoyer le lien d'avis Google">
+            <StarIcon className="h-4 w-4 mr-1" />
+            Avis
+          </Button>
+          <Button size="sm" onClick={onSendGalleryDirect} title="Envoyer directement la galerie photos">
+            <PhotoIcon className="h-4 w-4 mr-1" />
+            Galerie
           </Button>
         </div>
       </div>
