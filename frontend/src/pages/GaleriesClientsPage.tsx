@@ -278,7 +278,7 @@ export default function GaleriesClientsPage() {
           <p>Aucun événement {tab === 'upcoming' ? 'à venir' : 'passé'}</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {currentEvents.map((ev) => (
             <EventCard
               key={ev.googleEventId}
@@ -400,9 +400,10 @@ function EventCard({ event, onRename, onSendReviewLink, onSendGalleryDirect, onC
   onCopyLink: () => void;
 }) {
   const booking = event.booking;
-  const statusInfo = booking ? STATUS_LABELS[booking.status] || { label: booking.status, color: 'bg-gray-100 text-gray-600' } : null;
+  // Only show status badge for meaningful statuses (not the default 'link_sent')
+  const showStatus = booking && booking.status !== 'link_sent';
+  const statusInfo = showStatus ? STATUS_LABELS[booking.status] || { label: booking.status, color: 'bg-gray-100 text-gray-600' } : null;
 
-  // Editable name state
   const displayName = booking?.customerName || event.clientName;
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(displayName);
@@ -424,109 +425,107 @@ function EventCard({ event, onRename, onSendReviewLink, onSendGalleryDirect, onC
   };
 
   return (
-    <Card className="p-4">
-      <div className="flex flex-col md:flex-row md:items-center gap-4">
-        {/* Event Info */}
-        <div className="flex-1 min-w-0">
-          {/* Client Name - editable */}
-          <div className="flex items-center gap-2 mb-1">
-            {editing ? (
-              <div className="flex items-center gap-1">
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRename(); if (e.key === 'Escape') handleCancelRename(); }}
-                  className="border border-primary-300 rounded px-2 py-0.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  autoFocus
-                />
-                <button onClick={handleSaveRename} className="p-0.5 text-green-600 hover:text-green-700">
-                  <CheckIcon className="h-4 w-4" />
-                </button>
-                <button onClick={handleCancelRename} className="p-0.5 text-gray-400 hover:text-gray-600">
-                  <XMarkIcon className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <>
-                <h3 className="font-semibold text-gray-900 truncate">{displayName}</h3>
-                {booking && (
-                  <button
-                    onClick={() => { setEditName(displayName); setEditing(true); }}
-                    className="p-0.5 text-gray-400 hover:text-primary-600"
-                    title="Modifier le nom du client"
-                  >
-                    <PencilIcon className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </>
-            )}
-            {statusInfo && (
-              <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap', statusInfo.color)}>
-                {statusInfo.label}
-              </span>
-            )}
-          </div>
-
-          {/* Date + Type de borne */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
-            <span className="flex items-center gap-1">
-              <CalendarDaysIcon className="h-4 w-4" />
-              {formatDateRange(event.startDate, event.endDate)}
+    <Card className="p-4 flex flex-col justify-between">
+      {/* Top: date + type de borne */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="flex items-center gap-1 text-sm text-gray-500">
+            <CalendarDaysIcon className="h-4 w-4" />
+            {formatDateRange(event.startDate, event.endDate)}
+          </span>
+          {statusInfo && (
+            <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap', statusInfo.color)}>
+              {statusInfo.label}
             </span>
-            {event.produitNom && (
-              <Badge variant="default" size="sm">{event.produitNom}</Badge>
-            )}
-          </div>
-
-          {/* Booking info line */}
-          {booking && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400 mt-1">
-              {booking.customerEmail && (
-                <span>Email: {booking.customerEmail}</span>
-              )}
-              {booking.galleryUrl && (
-                <a href={booking.galleryUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-600 hover:underline">
-                  <FolderOpenIcon className="h-3 w-3" />
-                  Drive
-                </a>
-              )}
-              {booking.emailSentAt && (
-                <span className="flex items-center gap-1">
-                  <CheckCircleIcon className="h-3 w-3 text-green-500" />
-                  Envoyé le {new Date(booking.emailSentAt).toLocaleDateString('fr-FR')}
-                </span>
-              )}
-              {booking._count.events > 0 && (
-                <span className="flex items-center gap-1">
-                  <EyeIcon className="h-3 w-3" />
-                  {booking._count.events} visite{booking._count.events > 1 ? 's' : ''}
-                </span>
-              )}
-              {booking._count.reviewMatches > 0 && (
-                <span className="flex items-center gap-1 text-amber-600">
-                  <StarIcon className="h-3 w-3" />
-                  {booking._count.reviewMatches} avis
-                </span>
-              )}
-            </div>
           )}
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Button variant="outline" size="sm" onClick={onCopyLink} title="Copier le lien d'avis">
-            {booking ? <ClipboardDocumentIcon className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
-          </Button>
-          <Button variant="outline" size="sm" onClick={onSendReviewLink} title="Envoyer le lien d'avis Google">
-            <StarIcon className="h-4 w-4 mr-1" />
-            Avis
-          </Button>
-          <Button size="sm" onClick={onSendGalleryDirect} title="Envoyer directement la galerie photos">
-            <PhotoIcon className="h-4 w-4 mr-1" />
-            Galerie
-          </Button>
+        {/* Client Name - editable */}
+        <div className="flex items-center gap-1.5 mb-2">
+          {editing ? (
+            <div className="flex items-center gap-1 flex-1">
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRename(); if (e.key === 'Escape') handleCancelRename(); }}
+                className="flex-1 border border-primary-300 rounded px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500"
+                autoFocus
+              />
+              <button onClick={handleSaveRename} className="p-1 text-green-600 hover:text-green-700">
+                <CheckIcon className="h-4 w-4" />
+              </button>
+              <button onClick={handleCancelRename} className="p-1 text-gray-400 hover:text-gray-600">
+                <XMarkIcon className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <h3 className="font-semibold text-gray-900 truncate">{displayName}</h3>
+              {booking && (
+                <button
+                  onClick={() => { setEditName(displayName); setEditing(true); }}
+                  className="p-0.5 text-gray-400 hover:text-primary-600 flex-shrink-0"
+                  title="Modifier le nom du client"
+                >
+                  <PencilIcon className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </>
+          )}
         </div>
+
+        {/* Type de borne */}
+        {event.produitNom && (
+          <div className="mb-3">
+            <Badge variant="default" size="sm">{event.produitNom}</Badge>
+          </div>
+        )}
+
+        {/* Booking info */}
+        {booking && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 mb-3">
+            {booking.galleryUrl && (
+              <a href={booking.galleryUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-600 hover:underline">
+                <FolderOpenIcon className="h-3 w-3" />
+                Drive
+              </a>
+            )}
+            {booking.emailSentAt && (
+              <span className="flex items-center gap-1">
+                <CheckCircleIcon className="h-3 w-3 text-green-500" />
+                Envoyé {new Date(booking.emailSentAt).toLocaleDateString('fr-FR')}
+              </span>
+            )}
+            {booking._count.events > 0 && (
+              <span className="flex items-center gap-1">
+                <EyeIcon className="h-3 w-3" />
+                {booking._count.events} visite{booking._count.events > 1 ? 's' : ''}
+              </span>
+            )}
+            {booking._count.reviewMatches > 0 && (
+              <span className="flex items-center gap-1 text-amber-600">
+                <StarIcon className="h-3 w-3" />
+                {booking._count.reviewMatches} avis
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom: Actions */}
+      <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+        <Button variant="outline" size="sm" onClick={onCopyLink} title="Copier le lien d'avis" className="flex-shrink-0">
+          {booking ? <ClipboardDocumentIcon className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
+        </Button>
+        <Button variant="outline" size="sm" onClick={onSendReviewLink} title="Envoyer le lien d'avis Google" className="flex-1">
+          <StarIcon className="h-4 w-4 mr-1" />
+          Avis
+        </Button>
+        <Button size="sm" onClick={onSendGalleryDirect} title="Envoyer directement la galerie photos" className="flex-1">
+          <PhotoIcon className="h-4 w-4 mr-1" />
+          Galerie
+        </Button>
       </div>
     </Card>
   );
