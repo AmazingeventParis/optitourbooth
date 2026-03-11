@@ -15,6 +15,7 @@ import {
   PencilIcon,
   CheckIcon,
   XMarkIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
@@ -48,6 +49,7 @@ export default function GaleriesClientsPage() {
   const [events, setEvents] = useState<{ upcoming: CalendarEvent[]; past: CalendarEvent[] }>({ upcoming: [], past: [] });
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
+  const [search, setSearch] = useState('');
 
   // Modal states
   const [sendModal, setSendModal] = useState<CalendarEvent | null>(null);
@@ -205,7 +207,18 @@ export default function GaleriesClientsPage() {
     setSendGalleryModal(ev);
   };
 
-  const currentEvents = tab === 'upcoming' ? events.upcoming : events.past;
+  const filterBySearch = (list: CalendarEvent[]) => {
+    if (!search.trim()) return list;
+    const q = search.toLowerCase().trim();
+    return list.filter(ev => {
+      const name = (ev.booking?.customerName || ev.clientName).toLowerCase();
+      return name.includes(q);
+    });
+  };
+
+  const filteredUpcoming = filterBySearch(events.upcoming);
+  const filteredPast = filterBySearch(events.past);
+  const currentEvents = tab === 'upcoming' ? filteredUpcoming : filteredPast;
 
   return (
     <div className="space-y-6">
@@ -247,6 +260,23 @@ export default function GaleriesClientsPage() {
         </Card>
       </div>
 
+      {/* Search */}
+      <div className="relative">
+        <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Rechercher un client..."
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+        />
+        {search && (
+          <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            <XMarkIcon className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
       {/* Tabs */}
       <div className="flex gap-2 border-b">
         <button
@@ -256,7 +286,7 @@ export default function GaleriesClientsPage() {
             tab === 'upcoming' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
           )}
         >
-          A venir ({events.upcoming.length})
+          A venir ({filteredUpcoming.length})
         </button>
         <button
           onClick={() => setTab('past')}
@@ -265,7 +295,7 @@ export default function GaleriesClientsPage() {
             tab === 'past' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
           )}
         >
-          Passés ({events.past.length})
+          Passés ({filteredPast.length})
         </button>
       </div>
 
