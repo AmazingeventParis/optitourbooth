@@ -36,17 +36,19 @@ workflows:
           mkdir -p "$HOME/private_keys"
           echo -n "$APP_STORE_CONNECT_PRIVATE_KEY" > "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
 
-          # Generate a certificate private key for signing
-          openssl genrsa -out /tmp/cert_key.pem 2048
+          # Generate certificate private key if not provided
+          if [ -z "$CERTIFICATE_PRIVATE_KEY" ]; then
+            echo "Generating RSA key for certificate..."
+            export CERTIFICATE_PRIVATE_KEY=$(openssl genrsa 2048 2>/dev/null)
+          fi
 
           keychain initialize
 
-          # Fetch or create signing files with certificate key
+          # Fetch or create signing files
           app-store-connect fetch-signing-files \
             "app.swipego.optitourbooth" \
             --type IOS_APP_STORE \
-            --create \
-            --certificate-key /tmp/cert_key.pem
+            --create
 
           keychain add-certificates
           xcode-project use-profiles
