@@ -17,17 +17,7 @@ workflows:
       - name: Install dependencies
         script: |
           cd frontend
-          npm config set production false
-          npm config delete omit
           npm install --include=dev --legacy-peer-deps
-          echo "Installed packages count:"
-          ls node_modules | wc -l
-          echo "TypeScript:"
-          ls -la node_modules/.bin/tsc 2>/dev/null || echo "NOT FOUND"
-          echo "Vite:"
-          ls -la node_modules/.bin/vite 2>/dev/null || echo "NOT FOUND"
-          echo "npm config list:"
-          npm config list
       - name: Build web assets
         script: |
           cd frontend
@@ -42,13 +32,22 @@ workflows:
           pod install
       - name: Set up code signing
         script: |
+          # Write the App Store Connect API key
           mkdir -p "$HOME/private_keys"
           echo -n "$APP_STORE_CONNECT_PRIVATE_KEY" > "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
+
+          # Generate a certificate private key for signing
+          openssl genrsa -out /tmp/cert_key.pem 2048
+
           keychain initialize
+
+          # Fetch or create signing files with certificate key
           app-store-connect fetch-signing-files \
             "app.swipego.optitourbooth" \
             --type IOS_APP_STORE \
-            --create
+            --create \
+            --certificate-key /tmp/cert_key.pem
+
           keychain add-certificates
           xcode-project use-profiles
       - name: Increment build number
