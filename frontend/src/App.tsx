@@ -232,7 +232,7 @@ function App() {
     <Routes>
       {/* Route publique - Page de collecte d'avis (no auth) */}
       <Route
-        path="/r/:token"
+        path="/galerie/:token"
         element={<LazyPage><ReviewPage /></LazyPage>}
       />
 

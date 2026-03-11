@@ -279,7 +279,7 @@ export default function BookingsPage() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => copyToClipboard(`${window.location.origin}/r/${b.publicToken}`)}
+                        onClick={() => copyToClipboard(`${window.location.origin}/galerie/${b.publicToken}`)}
                       >
                         Copier lien
                       </Button>
