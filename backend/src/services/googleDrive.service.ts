@@ -136,15 +136,14 @@ export async function createDriveFolder(folderName: string, startDate?: string):
 
 /**
  * Build a folder name from event data
- * Format: "YYYY-MM-DD - ClientName (Produit)"
+ * Format: "JJ.MM Nom du client"
  */
-export function buildFolderName(clientName: string, startDate: string, produitNom?: string | null): string {
-  const parts = [startDate, clientName];
-  if (produitNom) {
-    parts.push(`(${produitNom})`);
-  }
+export function buildFolderName(clientName: string, startDate: string, _produitNom?: string | null): string {
+  // startDate is "YYYY-MM-DD"
+  const [, month, day] = startDate.split('-');
+  const name = `${day}.${month} ${clientName}`;
   // Sanitize: remove chars not allowed in Drive folder names
-  return parts.join(' - ').replace(/[/\\:*?"<>|]/g, '_');
+  return name.replace(/[/\\:*?"<>|]/g, '_');
 }
 
 /**
