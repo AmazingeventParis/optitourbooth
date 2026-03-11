@@ -8,6 +8,7 @@ import { scheduleGalleryDispatch } from '../services/galleryDispatch.service.js'
 import { processNewReview } from '../services/reviewMatching.service.js';
 import { fetchReview, parsePubSubMessage, isGoogleBusinessConfigured } from '../services/googleBusiness.service.js';
 import { renameDriveFolder, buildFolderName, isDriveConfigured } from '../services/googleDrive.service.js';
+import { sendReviewLinkEmail, sendGalleryDirectEmail } from '../services/email.service.js';
 
 // ===========================
 // PUBLIC ROUTES (no auth)
@@ -390,9 +391,30 @@ export const manualSendGallery = asyncHandler(async (req: Request, res: Response
     return apiResponse.badRequest(res, 'Aucune URL de galerie configurée pour cette réservation');
   }
 
-  await scheduleGalleryDispatch(id as string, 'manual', new Date());
+  if (!booking.customerEmail) {
+    return apiResponse.badRequest(res, 'Aucun email client configuré pour cette réservation');
+  }
 
-  return apiResponse.success(res, { message: 'Envoi de la galerie déclenché' });
+  const brand = (booking.senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
+
+  try {
+    await sendGalleryDirectEmail({
+      to: booking.customerEmail,
+      customerName: booking.customerName,
+      galleryUrl: booking.galleryUrl,
+      brand,
+    });
+  } catch (err) {
+    console.error(`[Booking] Erreur envoi galerie:`, err);
+    return apiResponse.serverError(res, `Erreur lors de l'envoi: ${(err as Error).message}`);
+  }
+
+  await prisma.booking.update({
+    where: { id },
+    data: { status: 'gallery_sent' },
+  });
+
+  return apiResponse.success(res, { message: `Galerie envoyée à ${booking.customerEmail} via ${brand}` });
 });
 
 /**
@@ -627,22 +649,34 @@ export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) =>
 
   const publicUrl = `${config.reviewSystem.publicBaseUrl}/galerie/${booking.publicToken}`;
 
+  const brand = (senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
+
   // Update email + sender brand on booking
   await prisma.booking.update({
     where: { id },
     data: {
       customerEmail: email,
       emailSentAt: new Date(),
-      ...(senderBrand && { senderBrand }),
+      senderBrand: brand,
     },
   });
 
-  // TODO: Send actual email via provider (SendGrid, SES, etc.)
-  // senderBrand determines which company email to send from (SHOOTNBOX or SMAKK)
-  console.log(`[Booking] Email envoyé à ${email} via ${senderBrand || 'default'} avec lien: ${publicUrl}`);
+  // Send actual email
+  try {
+    await sendReviewLinkEmail({
+      to: email,
+      customerName: booking.customerName,
+      publicUrl,
+      galleryUrl: booking.galleryUrl,
+      brand,
+    });
+  } catch (err) {
+    console.error(`[Booking] Erreur envoi email:`, err);
+    return apiResponse.serverError(res, `Erreur lors de l'envoi de l'email: ${(err as Error).message}`);
+  }
 
   return apiResponse.success(res, {
-    message: `Lien envoyé à ${email} via ${senderBrand || 'default'}`,
+    message: `Lien envoyé à ${email} via ${brand}`,
     publicUrl,
   });
 });

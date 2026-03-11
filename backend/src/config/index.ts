@@ -88,6 +88,27 @@ export const config = {
     pubsubTopicName: process.env.GOOGLE_PUBSUB_TOPIC_NAME || 'gbp-reviews',
   },
 
+  // Email (Outlook Exchange SMTP)
+  email: {
+    smtp: {
+      host: process.env.SMTP_HOST || 'smtp.office365.com',
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
+      secure: false, // STARTTLS
+    },
+    brands: {
+      SHOOTNBOX: {
+        email: process.env.EMAIL_SHOOTNBOX || 'contact@shootnbox.fr',
+        password: process.env.EMAIL_SHOOTNBOX_PASSWORD || '',
+        name: 'Shootnbox',
+      },
+      SMAKK: {
+        email: process.env.EMAIL_SMAKK || 'contact@smakk.fr',
+        password: process.env.EMAIL_SMAKK_PASSWORD || '',
+        name: 'Smakk',
+      },
+    },
+  },
+
   // Review system
   reviewSystem: {
     galleryDelayHours: parseInt(process.env.GALLERY_DELAY_HOURS || '24', 10),
