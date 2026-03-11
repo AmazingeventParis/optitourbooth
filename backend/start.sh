@@ -4,7 +4,7 @@ set -e
 echo "=== OptiTour Booth - Démarrage ==="
 
 echo "[1/3] Synchronisation du schéma de base de données..."
-prisma db push
+prisma db push --accept-data-loss
 
 echo "[2/3] Seed (upsert idempotent)..."
 npx tsx prisma/seed.ts
