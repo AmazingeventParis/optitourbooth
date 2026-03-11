@@ -73,6 +73,36 @@ export interface BookingStats {
   googleBusinessConfigured: boolean;
 }
 
+export interface CalendarEvent {
+  googleEventId: string;
+  clientName: string;
+  startDate: string;
+  endDate: string;
+  produitNom: string | null;
+  adresse: string | null;
+  contactNom: string | null;
+  contactTelephone: string | null;
+  notes: string | null;
+  booking: {
+    id: string;
+    publicToken: string;
+    publicUrl: string;
+    customerEmail: string | null;
+    customerPhone: string | null;
+    galleryUrl: string | null;
+    googleReviewUrl: string | null;
+    status: string;
+    emailSentAt: string | null;
+    createdAt: string;
+    _count: { events: number; reviewMatches: number; galleryDispatches: number };
+  } | null;
+}
+
+export interface CalendarEventsResponse {
+  upcoming: CalendarEvent[];
+  past: CalendarEvent[];
+}
+
 export const bookingsService = {
   async list(params?: { page?: number; limit?: number; status?: string; search?: string }) {
     const response = await api.get<ApiResponse<Booking[]>>('/bookings', { params });
@@ -120,6 +150,31 @@ export const bookingsService = {
       `/bookings/review-matches/${matchId}/status`,
       { status }
     );
+    return response.data.data;
+  },
+
+  async getCalendarEvents() {
+    const response = await api.get<ApiResponse<CalendarEventsResponse>>('/bookings/calendar-events');
+    return response.data.data;
+  },
+
+  async createFromEvent(data: {
+    googleEventId: string;
+    customerName: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    eventDate: string;
+    eventEndDate?: string;
+    produitNom?: string;
+    galleryUrl?: string;
+    googleReviewUrl?: string;
+  }) {
+    const response = await api.post<ApiResponse<Booking & { publicUrl: string }>>('/bookings/from-event', data);
+    return response.data.data;
+  },
+
+  async sendLinkEmail(id: string, email: string) {
+    const response = await api.post<ApiResponse<{ message: string; publicUrl: string }>>(`/bookings/${id}/send-link-email`, { email });
     return response.data.data;
   },
 };

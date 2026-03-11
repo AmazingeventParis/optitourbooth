@@ -175,7 +175,7 @@ export default function ReviewPage() {
               {/* CTA 1: Leave a Google review */}
               <button
                 onClick={handleReviewClick}
-                className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 mb-4"
+                className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 mb-2"
               >
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
@@ -185,17 +185,23 @@ export default function ReviewPage() {
                 </svg>
                 Laisser un avis Google
               </button>
+              <p className="text-xs text-green-600 font-medium text-center mb-6">
+                Galerie disponible immédiatement
+              </p>
 
               {/* CTA 2: No review */}
               <button
                 onClick={handleNoReviewClick}
-                className="w-full py-3 px-6 rounded-xl border-2 border-gray-200 text-gray-600 font-medium hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
+                className="w-full py-3 px-6 rounded-xl border-2 border-gray-200 text-gray-600 font-medium hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 mb-2"
               >
                 Je ne laisse pas d'avis
               </button>
+              <p className="text-xs text-gray-400 text-center mb-4">
+                Galerie disponible sous 24h
+              </p>
 
               {/* Reassurance */}
-              <p className="text-sm text-gray-400 text-center mt-6">
+              <p className="text-sm text-gray-400 text-center mt-4 pt-4 border-t border-gray-100">
                 Dans tous les cas, votre galerie vous sera bien envoyée.
               </p>
 

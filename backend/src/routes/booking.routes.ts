@@ -9,11 +9,14 @@ import {
   handlePubSubReview,
   // Admin
   listBookings,
+  listCalendarEvents,
   createBooking,
+  createBookingFromEvent,
   getBookingDetail,
   updateBooking,
   deleteBooking,
   manualSendGallery,
+  sendLinkEmail,
   updateReviewMatchStatus,
   getBookingStats,
 } from '../controllers/booking.controller.js';
@@ -50,8 +53,14 @@ router.get('/bookings', authenticate, requireAdmin, listBookings);
 // Get booking stats
 router.get('/bookings/stats', authenticate, requireAdmin, getBookingStats);
 
+// List calendar events with booking status
+router.get('/bookings/calendar-events', authenticate, requireAdmin, listCalendarEvents);
+
 // Create a new booking
 router.post('/bookings', authenticate, requireAdmin, createBooking);
+
+// Create booking from Google Calendar event
+router.post('/bookings/from-event', authenticate, requireAdmin, createBookingFromEvent);
 
 // Get booking detail
 router.get('/bookings/:id', authenticate, requireAdmin, getBookingDetail);
@@ -64,6 +73,9 @@ router.delete('/bookings/:id', authenticate, requireAdmin, deleteBooking);
 
 // Manually send gallery
 router.post('/bookings/:id/send-gallery', authenticate, requireAdmin, manualSendGallery);
+
+// Send review link email to customer
+router.post('/bookings/:id/send-link-email', authenticate, requireAdmin, sendLinkEmail);
 
 // Update review match status
 router.patch('/bookings/review-matches/:matchId/status', authenticate, requireAdmin, updateReviewMatchStatus);

@@ -646,11 +646,15 @@ model Booking {
   customerEmail       String?       @map("customer_email")
   customerPhone       String?       @map("customer_phone")
   eventDate           DateTime      @db.Date @map("event_date")
+  eventEndDate        DateTime?     @db.Date @map("event_end_date")
   galleryUrl          String?       @map("gallery_url")
   googleReviewUrl     String?       @map("google_review_url")
+  googleEventId       String?       @unique @map("google_event_id")
+  produitNom          String?       @map("produit_nom")
   businessAccountId   String?       @map("business_account_id")
   businessLocationId  String?       @map("business_location_id")
   status              BookingStatus @default(link_sent)
+  emailSentAt         DateTime?     @map("email_sent_at")
 
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
@@ -662,6 +666,7 @@ model Booking {
   @@index([status])
   @@index([eventDate])
   @@index([customerEmail])
+  @@index([googleEventId])
   @@map("bookings")
 }
 

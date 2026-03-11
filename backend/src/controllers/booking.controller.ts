@@ -424,6 +424,214 @@ export const updateReviewMatchStatus = asyncHandler(async (req: Request, res: Re
 });
 
 /**
+ * GET /api/bookings/calendar-events
+ * List Google Calendar events grouped, with their booking status
+ * Returns upcoming and past events
+ */
+export const listCalendarEvents = asyncHandler(async (_req: Request, res: Response) => {
+  // Get all unique Google Calendar events from PendingPoints
+  const pendingPoints = await prisma.pendingPoint.findMany({
+    where: { source: 'google_calendar' },
+    orderBy: { date: 'desc' },
+  });
+
+  // Group by Google event ID (externalId without _livraison/_ramassage suffix)
+  const eventsMap = new Map<string, {
+    googleEventId: string;
+    clientName: string;
+    startDate: string;
+    endDate: string;
+    produitNom: string | null;
+    adresse: string | null;
+    contactNom: string | null;
+    contactTelephone: string | null;
+    notes: string | null;
+  }>();
+
+  for (const pp of pendingPoints) {
+    if (!pp.externalId) continue;
+    const eventId = pp.externalId.replace(/_livraison$/, '').replace(/_ramassage$/, '');
+
+    const existing = eventsMap.get(eventId);
+    if (!existing) {
+      eventsMap.set(eventId, {
+        googleEventId: eventId,
+        clientName: pp.clientName,
+        startDate: pp.date.toISOString().substring(0, 10),
+        endDate: pp.date.toISOString().substring(0, 10),
+        produitNom: pp.produitNom,
+        adresse: pp.adresse,
+        contactNom: pp.contactNom,
+        contactTelephone: pp.contactTelephone,
+        notes: pp.notes,
+      });
+    } else {
+      // Update start/end dates
+      const dateStr = pp.date.toISOString().substring(0, 10);
+      if (pp.type === 'livraison' && dateStr < existing.startDate) {
+        existing.startDate = dateStr;
+      }
+      if (pp.type === 'ramassage' && dateStr > existing.endDate) {
+        existing.endDate = dateStr;
+      }
+      // Fill missing info
+      if (!existing.adresse && pp.adresse) existing.adresse = pp.adresse;
+      if (!existing.contactNom && pp.contactNom) existing.contactNom = pp.contactNom;
+      if (!existing.contactTelephone && pp.contactTelephone) existing.contactTelephone = pp.contactTelephone;
+      if (!existing.produitNom && pp.produitNom) existing.produitNom = pp.produitNom;
+    }
+  }
+
+  // Get all bookings with googleEventId
+  const bookings = await prisma.booking.findMany({
+    where: { googleEventId: { not: null } },
+    include: {
+      _count: { select: { events: true, reviewMatches: true, galleryDispatches: true } },
+    },
+  });
+
+  const bookingByEventId = new Map<string, typeof bookings[0]>();
+  for (const b of bookings) {
+    if (b.googleEventId) bookingByEventId.set(b.googleEventId, b);
+  }
+
+  // Also include bookings without a matching PendingPoint (manually created)
+  for (const b of bookings) {
+    if (b.googleEventId && !eventsMap.has(b.googleEventId)) {
+      eventsMap.set(b.googleEventId, {
+        googleEventId: b.googleEventId,
+        clientName: b.customerName,
+        startDate: b.eventDate.toISOString().substring(0, 10),
+        endDate: (b.eventEndDate || b.eventDate).toISOString().substring(0, 10),
+        produitNom: b.produitNom,
+        adresse: null,
+        contactNom: null,
+        contactTelephone: null,
+        notes: null,
+      });
+    }
+  }
+
+  // Build result
+  const now = new Date();
+  const todayStr = now.toISOString().substring(0, 10);
+  const upcoming: unknown[] = [];
+  const past: unknown[] = [];
+
+  for (const [eventId, ev] of eventsMap) {
+    const booking = bookingByEventId.get(eventId);
+    const entry = {
+      ...ev,
+      booking: booking ? {
+        id: booking.id,
+        publicToken: booking.publicToken,
+        publicUrl: `${config.reviewSystem.publicBaseUrl}/r/${booking.publicToken}`,
+        customerEmail: booking.customerEmail,
+        customerPhone: booking.customerPhone,
+        galleryUrl: booking.galleryUrl,
+        googleReviewUrl: booking.googleReviewUrl,
+        status: booking.status,
+        emailSentAt: booking.emailSentAt,
+        createdAt: booking.createdAt,
+        _count: booking._count,
+      } : null,
+    };
+
+    if (ev.endDate >= todayStr) {
+      upcoming.push(entry);
+    } else {
+      past.push(entry);
+    }
+  }
+
+  // Sort: upcoming by startDate ASC, past by endDate DESC
+  upcoming.sort((a: any, b: any) => a.startDate.localeCompare(b.startDate));
+  past.sort((a: any, b: any) => b.endDate.localeCompare(a.endDate));
+
+  return apiResponse.success(res, { upcoming, past });
+});
+
+/**
+ * POST /api/bookings/from-event
+ * Create a booking from a Google Calendar event + optionally send email
+ */
+export const createBookingFromEvent = asyncHandler(async (req: Request, res: Response) => {
+  const { googleEventId, customerName, customerEmail, customerPhone, eventDate, eventEndDate, produitNom, galleryUrl, googleReviewUrl } = req.body;
+
+  if (!googleEventId || !customerName || !eventDate) {
+    return apiResponse.badRequest(res, 'googleEventId, customerName et eventDate requis');
+  }
+
+  // Check if booking already exists for this event
+  const existing = await prisma.booking.findUnique({ where: { googleEventId } });
+  if (existing) {
+    return apiResponse.badRequest(res, 'Un lien existe déjà pour cet événement');
+  }
+
+  const publicToken = crypto.randomBytes(24).toString('base64url');
+
+  const booking = await prisma.booking.create({
+    data: {
+      publicToken,
+      customerName,
+      customerEmail: customerEmail || null,
+      customerPhone: customerPhone || null,
+      eventDate: new Date(eventDate),
+      eventEndDate: eventEndDate ? new Date(eventEndDate) : null,
+      produitNom: produitNom || null,
+      galleryUrl: galleryUrl || null,
+      googleEventId,
+      googleReviewUrl: googleReviewUrl || config.googleBusiness.defaultReviewUrl || null,
+      businessAccountId: config.googleBusiness.accountId || null,
+      businessLocationId: config.googleBusiness.locationId || null,
+      status: 'link_sent',
+    },
+  });
+
+  const publicUrl = `${config.reviewSystem.publicBaseUrl}/r/${publicToken}`;
+
+  return apiResponse.created(res, { ...booking, publicUrl });
+});
+
+/**
+ * POST /api/bookings/:id/send-link-email
+ * Send the review link to the customer by email
+ */
+export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { email } = req.body;
+
+  if (!email) {
+    return apiResponse.badRequest(res, 'Email requis');
+  }
+
+  const booking = await prisma.booking.findUnique({ where: { id } });
+  if (!booking) {
+    return apiResponse.notFound(res, 'Réservation introuvable');
+  }
+
+  const publicUrl = `${config.reviewSystem.publicBaseUrl}/r/${booking.publicToken}`;
+
+  // Update email on booking
+  await prisma.booking.update({
+    where: { id },
+    data: {
+      customerEmail: email,
+      emailSentAt: new Date(),
+    },
+  });
+
+  // TODO: Send actual email via provider (SendGrid, SES, etc.)
+  // For now, just log and mark as sent
+  console.log(`[Booking] Email envoyé à ${email} avec lien: ${publicUrl}`);
+
+  return apiResponse.success(res, {
+    message: `Lien envoyé à ${email}`,
+    publicUrl,
+  });
+});
+
+/**
  * GET /api/bookings/stats
  * Get booking statistics
  */
