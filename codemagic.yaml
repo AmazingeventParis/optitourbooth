@@ -13,13 +13,12 @@ workflows:
         VITE_API_URL: "https://optitourbooth-api.swipego.app/api"
         VITE_CAPACITOR: "true"
     scripts:
-      - name: Install pnpm
+      - name: Install dependencies
         script: |
-          npm install -g pnpm
-      - name: Install frontend dependencies
-        script: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
           cd frontend
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile || pnpm install
       - name: Build web assets for Capacitor
         script: |
           cd frontend
