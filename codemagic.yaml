@@ -13,43 +13,27 @@ workflows:
         VITE_API_URL: "https://optitourbooth-api.swipego.app/api"
         VITE_CAPACITOR: "true"
     scripts:
-      - name: Install dependencies
-        script: |
-          corepack enable
-          corepack prepare pnpm@latest --activate
-          cd frontend
-          pnpm install --frozen-lockfile || pnpm install
-      - name: Build web assets for Capacitor
+      - name: Install dependencies and build web
         script: |
           cd frontend
-          pnpm vite build --mode capacitor
-      - name: Sync Capacitor iOS
+          npm install --legacy-peer-deps
+          npx vite build --mode capacitor
+      - name: Sync Capacitor and install pods
         script: |
           cd frontend
           npx cap sync ios
-      - name: Install CocoaPods
-        script: |
-          cd frontend/ios/App
+          cd ios/App
           pod install
       - name: Set up code signing
         script: |
-          # Write the .p8 key file
           mkdir -p "$HOME/private_keys"
           echo -n "$APP_STORE_CONNECT_PRIVATE_KEY" > "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
-
-          # Initialize keychain
           keychain initialize
-
-          # Fetch or create signing certificates and provisioning profiles
           app-store-connect fetch-signing-files \
             "app.swipego.optitourbooth" \
             --type IOS_APP_STORE \
             --create
-
-          # Add fetched certificates to the keychain
           keychain add-certificates
-
-          # Apply provisioning profiles to Xcode project
           xcode-project use-profiles
       - name: Increment build number
         script: |
