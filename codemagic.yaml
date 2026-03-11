@@ -1,0 +1,68 @@
+workflows:
+  ios-build:
+    name: iOS Build & TestFlight
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      groups:
+        - apple_credentials
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: app.swipego.optitourbooth
+      node: 20
+      xcode: latest
+      cocoapods: default
+      vars:
+        VITE_API_URL: "https://optitourbooth-api.swipego.app/api"
+        VITE_CAPACITOR: "true"
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: master
+          include: true
+      cancel_previous_builds: true
+    scripts:
+      - name: Install pnpm
+        script: |
+          npm install -g pnpm
+      - name: Install frontend dependencies
+        script: |
+          cd frontend
+          pnpm install --frozen-lockfile
+      - name: Build web assets for Capacitor
+        script: |
+          cd frontend
+          pnpm vite build --mode capacitor
+      - name: Sync Capacitor iOS
+        script: |
+          cd frontend
+          npx cap sync ios
+      - name: Install CocoaPods
+        script: |
+          cd frontend/ios/App
+          pod install
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
+      - name: Increment build number
+        script: |
+          cd frontend/ios/App
+          LATEST_BUILD=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_CONNECT_APP_ID" || echo 0)
+          agvtool new-version -all $((LATEST_BUILD + 1))
+      - name: Build iOS app
+        script: |
+          cd frontend/ios/App
+          xcode-project build-ipa \
+            --workspace "App.xcworkspace" \
+            --scheme "App" \
+            --config "Release"
+    artifacts:
+      - frontend/ios/App/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Chauffeurs

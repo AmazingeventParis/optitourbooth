@@ -84,9 +84,10 @@ test_*.xlsx
 
 # ----- Mobile (Capacitor) -----
 frontend/android/
-frontend/ios/
 *.aab
 *.ipa
+# Keep iOS project for Codemagic CI build
+# frontend/ios/ is NOT ignored — needed for Codemagic
 # Keep the downloadable APK in public
 !frontend/public/downloads/*.apk
 
