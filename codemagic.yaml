@@ -23,7 +23,7 @@ workflows:
           cd frontend
           export VITE_API_URL="https://optitourbooth-api.swipego.app/api"
           export VITE_CAPACITOR="true"
-          npx vite build
+          ./node_modules/.bin/vite build 2>&1 | tee /tmp/vite-build.log
       - name: Sync Capacitor iOS
         script: |
           cd frontend
