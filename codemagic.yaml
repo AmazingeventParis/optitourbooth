@@ -72,10 +72,14 @@ workflows:
       - name: Build iOS app
         script: |
           cd frontend/ios/App
+          # List available schemes
+          xcodebuild -workspace "App.xcworkspace" -list 2>&1 || true
+          # Build with detected scheme
           xcode-project build-ipa \
             --workspace "App.xcworkspace" \
             --scheme "App" \
-            --config "Release"
+            --config "Release" \
+            --allow-provisioning-updates
     artifacts:
       - frontend/ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
