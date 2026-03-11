@@ -641,6 +641,15 @@ export async function syncGoogleCalendarEvents(): Promise<{
             },
           });
           console.log(`[Google Calendar] 📁 Dossier Drive + Booking créés pour "${clientName}" → ${folderUrl}`);
+        } else if (!existingBooking.galleryUrl) {
+          // Booking exists but no Drive folder yet - create one
+          const folderName = buildFolderName(clientName, startDate, produitNom);
+          const { folderUrl } = await createDriveFolder(folderName);
+          await prisma.booking.update({
+            where: { id: existingBooking.id },
+            data: { galleryUrl: folderUrl },
+          });
+          console.log(`[Google Calendar] 📁 Dossier Drive ajouté à booking existant "${clientName}" → ${folderUrl}`);
         }
       } catch (e) {
         console.error(`[Google Calendar] Erreur création dossier Drive pour ${clientName}:`, e);
