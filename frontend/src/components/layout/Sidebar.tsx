@@ -4,9 +4,6 @@ import { Dialog, Transition, Menu } from '@headlessui/react';
 import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import {
   HomeIcon,
-  UserGroupIcon,
-  UsersIcon,
-  CubeIcon,
   ChartBarIcon,
   CalendarDaysIcon,
   ClockIcon,
@@ -44,10 +41,6 @@ const navigation: Array<{
   { name: 'Planning', href: '/planning', icon: CalendarDaysIcon, roles: ['admin', 'warehouse'] },
   { name: 'Historique', href: '/historique', icon: ClockIcon, roles: ['admin'] },
   { name: 'Préparations', href: '/preparations', icon: WrenchScrewdriverIcon, roles: ['admin', 'preparateur', 'warehouse'] },
-  { name: 'Clients', href: '/clients', icon: UserGroupIcon, roles: ['admin'] },
-  { name: 'Utilisateurs', href: '/utilisateurs', icon: UsersIcon, roles: ['admin'] },
-  { name: 'Véhicules', href: '/vehicules', icon: TruckIcon, roles: ['admin'] },
-  { name: 'Produits', href: '/produits', icon: CubeIcon, roles: ['admin'] },
   { name: 'Rapports', href: '/rapports', icon: ChartBarIcon, roles: ['admin'] },
   { name: 'Galeries Clients', href: '/galeries', icon: PhotoIcon, roles: ['admin'] },
   { name: 'Paramètres', href: '/parametres', icon: Cog6ToothIcon, roles: ['admin'] },

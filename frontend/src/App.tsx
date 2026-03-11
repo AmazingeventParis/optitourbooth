@@ -16,10 +16,6 @@ import LoginPage from '@/pages/LoginPage';
 // Ces pages sont chargées uniquement quand nécessaire
 // ============================================
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
-const UsersPage = lazy(() => import('@/pages/UsersPage'));
-const VehiculesPage = lazy(() => import('@/pages/VehiculesPage'));
-const ClientsPage = lazy(() => import('@/pages/ClientsPage'));
-const ProduitsPage = lazy(() => import('@/pages/ProduitsPage'));
 const TourneesPage = lazy(() => import('@/pages/TourneesPage'));
 const TourneeDetailPage = lazy(() => import('@/pages/TourneeDetailPage'));
 const DailyPlanningPage = lazy(() => import('@/pages/DailyPlanningPage'));
@@ -278,10 +274,10 @@ function App() {
         }
       >
         <Route index element={<LazyPage><DashboardPage /></LazyPage>} />
-        <Route path="utilisateurs" element={<LazyPage><UsersPage /></LazyPage>} />
-        <Route path="vehicules" element={<LazyPage><VehiculesPage /></LazyPage>} />
-        <Route path="clients" element={<LazyPage><ClientsPage /></LazyPage>} />
-        <Route path="produits" element={<LazyPage><ProduitsPage /></LazyPage>} />
+        <Route path="utilisateurs" element={<Navigate to="/parametres" replace />} />
+        <Route path="vehicules" element={<Navigate to="/parametres" replace />} />
+        <Route path="clients" element={<Navigate to="/parametres" replace />} />
+        <Route path="produits" element={<Navigate to="/parametres" replace />} />
         <Route path="tournees" element={<LazyPage><TourneesPage /></LazyPage>} />
         <Route path="tournees/:id" element={<LazyPage><TourneeDetailPage /></LazyPage>} />
         <Route path="planning" element={<LazyPage><DailyPlanningPage /></LazyPage>} />
