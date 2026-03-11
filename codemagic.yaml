@@ -16,11 +16,15 @@ workflows:
       - name: Install dependencies
         script: |
           set -ex
+          export NODE_ENV=development
           cd frontend
           node -v
           npm -v
           # Force install ALL deps (including devDependencies needed for build)
-          NODE_ENV=development npm install --legacy-peer-deps
+          npm install --include=dev --legacy-peer-deps
+          # Verify vite is installed
+          ls node_modules/.bin/vite || echo "VITE NOT FOUND!"
+          npx vite --version
       - name: Build web assets
         script: |
           cd frontend
