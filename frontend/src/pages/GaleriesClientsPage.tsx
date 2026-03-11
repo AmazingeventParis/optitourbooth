@@ -7,7 +7,6 @@ import {
   ClipboardDocumentIcon,
   LinkIcon,
   CheckCircleIcon,
-  ClockIcon,
   CalendarDaysIcon,
   MapPinIcon,
   PhoneIcon,
@@ -274,7 +273,7 @@ export default function GaleriesClientsPage() {
 
       {/* Send Email Modal */}
       <Modal
-        open={!!sendModal}
+        isOpen={!!sendModal}
         onClose={() => setSendModal(null)}
         title={`Envoyer le lien — ${sendModal?.clientName}`}
       >
@@ -328,7 +327,7 @@ export default function GaleriesClientsPage() {
 
       {/* Gallery URL Modal */}
       <Modal
-        open={!!galleryModal}
+        isOpen={!!galleryModal}
         onClose={() => setGalleryModal(null)}
         title={`Galerie photos — ${galleryModal?.clientName}`}
       >
