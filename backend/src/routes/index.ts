@@ -15,6 +15,7 @@ import preparationRoutes from './preparation.routes.js';
 import tenantRoutes from './tenant.routes.js';
 import settingsRoutes from './settings.routes.js';
 import pendingPointRoutes from './pendingPoint.routes.js';
+import bookingRoutes from './booking.routes.js';
 
 const router = Router();
 
@@ -131,6 +132,26 @@ router.get('/', (_req: Request, res: Response) => {
         createAdmin: 'POST /api/tenants/:id/admin',
         listUsers: 'GET /api/tenants/:id/users',
       },
+      bookings: {
+        public: {
+          getPage: 'GET /api/public/bookings/:token',
+          reviewClick: 'POST /api/public/bookings/:token/actions/review-click',
+          noReviewClick: 'POST /api/public/bookings/:token/actions/no-review-click',
+        },
+        internal: {
+          pubsubReviews: 'POST /api/internal/google/pubsub/reviews',
+        },
+        admin: {
+          list: 'GET /api/bookings',
+          stats: 'GET /api/bookings/stats',
+          create: 'POST /api/bookings',
+          get: 'GET /api/bookings/:id',
+          update: 'PUT /api/bookings/:id',
+          delete: 'DELETE /api/bookings/:id',
+          sendGallery: 'POST /api/bookings/:id/send-gallery',
+          updateMatchStatus: 'PATCH /api/bookings/review-matches/:matchId/status',
+        },
+      },
     },
   });
 });
@@ -149,5 +170,8 @@ router.use('/preparations', preparationRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/tenants', tenantRoutes);
 router.use('/pending-points', pendingPointRoutes);
+
+// Booking / Review system routes (public + internal + admin)
+router.use('/', bookingRoutes);
 
 export default router;

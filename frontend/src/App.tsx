@@ -51,6 +51,16 @@ const ChauffeurAgendaPage = lazy(() =>
 );
 
 // ============================================
+// LAZY LOADING - Pages Admin (suite)
+// ============================================
+const BookingsPage = lazy(() => import('@/pages/BookingsPage'));
+
+// ============================================
+// LAZY LOADING - Page publique (review/galerie)
+// ============================================
+const ReviewPage = lazy(() => import('@/pages/ReviewPage'));
+
+// ============================================
 // LAZY LOADING - Pages Super Admin
 // ============================================
 const SuperAdminLayout = lazy(() => import('@/components/layout/SuperAdminLayout'));
@@ -219,6 +229,12 @@ function App() {
 
   return (
     <Routes>
+      {/* Route publique - Page de collecte d'avis (no auth) */}
+      <Route
+        path="/r/:token"
+        element={<LazyPage><ReviewPage /></LazyPage>}
+      />
+
       {/* Routes publiques */}
       <Route
         path="/login"
@@ -270,6 +286,7 @@ function App() {
         <Route path="planning" element={<LazyPage><DailyPlanningPage /></LazyPage>} />
         <Route path="historique" element={<LazyPage><TourneesPage /></LazyPage>} />
         <Route path="rapports" element={<LazyPage><RapportsPage /></LazyPage>} />
+        <Route path="reservations" element={<LazyPage><BookingsPage /></LazyPage>} />
         <Route path="parametres" element={<LazyPage><SettingsPage /></LazyPage>} />
       </Route>
 

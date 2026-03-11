@@ -70,6 +70,25 @@ export const config = {
     syncDaysAhead: parseInt(process.env.GOOGLE_CALENDAR_SYNC_DAYS_AHEAD || '30', 10),
   },
 
+  // Google Business Profile (Review system)
+  googleBusiness: {
+    oauthClientId: process.env.GOOGLE_BP_CLIENT_ID || '',
+    oauthClientSecret: process.env.GOOGLE_BP_CLIENT_SECRET || '',
+    oauthRefreshToken: process.env.GOOGLE_BP_REFRESH_TOKEN || '',
+    accountId: process.env.GOOGLE_BP_ACCOUNT_ID || '',
+    locationId: process.env.GOOGLE_BP_LOCATION_ID || '',
+    defaultReviewUrl: process.env.GOOGLE_DEFAULT_REVIEW_URL || '',
+    pubsubProjectId: process.env.GOOGLE_PUBSUB_PROJECT_ID || '',
+    pubsubTopicName: process.env.GOOGLE_PUBSUB_TOPIC_NAME || 'gbp-reviews',
+  },
+
+  // Review system
+  reviewSystem: {
+    galleryDelayHours: parseInt(process.env.GALLERY_DELAY_HOURS || '24', 10),
+    matchingWindowMinutes: parseInt(process.env.MATCHING_WINDOW_MINUTES || '60', 10),
+    publicBaseUrl: process.env.PUBLIC_BASE_URL || 'http://localhost:5173',
+  },
+
   // CORS
   cors: {
     origin: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim()),

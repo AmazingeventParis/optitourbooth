@@ -440,7 +440,7 @@ export default function ChauffeurPointPage() {
                 alt={photo.filename}
                 className={clsx(
                   'w-full h-full object-cover rounded',
-                  photo.status === 'uploading' && 'opacity-70',
+                  (photo.status === 'uploading' || photo.status === 'compressing') && 'opacity-70',
                   photo.status === 'error' && 'opacity-50'
                 )}
               />
@@ -453,25 +453,38 @@ export default function ChauffeurPointPage() {
                   />
                 </div>
               )}
+              {/* Compressing indicator */}
+              {photo.status === 'compressing' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 rounded">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                  <span className="text-white text-xs mt-1">Compression...</span>
+                </div>
+              )}
               {/* Uploading spinner */}
               {(photo.status === 'uploading' || photo.status === 'pending') && (
-                <div className="absolute inset-0 flex items-center justify-center">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 rounded">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                  {photo.status === 'uploading' && photo.progress > 0 && (
+                    <span className="text-white text-xs mt-1">{photo.progress}%</span>
+                  )}
                 </div>
               )}
               {/* Error overlay */}
               {photo.status === 'error' && (
-                <div className="absolute inset-0 flex items-center justify-center">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 rounded">
                   <button
-                    onClick={() => retryPhoto(photo.id)}
+                    onClick={(e) => { e.stopPropagation(); retryPhoto(photo.id); }}
                     className="p-2 bg-red-500 text-white rounded-full"
                   >
                     <ArrowPathIcon className="h-5 w-5" />
                   </button>
+                  <span className="text-white text-xs mt-1 px-1 text-center">
+                    {(photo as any).errorMessage || 'Erreur'}
+                  </span>
                 </div>
               )}
               {/* Delete button */}
-              {isActive && photo.status !== 'uploading' && (
+              {isActive && photo.status !== 'uploading' && photo.status !== 'compressing' && (
                 <button
                   onClick={() => removePhoto(photo.id)}
                   className="absolute top-1 right-1 p-1.5 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"

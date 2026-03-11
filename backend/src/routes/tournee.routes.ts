@@ -46,10 +46,11 @@ const upload = multer({
 });
 
 // Configuration multer pour l'upload de photos (stockage mémoire pour Cloudinary)
+// Les photos sont compressées côté frontend (~500KB), limite haute en fallback
 const photoUpload = multer({
-  storage: multer.memoryStorage(), // Stockage en mémoire pour upload vers Cloudinary
+  storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB max per photo
+    fileSize: 5 * 1024 * 1024, // 5MB max per photo (photos are pre-compressed to ~500KB)
   },
   fileFilter: (_req, file, cb) => {
     const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];

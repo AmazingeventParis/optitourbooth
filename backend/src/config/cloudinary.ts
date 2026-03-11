@@ -42,16 +42,23 @@ export async function uploadToCloudinary(
   }
 
   return new Promise((resolve, reject) => {
+    // Timeout: 30 seconds
+    const timeout = setTimeout(() => {
+      reject(new Error('Cloudinary upload timeout (30s)'));
+    }, 30_000);
+
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder,
         resource_type: 'image',
         transformation: [
-          { quality: 'auto:good' }, // Optimisation automatique de la qualité
-          { fetch_format: 'auto' }, // Format automatique (webp si supporté)
+          { quality: 'auto:good' },
+          { fetch_format: 'auto' },
         ],
+        timeout: 30000,
       },
       (error, result) => {
+        clearTimeout(timeout);
         if (error) {
           console.error('Cloudinary upload error:', error);
           reject(error);

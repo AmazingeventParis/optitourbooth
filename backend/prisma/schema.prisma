@@ -579,6 +579,135 @@ model Preparation {
   @@map("preparations")
 }
 
+// ----- REVIEW & GALLERY SYSTEM -----
+
+enum BookingStatus {
+  link_sent
+  page_viewed
+  review_clicked
+  no_review_selected
+  review_detected
+  review_matched
+  gallery_scheduled_24h
+  gallery_sent
+  manual_check_required
+  closed
+}
+
+enum BookingEventType {
+  landing_view
+  review_click
+  no_review_click
+  review_redirected
+  review_detected
+  gallery_send_scheduled
+  gallery_sent
+  matching_failed
+  manual_review_required
+}
+
+enum MatchStatus {
+  pending
+  matched
+  manual_check
+  rejected
+}
+
+enum DispatchType {
+  after_review
+  after_no_review_24h
+  fallback_24h
+  manual
+}
+
+/// Réservations clients (page unique de collecte avis)
+model Booking {
+  id                  String        @id @default(uuid())
+  publicToken         String        @unique @map("public_token")
+  customerName        String        @map("customer_name")
+  customerEmail       String?       @map("customer_email")
+  customerPhone       String?       @map("customer_phone")
+  eventDate           DateTime      @db.Date @map("event_date")
+  galleryUrl          String?       @map("gallery_url")
+  googleReviewUrl     String?       @map("google_review_url")
+  businessAccountId   String?       @map("business_account_id")
+  businessLocationId  String?       @map("business_location_id")
+  status              BookingStatus @default(link_sent)
+
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  events              BookingEvent[]
+  reviewMatches       ReviewMatch[]
+  galleryDispatches   GalleryDispatch[]
+
+  @@index([status])
+  @@index([eventDate])
+  @@index([customerEmail])
+  @@map("bookings")
+}
+
+/// Journal d'événements horodatés pour chaque réservation
+model BookingEvent {
+  id            String           @id @default(uuid())
+  bookingId     String           @map("booking_id")
+  eventType     BookingEventType @map("event_type")
+  occurredAt    DateTime         @default(now()) @map("occurred_at")
+  sessionId     String?          @map("session_id")
+  ipHash        String?          @map("ip_hash")
+  userAgent     String?          @map("user_agent")
+  referer       String?
+  metadataJson  Json?            @map("metadata_json")
+
+  booking       Booking          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([bookingId, eventType])
+  @@index([occurredAt])
+  @@map("booking_events")
+}
+
+/// Correspondances entre avis Google et réservations
+model ReviewMatch {
+  id                         String      @id @default(uuid())
+  bookingId                  String      @map("booking_id")
+  googleReviewName           String?     @map("google_review_name")
+  googleReviewId             String?     @unique @map("google_review_id")
+  googleReviewerDisplayName  String?     @map("google_reviewer_display_name")
+  googleReviewCreateTime     DateTime?   @map("google_review_create_time")
+  googleReviewUpdateTime     DateTime?   @map("google_review_update_time")
+  matchScore                 Int         @default(0) @map("match_score")
+  matchStatus                MatchStatus @default(pending) @map("match_status")
+  matchedAt                  DateTime?   @map("matched_at")
+  rawPayloadJson             Json?       @map("raw_payload_json")
+
+  booking                    Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([matchStatus])
+  @@map("review_matches")
+}
+
+/// Envois de galeries photos
+model GalleryDispatch {
+  id                String       @id @default(uuid())
+  bookingId         String       @map("booking_id")
+  dispatchType      DispatchType @map("dispatch_type")
+  scheduledFor      DateTime     @map("scheduled_for")
+  sentAt            DateTime?    @map("sent_at")
+  channel           String       @default("email") // email, sms, whatsapp
+  deliveryStatus    String       @default("pending") @map("delivery_status") // pending, sent, delivered, failed
+  providerMessageId String?      @map("provider_message_id")
+  payloadJson       Json?        @map("payload_json")
+
+  booking           Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([scheduledFor])
+  @@index([deliveryStatus])
+  @@map("gallery_dispatches")
+}
+
 // Points à dispatcher créés automatiquement (Google Calendar, etc.)
 model PendingPoint {
   id                String   @id @default(uuid())

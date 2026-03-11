@@ -18,6 +18,9 @@ import { initializeSocket } from './config/socket.js';
 import { notFoundHandler, errorHandler } from './middlewares/index.js';
 import routes from './routes/index.js';
 import { autoUpdatePreparationStatuses } from './controllers/preparation.controller.js';
+import { initializeQueues } from './config/queue.js';
+import { processOverdueDispatches } from './services/galleryDispatch.service.js';
+import { startGalleryWorker, stopGalleryWorker } from './workers/galleryWorker.js';
 
 // Créer l'application Express
 const app = express();
@@ -135,6 +138,20 @@ async function startServer(): Promise<void> {
       // Démarrer la sync Google Calendar
       startGoogleCalendarSync();
 
+      // Initialize BullMQ queues and worker for gallery dispatch
+      initializeQueues();
+      startGalleryWorker();
+
+      // CRON: Poll overdue gallery dispatches every 5 minutes (fallback for BullMQ)
+      setInterval(async () => {
+        try {
+          await processOverdueDispatches();
+        } catch (error) {
+          console.error('[CRON] Gallery dispatch poll error:', error);
+        }
+      }, 5 * 60 * 1000);
+      console.log('⏰ CRON: Gallery dispatch poll every 5 min');
+
       // Keep-alive: ping self every 10 min to prevent Render free tier sleep
       if (!config.isDev && process.env.RENDER_EXTERNAL_URL) {
         const url = `${process.env.RENDER_EXTERNAL_URL}/api/health`;
@@ -175,6 +192,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
 
   // Arrêter les tâches planifiées
   stopGoogleCalendarSync();
+  stopGalleryWorker();
 
   // Fermer les connexions
   await disconnectDatabase();
