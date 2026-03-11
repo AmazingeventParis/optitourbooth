@@ -6,9 +6,6 @@ workflows:
     environment:
       groups:
         - apple_credentials
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: app.swipego.optitourbooth
       node: 20
       xcode: latest
       cocoapods: default
@@ -35,25 +32,25 @@ workflows:
         script: |
           cd frontend/ios/App
           pod install
-      - name: Set up App Store Connect key for signing
+      - name: Set up code signing
         script: |
-          # Write the .p8 key file from env var
-          mkdir -p ~/private_keys
-          echo -n "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+          # Write the .p8 key file
+          mkdir -p "$HOME/private_keys"
+          echo -n "$APP_STORE_CONNECT_PRIVATE_KEY" > "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
 
-          # Initialize keychain for code signing
+          # Initialize keychain
           keychain initialize
 
-          # Fetch signing certificates and profiles from App Store Connect
+          # Fetch or create signing certificates and provisioning profiles
           app-store-connect fetch-signing-files \
             "app.swipego.optitourbooth" \
             --type IOS_APP_STORE \
             --create
 
-          # Install fetched certificates to keychain
+          # Add fetched certificates to the keychain
           keychain add-certificates
 
-          # Set up provisioning profiles for Xcode
+          # Apply provisioning profiles to Xcode project
           xcode-project use-profiles
       - name: Increment build number
         script: |
@@ -74,7 +71,6 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
     publishing:
       app_store_connect:
-        # Uses APP_STORE_CONNECT_* env vars from apple_credentials group
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
