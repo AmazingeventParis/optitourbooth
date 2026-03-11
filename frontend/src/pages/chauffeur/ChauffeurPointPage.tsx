@@ -305,12 +305,17 @@ export default function ChauffeurPointPage() {
             </div>
           )}
 
-          {point.client?.contactNom && (
+          {(point.client?.telephone || point.client?.contactTelephone) && (
             <div className="flex items-center gap-3">
               <PhoneIcon className="h-5 w-5 text-gray-400" />
               <div className="flex-1">
-                <p className="font-medium mb-1">{point.client.contactNom}</p>
-                {point.client.contactTelephone && (
+                {point.client.contactNom && (
+                  <p className="font-medium mb-1">{point.client.contactNom}</p>
+                )}
+                {point.client.telephone && (
+                  <PhoneNumbers phones={point.client.telephone} variant="links" size="md" />
+                )}
+                {point.client.contactTelephone && point.client.contactTelephone !== point.client.telephone && (
                   <PhoneNumbers phones={point.client.contactTelephone} variant="links" size="md" />
                 )}
               </div>

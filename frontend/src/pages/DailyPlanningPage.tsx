@@ -3551,10 +3551,10 @@ export default function DailyPlanningPage() {
                                 </a>
                               </div>
                             )}
-                            {client?.telephone && (
+                            {(client?.telephone || client?.contactTelephone) && (
                               <div>
-                                <div className="text-[10px] text-gray-400 mb-1">Tél</div>
-                                <PhoneNumbers phones={client.telephone} variant="badges" size="sm" />
+                                <div className="text-[10px] text-gray-400 mb-1">Tél{client?.contactNom ? ` (${client.contactNom})` : ''}</div>
+                                <PhoneNumbers phones={client.telephone || client.contactTelephone || ''} variant="badges" size="sm" />
                               </div>
                             )}
                             <div>

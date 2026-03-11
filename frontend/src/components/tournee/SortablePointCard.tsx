@@ -9,6 +9,7 @@ import {
   TrashIcon,
   ClockIcon,
   MapPinIcon,
+  PhoneIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { formatTime, formatTimeRange } from '@/utils/format';
@@ -256,6 +257,15 @@ const SortablePointCard = memo(function SortablePointCard({
                 {client?.adresse}, {client?.codePostal} {client?.ville}
               </span>
             </div>
+            {(client?.telephone || client?.contactTelephone) && (
+              <div className="flex items-center">
+                <PhoneIcon className="h-4 w-4 mr-1 flex-shrink-0" />
+                <a href={`tel:${(client.telephone || client.contactTelephone || '').replace(/\s/g, '')}`} className="truncate text-primary-600 hover:underline" onClick={e => e.stopPropagation()}>
+                  {client.telephone || client.contactTelephone}
+                  {client.contactNom ? ` (${client.contactNom})` : ''}
+                </a>
+              </div>
+            )}
 
             <div className="flex items-center gap-4">
               {(point.creneauDebut || point.creneauFin) && (
