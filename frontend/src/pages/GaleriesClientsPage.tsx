@@ -55,12 +55,14 @@ export default function GaleriesClientsPage() {
   const [sendModal, setSendModal] = useState<CalendarEvent | null>(null);
   const [sendEmail, setSendEmail] = useState('');
   const [galleryUrlInput, setGalleryUrlInput] = useState('');
+  const [sendBrand, setSendBrand] = useState<'SHOOTNBOX' | 'SMAKK'>('SHOOTNBOX');
   const [sending, setSending] = useState(false);
 
   // Send gallery directly modal
   const [sendGalleryModal, setSendGalleryModal] = useState<CalendarEvent | null>(null);
   const [sendGalleryEmail, setSendGalleryEmail] = useState('');
   const [sendGalleryUrl, setSendGalleryUrl] = useState('');
+  const [sendGalleryBrand, setSendGalleryBrand] = useState<'SHOOTNBOX' | 'SMAKK'>('SHOOTNBOX');
   const [sendingGallery, setSendingGallery] = useState(false);
 
   const fetchEvents = useCallback(async () => {
@@ -103,8 +105,8 @@ export default function GaleriesClientsPage() {
         await bookingsService.update(bookingId, { galleryUrl: galleryUrlInput } as any);
       }
 
-      await bookingsService.sendLinkEmail(bookingId, sendEmail);
-      toast.success(`Lien envoyé à ${sendEmail}`);
+      await bookingsService.sendLinkEmail(bookingId, sendEmail, sendBrand);
+      toast.success(`Lien envoyé à ${sendEmail} via ${sendBrand}`);
       setSendModal(null);
       setSendEmail('');
       setGalleryUrlInput('');
@@ -168,11 +170,11 @@ export default function GaleriesClientsPage() {
         });
         bookingId = booking.id;
       } else {
-        await bookingsService.update(bookingId, { galleryUrl: sendGalleryUrl, customerEmail: sendGalleryEmail } as any);
+        await bookingsService.update(bookingId, { galleryUrl: sendGalleryUrl, customerEmail: sendGalleryEmail, senderBrand: sendGalleryBrand } as any);
       }
 
       await bookingsService.sendGallery(bookingId);
-      toast.success(`Galerie envoyée à ${sendGalleryEmail}`);
+      toast.success(`Galerie envoyée à ${sendGalleryEmail} via ${sendGalleryBrand}`);
       setSendGalleryModal(null);
       setSendGalleryEmail('');
       setSendGalleryUrl('');
@@ -198,12 +200,14 @@ export default function GaleriesClientsPage() {
   const openSendModal = (ev: CalendarEvent) => {
     setSendEmail(ev.booking?.customerEmail || '');
     setGalleryUrlInput(ev.booking?.galleryUrl || '');
+    setSendBrand((ev.booking?.senderBrand as 'SHOOTNBOX' | 'SMAKK') || 'SHOOTNBOX');
     setSendModal(ev);
   };
 
   const openSendGalleryModal = (ev: CalendarEvent) => {
     setSendGalleryEmail(ev.booking?.customerEmail || '');
     setSendGalleryUrl(ev.booking?.galleryUrl || '');
+    setSendGalleryBrand((ev.booking?.senderBrand as 'SHOOTNBOX' | 'SMAKK') || 'SHOOTNBOX');
     setSendGalleryModal(ev);
   };
 
@@ -335,6 +339,12 @@ export default function GaleriesClientsPage() {
               Sinon, elle sera accessible sous 24h.
             </p>
 
+            {/* Brand selector */}
+            <div>
+              <label className="label">Envoyer depuis *</label>
+              <BrandSelector value={sendBrand} onChange={setSendBrand} />
+            </div>
+
             <div>
               <label className="label">Email du client *</label>
               <Input
@@ -388,6 +398,12 @@ export default function GaleriesClientsPage() {
               Le client recevra directement le lien Google Drive contenant ses photos (sans passer par la page d'avis).
             </p>
 
+            {/* Brand selector */}
+            <div>
+              <label className="label">Envoyer depuis *</label>
+              <BrandSelector value={sendGalleryBrand} onChange={setSendGalleryBrand} />
+            </div>
+
             <div>
               <label className="label">Email du client *</label>
               <Input
@@ -418,6 +434,37 @@ export default function GaleriesClientsPage() {
           </div>
         )}
       </Modal>
+    </div>
+  );
+}
+
+function BrandSelector({ value, onChange }: { value: 'SHOOTNBOX' | 'SMAKK'; onChange: (v: 'SHOOTNBOX' | 'SMAKK') => void }) {
+  return (
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={() => onChange('SHOOTNBOX')}
+        className={clsx(
+          'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-bold transition-all',
+          value === 'SHOOTNBOX'
+            ? 'border-orange-500 bg-orange-50 text-orange-700'
+            : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+        )}
+      >
+        SHOOTNBOX
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('SMAKK')}
+        className={clsx(
+          'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-bold transition-all',
+          value === 'SMAKK'
+            ? 'border-purple-500 bg-purple-50 text-purple-700'
+            : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+        )}
+      >
+        SMAKK
+      </button>
     </div>
   );
 }
@@ -515,6 +562,13 @@ function EventCard({ event, onRename, onSendReviewLink, onSendGalleryDirect, onC
         {/* Booking info */}
         {booking && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 mb-3">
+            {booking.senderBrand && (
+              <span className={clsx('px-1.5 py-0.5 rounded text-xs font-bold',
+                booking.senderBrand === 'SHOOTNBOX' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'
+              )}>
+                {booking.senderBrand}
+              </span>
+            )}
             {booking.galleryUrl && (
               <a href={booking.galleryUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-600 hover:underline">
                 <FolderOpenIcon className="h-3 w-3" />

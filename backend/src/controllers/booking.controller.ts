@@ -322,7 +322,7 @@ export const getBookingDetail = asyncHandler(async (req: Request, res: Response)
  */
 export const updateBooking = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { customerName, customerEmail, customerPhone, eventDate, galleryUrl, googleReviewUrl, status } = req.body;
+  const { customerName, customerEmail, customerPhone, eventDate, galleryUrl, googleReviewUrl, status, senderBrand } = req.body;
 
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) {
@@ -339,6 +339,7 @@ export const updateBooking = asyncHandler(async (req: Request, res: Response) =>
       ...(galleryUrl !== undefined && { galleryUrl }),
       ...(googleReviewUrl !== undefined && { googleReviewUrl }),
       ...(status && { status }),
+      ...(senderBrand !== undefined && { senderBrand }),
     },
   });
 
@@ -541,6 +542,7 @@ export const listCalendarEvents = asyncHandler(async (_req: Request, res: Respon
         customerName: booking.customerName,
         customerEmail: booking.customerEmail,
         customerPhone: booking.customerPhone,
+        senderBrand: booking.senderBrand,
         galleryUrl: booking.galleryUrl,
         googleReviewUrl: booking.googleReviewUrl,
         status: booking.status,
@@ -612,7 +614,7 @@ export const createBookingFromEvent = asyncHandler(async (req: Request, res: Res
  */
 export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { email } = req.body;
+  const { email, senderBrand } = req.body;
 
   if (!email) {
     return apiResponse.badRequest(res, 'Email requis');
@@ -625,21 +627,22 @@ export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) =>
 
   const publicUrl = `${config.reviewSystem.publicBaseUrl}/galerie/${booking.publicToken}`;
 
-  // Update email on booking
+  // Update email + sender brand on booking
   await prisma.booking.update({
     where: { id },
     data: {
       customerEmail: email,
       emailSentAt: new Date(),
+      ...(senderBrand && { senderBrand }),
     },
   });
 
   // TODO: Send actual email via provider (SendGrid, SES, etc.)
-  // For now, just log and mark as sent
-  console.log(`[Booking] Email envoyé à ${email} avec lien: ${publicUrl}`);
+  // senderBrand determines which company email to send from (SHOOTNBOX or SMAKK)
+  console.log(`[Booking] Email envoyé à ${email} via ${senderBrand || 'default'} avec lien: ${publicUrl}`);
 
   return apiResponse.success(res, {
-    message: `Lien envoyé à ${email}`,
+    message: `Lien envoyé à ${email} via ${senderBrand || 'default'}`,
     publicUrl,
   });
 });

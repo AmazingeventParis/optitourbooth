@@ -90,6 +90,7 @@ export interface CalendarEvent {
     customerName: string;
     customerEmail: string | null;
     customerPhone: string | null;
+    senderBrand: string | null;
     galleryUrl: string | null;
     googleReviewUrl: string | null;
     status: string;
@@ -174,8 +175,8 @@ export const bookingsService = {
     return response.data.data;
   },
 
-  async sendLinkEmail(id: string, email: string) {
-    const response = await api.post<ApiResponse<{ message: string; publicUrl: string }>>(`/bookings/${id}/send-link-email`, { email });
+  async sendLinkEmail(id: string, email: string, senderBrand?: string) {
+    const response = await api.post<ApiResponse<{ message: string; publicUrl: string }>>(`/bookings/${id}/send-link-email`, { email, senderBrand });
     return response.data.data;
   },
 };

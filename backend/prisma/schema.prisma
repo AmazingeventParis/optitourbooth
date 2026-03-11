@@ -653,6 +653,7 @@ model Booking {
   produitNom          String?       @map("produit_nom")
   businessAccountId   String?       @map("business_account_id")
   businessLocationId  String?       @map("business_location_id")
+  senderBrand         String?       @map("sender_brand")
   status              BookingStatus @default(link_sent)
   emailSentAt         DateTime?     @map("email_sent_at")
 
