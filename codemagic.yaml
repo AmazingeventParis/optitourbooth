@@ -23,12 +23,14 @@ workflows:
           NODE_ENV=development npm install --legacy-peer-deps
       - name: Build web assets
         script: |
-          set -ex
           cd frontend
-          # Set env vars directly for the build
           export VITE_API_URL="https://optitourbooth-api.swipego.app/api"
           export VITE_CAPACITOR="true"
-          npx vite build
+          npx vite build 2>&1 | tee /tmp/vite-build.log || {
+            echo "=== VITE BUILD FAILED ==="
+            cat /tmp/vite-build.log
+            exit 1
+          }
       - name: Sync Capacitor and install pods
         script: |
           cd frontend
@@ -63,6 +65,7 @@ workflows:
     artifacts:
       - frontend/ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+      - /tmp/vite-build.log
     publishing:
       app_store_connect:
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
