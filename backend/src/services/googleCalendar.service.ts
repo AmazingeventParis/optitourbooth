@@ -623,7 +623,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
 
         if (!existingBooking) {
           const folderName = buildFolderName(clientName, startDate, produitNom);
-          const { folderUrl } = await createDriveFolder(folderName);
+          const { folderUrl } = await createDriveFolder(folderName, startDate);
 
           const publicToken = crypto.randomBytes(24).toString('base64url');
           await prisma.booking.create({
@@ -644,7 +644,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
         } else if (!existingBooking.galleryUrl) {
           // Booking exists but no Drive folder yet - create one
           const folderName = buildFolderName(clientName, startDate, produitNom);
-          const { folderUrl } = await createDriveFolder(folderName);
+          const { folderUrl } = await createDriveFolder(folderName, startDate);
           await prisma.booking.update({
             where: { id: existingBooking.id },
             data: { galleryUrl: folderUrl },

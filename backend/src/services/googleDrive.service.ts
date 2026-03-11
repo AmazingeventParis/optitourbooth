@@ -24,15 +24,70 @@ function getDriveClient() {
 }
 
 /**
- * Create a folder in Google Drive inside the parent folder
- * Returns the folder ID and shareable URL
+ * Find or create a subfolder by name inside a given parent folder.
+ * Returns the subfolder ID.
  */
-export async function createDriveFolder(folderName: string): Promise<{
+async function getOrCreateSubfolder(drive: ReturnType<typeof getDriveClient>, parentId: string, name: string): Promise<string> {
+  const existing = await drive.files.list({
+    q: `name = '${name.replace(/'/g, "\\'")}' and '${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+    fields: 'files(id)',
+    supportsAllDrives: true,
+  });
+
+  if (existing.data.files && existing.data.files.length > 0) {
+    return existing.data.files[0]!.id!;
+  }
+
+  const response = await drive.files.create({
+    requestBody: {
+      name,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentId],
+    },
+    fields: 'id',
+    supportsAllDrives: true,
+  });
+
+  const folderId = response.data.id!;
+
+  // Monthly subfolder also publicly accessible
+  await drive.permissions.create({
+    fileId: folderId,
+    requestBody: { role: 'reader', type: 'anyone' },
+    supportsAllDrives: true,
+  });
+
+  console.log(`[Google Drive] Sous-dossier mensuel créé: "${name}" (${folderId})`);
+  return folderId;
+}
+
+/**
+ * Build the monthly subfolder name from a date string.
+ * Format: "YYYY-MM" (e.g. "2026-03")
+ */
+function getMonthlyFolderName(startDate: string): string {
+  // startDate is "YYYY-MM-DD"
+  return startDate.substring(0, 7);
+}
+
+/**
+ * Create a folder in Google Drive inside a monthly subfolder.
+ * Structure: parentFolder / YYYY-MM / eventFolder
+ * Returns the folder ID and shareable URL.
+ */
+export async function createDriveFolder(folderName: string, startDate?: string): Promise<{
   folderId: string;
   folderUrl: string;
 }> {
   const drive = getDriveClient();
-  const parentFolderId = config.googleDrive.parentFolderId;
+  const rootParentId = config.googleDrive.parentFolderId;
+
+  // Determine the actual parent: monthly subfolder if startDate provided
+  let parentFolderId = rootParentId;
+  if (startDate) {
+    const monthlyName = getMonthlyFolderName(startDate);
+    parentFolderId = await getOrCreateSubfolder(drive, rootParentId, monthlyName);
+  }
 
   // Check if folder already exists with same name in parent
   const existing = await drive.files.list({
