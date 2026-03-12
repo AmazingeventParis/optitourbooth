@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { bookingsService, CalendarEvent } from '@/services/bookings.service';
-import { Card, Button, Badge, Modal, Input } from '@/components/ui';
+import { Card, Button, Badge } from '@/components/ui';
 import {
   PhotoIcon,
   PaperAirplaneIcon,
@@ -60,9 +60,6 @@ export default function GaleriesClientsPage() {
   const [search, setSearch] = useState('');
   const [starFilter, setStarFilter] = useState<number | null>(null); // null = all, 0 = no rating, 1-5 = specific
 
-  // Send modal state
-  const [sendModal, setSendModal] = useState<{ event: CalendarEvent; brand: 'SHOOTNBOX' | 'SMAKK' } | null>(null);
-  const [sendEmail, setSendEmail] = useState('');
   const [sending, setSending] = useState(false);
 
   const fetchEvents = useCallback(async () => {
@@ -125,8 +122,6 @@ export default function GaleriesClientsPage() {
       const { id } = await ensureBooking(ev);
       await bookingsService.sendLinkEmail(id, email, brand);
       toast.success(`Lien envoyé à ${email} via ${brand}`);
-      setSendModal(null);
-      setSendEmail('');
       fetchEvents();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Erreur lors de l'envoi");
@@ -135,14 +130,15 @@ export default function GaleriesClientsPage() {
     }
   };
 
-  /** Click send button: if email known, send directly; else open modal */
-  const handleSendClick = (ev: CalendarEvent, brand: 'SHOOTNBOX' | 'SMAKK') => {
-    const email = ev.booking?.customerEmail;
-    if (email) {
-      handleSend(ev, brand, email);
-    } else {
-      setSendEmail('');
-      setSendModal({ event: ev, brand });
+  /** Save email on a booking */
+  const handleSaveEmail = async (ev: CalendarEvent, email: string) => {
+    try {
+      const { id } = await ensureBooking(ev);
+      await bookingsService.update(id, { customerEmail: email } as any);
+      toast.success('Email sauvegardé');
+      fetchEvents();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erreur');
     }
   };
 
@@ -280,59 +276,25 @@ export default function GaleriesClientsPage() {
               onRename={(newName) => handleRename(ev, newName)}
               onCopyDrive={() => ev.booking?.galleryUrl && handleCopyDrive(ev.booking.galleryUrl)}
               onCopyBrandUrl={(brand) => handleCopyBrandUrl(ev, brand)}
-              onSendBrand={(brand) => handleSendClick(ev, brand)}
+              onSendBrand={(brand, email) => handleSend(ev, brand, email)}
+              onSaveEmail={(email) => handleSaveEmail(ev, email)}
               sending={sending}
             />
           ))}
         </div>
       )}
 
-      {/* Email Modal */}
-      <Modal
-        isOpen={!!sendModal}
-        onClose={() => setSendModal(null)}
-        title={`Envoyer via ${sendModal?.brand}`}
-      >
-        {sendModal && (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Envoyer le lien de satisfaction à <strong>{sendModal.event.booking?.customerName || sendModal.event.clientName}</strong>
-            </p>
-            <div>
-              <label className="label">Email du client *</label>
-              <Input
-                type="email"
-                value={sendEmail}
-                onChange={(e) => setSendEmail(e.target.value)}
-                placeholder="client@email.com"
-                onKeyDown={(e) => { if (e.key === 'Enter') handleSend(sendModal.event, sendModal.brand, sendEmail); }}
-                autoFocus
-              />
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <Button variant="outline" onClick={() => setSendModal(null)}>Annuler</Button>
-              <Button
-                onClick={() => handleSend(sendModal.event, sendModal.brand, sendEmail)}
-                disabled={sending}
-                className={sendModal.brand === 'SMAKK' ? '!bg-purple-600 hover:!bg-purple-700' : '!bg-orange-500 hover:!bg-orange-600'}
-              >
-                <PaperAirplaneIcon className="h-4 w-4 mr-2" />
-                {sending ? 'Envoi...' : 'Envoyer'}
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }
 
-function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, sending }: {
+function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, onSaveEmail, sending }: {
   event: CalendarEvent;
   onRename: (newName: string) => void;
   onCopyDrive: () => void;
   onCopyBrandUrl: (brand: 'SHOOTNBOX' | 'SMAKK') => void;
-  onSendBrand: (brand: 'SHOOTNBOX' | 'SMAKK') => void;
+  onSendBrand: (brand: 'SHOOTNBOX' | 'SMAKK', email: string) => void;
+  onSaveEmail: (email: string) => void;
   sending: boolean;
 }) {
   const booking = event.booking;
@@ -342,6 +304,9 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
   const displayName = booking?.customerName || event.clientName;
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(displayName);
+  const [emailValue, setEmailValue] = useState(booking?.customerEmail || '');
+  const [emailSaved, setEmailSaved] = useState(!!booking?.customerEmail);
+  const [savingEmail, setSavingEmail] = useState(false);
 
   const handleSaveRename = () => {
     const trimmed = editName.trim();
@@ -352,6 +317,24 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
     }
     onRename(trimmed);
     setEditing(false);
+  };
+
+  const handleSaveEmail = async () => {
+    const trimmed = emailValue.trim();
+    if (!trimmed) return;
+    setSavingEmail(true);
+    onSaveEmail(trimmed);
+    setEmailSaved(true);
+    setSavingEmail(false);
+  };
+
+  const handleSendBrand = (brand: 'SHOOTNBOX' | 'SMAKK') => {
+    const email = emailValue.trim();
+    if (!email) {
+      toast.error('Saisissez un email d\'abord');
+      return;
+    }
+    onSendBrand(brand, email);
   };
 
   return (
@@ -434,6 +417,36 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
             </span>
           )}
         </div>
+
+        {/* Inline email field */}
+        <div className="mb-3">
+          <div className="flex items-center gap-1.5">
+            <input
+              type="email"
+              value={emailValue}
+              onChange={(e) => { setEmailValue(e.target.value); setEmailSaved(false); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEmail(); }}
+              placeholder="Email du client"
+              className={clsx(
+                'flex-1 border rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors',
+                emailSaved && emailValue ? 'border-green-300 bg-green-50' : 'border-gray-300 bg-white'
+              )}
+            />
+            {emailValue && !emailSaved && (
+              <button
+                onClick={handleSaveEmail}
+                disabled={savingEmail}
+                className="p-1.5 rounded-lg text-white bg-primary-500 hover:bg-primary-600 transition-colors disabled:opacity-50"
+                title="Sauvegarder l'email"
+              >
+                <CheckIcon className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {emailSaved && emailValue && (
+              <CheckCircleIcon className="h-5 w-5 text-green-500 flex-shrink-0" />
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Actions */}
@@ -461,10 +474,10 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
             SHOOTNBOX
           </button>
           <button
-            onClick={() => onSendBrand('SHOOTNBOX')}
-            disabled={sending}
+            onClick={() => handleSendBrand('SHOOTNBOX')}
+            disabled={sending || !emailValue.trim()}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50"
-            title="Envoyer par email via SHOOTNBOX"
+            title={emailValue.trim() ? `Envoyer via SHOOTNBOX à ${emailValue}` : "Saisissez un email d'abord"}
           >
             <PaperAirplaneIcon className="h-3.5 w-3.5" />
           </button>
@@ -481,10 +494,10 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
             SMAKK
           </button>
           <button
-            onClick={() => onSendBrand('SMAKK')}
-            disabled={sending}
+            onClick={() => handleSendBrand('SMAKK')}
+            disabled={sending || !emailValue.trim()}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors disabled:opacity-50"
-            title="Envoyer par email via SMAKK"
+            title={emailValue.trim() ? `Envoyer via SMAKK à ${emailValue}` : "Saisissez un email d'abord"}
           >
             <PaperAirplaneIcon className="h-3.5 w-3.5" />
           </button>
