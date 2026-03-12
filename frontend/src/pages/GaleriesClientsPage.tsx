@@ -23,6 +23,8 @@ import clsx from 'clsx';
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   link_sent: { label: 'Lien envoyé', color: 'bg-blue-100 text-blue-800' },
   page_viewed: { label: 'Page vue', color: 'bg-indigo-100 text-indigo-800' },
+  rated_low: { label: 'Note faible', color: 'bg-red-100 text-red-800' },
+  rated_high: { label: 'Note haute', color: 'bg-green-100 text-green-800' },
   review_clicked: { label: 'Avis cliqué', color: 'bg-amber-100 text-amber-800' },
   no_review_selected: { label: 'Sans avis', color: 'bg-gray-100 text-gray-800' },
   review_detected: { label: 'Avis détecté', color: 'bg-green-100 text-green-800' },
@@ -51,19 +53,10 @@ export default function GaleriesClientsPage() {
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
   const [search, setSearch] = useState('');
 
-  // Modal states
-  const [sendModal, setSendModal] = useState<CalendarEvent | null>(null);
+  // Send modal state
+  const [sendModal, setSendModal] = useState<{ event: CalendarEvent; brand: 'SHOOTNBOX' | 'SMAKK' } | null>(null);
   const [sendEmail, setSendEmail] = useState('');
-  const [galleryUrlInput, setGalleryUrlInput] = useState('');
-  const [sendBrand, setSendBrand] = useState<'SHOOTNBOX' | 'SMAKK'>('SHOOTNBOX');
   const [sending, setSending] = useState(false);
-
-  // Send gallery directly modal
-  const [sendGalleryModal, setSendGalleryModal] = useState<CalendarEvent | null>(null);
-  const [sendGalleryEmail, setSendGalleryEmail] = useState('');
-  const [sendGalleryUrl, setSendGalleryUrl] = useState('');
-  const [sendGalleryBrand, setSendGalleryBrand] = useState<'SHOOTNBOX' | 'SMAKK'>('SHOOTNBOX');
-  const [sendingGallery, setSendingGallery] = useState(false);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -78,8 +71,8 @@ export default function GaleriesClientsPage() {
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
-  const handleCreateAndSend = async (ev: CalendarEvent) => {
-    if (!sendEmail.trim()) {
+  const handleSend = async (ev: CalendarEvent, brand: 'SHOOTNBOX' | 'SMAKK', email: string) => {
+    if (!email.trim()) {
       toast.error('Email requis');
       return;
     }
@@ -92,29 +85,35 @@ export default function GaleriesClientsPage() {
         const booking = await bookingsService.createFromEvent({
           googleEventId: ev.googleEventId,
           customerName: ev.clientName,
-          customerEmail: sendEmail,
+          customerEmail: email,
           eventDate: ev.startDate,
           eventEndDate: ev.endDate,
           produitNom: ev.produitNom || undefined,
-          galleryUrl: galleryUrlInput || undefined,
         });
         bookingId = booking.id;
       }
 
-      if (ev.booking && galleryUrlInput && galleryUrlInput !== ev.booking.galleryUrl) {
-        await bookingsService.update(bookingId, { galleryUrl: galleryUrlInput } as any);
-      }
-
-      await bookingsService.sendLinkEmail(bookingId, sendEmail, sendBrand);
-      toast.success(`Lien envoyé à ${sendEmail} via ${sendBrand}`);
+      await bookingsService.sendLinkEmail(bookingId, email, brand);
+      toast.success(`Lien envoyé à ${email} via ${brand}`);
       setSendModal(null);
       setSendEmail('');
-      setGalleryUrlInput('');
       fetchEvents();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Erreur lors de l\'envoi');
+      toast.error(err?.response?.data?.message || "Erreur lors de l'envoi");
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleBrandClick = (ev: CalendarEvent, brand: 'SHOOTNBOX' | 'SMAKK') => {
+    const email = ev.booking?.customerEmail;
+    if (email) {
+      // Email already known, send directly
+      handleSend(ev, brand, email);
+    } else {
+      // Ask for email
+      setSendEmail('');
+      setSendModal({ event: ev, brand });
     }
   };
 
@@ -144,48 +143,6 @@ export default function GaleriesClientsPage() {
     }
   };
 
-  const handleSendGalleryDirect = async (ev: CalendarEvent) => {
-    if (!sendGalleryEmail.trim()) {
-      toast.error('Email requis');
-      return;
-    }
-    if (!sendGalleryUrl.trim()) {
-      toast.error('Lien Google Drive requis');
-      return;
-    }
-
-    setSendingGallery(true);
-    try {
-      let bookingId = ev.booking?.id;
-
-      if (!bookingId) {
-        const booking = await bookingsService.createFromEvent({
-          googleEventId: ev.googleEventId,
-          customerName: ev.clientName,
-          customerEmail: sendGalleryEmail,
-          eventDate: ev.startDate,
-          eventEndDate: ev.endDate,
-          produitNom: ev.produitNom || undefined,
-          galleryUrl: sendGalleryUrl,
-        });
-        bookingId = booking.id;
-      } else {
-        await bookingsService.update(bookingId, { galleryUrl: sendGalleryUrl, customerEmail: sendGalleryEmail, senderBrand: sendGalleryBrand } as any);
-      }
-
-      await bookingsService.sendGallery(bookingId);
-      toast.success(`Galerie envoyée à ${sendGalleryEmail} via ${sendGalleryBrand}`);
-      setSendGalleryModal(null);
-      setSendGalleryEmail('');
-      setSendGalleryUrl('');
-      fetchEvents();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Erreur lors de l\'envoi');
-    } finally {
-      setSendingGallery(false);
-    }
-  };
-
   const handleRename = async (ev: CalendarEvent, newName: string) => {
     if (!ev.booking?.id) return;
     try {
@@ -195,20 +152,6 @@ export default function GaleriesClientsPage() {
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erreur');
     }
-  };
-
-  const openSendModal = (ev: CalendarEvent) => {
-    setSendEmail(ev.booking?.customerEmail || '');
-    setGalleryUrlInput(ev.booking?.galleryUrl || '');
-    setSendBrand((ev.booking?.senderBrand as 'SHOOTNBOX' | 'SMAKK') || 'SHOOTNBOX');
-    setSendModal(ev);
-  };
-
-  const openSendGalleryModal = (ev: CalendarEvent) => {
-    setSendGalleryEmail(ev.booking?.customerEmail || '');
-    setSendGalleryUrl(ev.booking?.galleryUrl || '');
-    setSendGalleryBrand((ev.booking?.senderBrand as 'SHOOTNBOX' | 'SMAKK') || 'SHOOTNBOX');
-    setSendGalleryModal(ev);
   };
 
   const filterBySearch = (list: CalendarEvent[]) => {
@@ -318,32 +261,25 @@ export default function GaleriesClientsPage() {
               key={ev.googleEventId}
               event={ev}
               onRename={(newName) => handleRename(ev, newName)}
-              onSendReviewLink={() => openSendModal(ev)}
-              onSendGalleryDirect={() => openSendGalleryModal(ev)}
+              onBrandSend={(brand) => handleBrandClick(ev, brand)}
               onCopyLink={() => handleCopyLink(ev)}
+              sending={sending}
             />
           ))}
         </div>
       )}
 
-      {/* Send Review Link Modal */}
+      {/* Email Modal (when email not known) */}
       <Modal
         isOpen={!!sendModal}
         onClose={() => setSendModal(null)}
-        title={`Envoyer le lien d'avis — ${sendModal?.booking?.customerName || sendModal?.clientName}`}
+        title={`Envoyer via ${sendModal?.brand} — ${sendModal?.event.booking?.customerName || sendModal?.event.clientName}`}
       >
         {sendModal && (
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Le client recevra un lien unique. S'il laisse un avis Google, sa galerie sera disponible immédiatement.
-              Sinon, elle sera accessible sous 24h.
+              Le client recevra un lien unique vers sa page de satisfaction et d'accès à ses photos.
             </p>
-
-            {/* Brand selector */}
-            <div>
-              <label className="label">Envoyer depuis *</label>
-              <BrandSelector value={sendBrand} onChange={setSendBrand} />
-            </div>
 
             <div>
               <label className="label">Email du client *</label>
@@ -352,83 +288,20 @@ export default function GaleriesClientsPage() {
                 value={sendEmail}
                 onChange={(e) => setSendEmail(e.target.value)}
                 placeholder="client@email.com"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSend(sendModal.event, sendModal.brand, sendEmail); }}
+                autoFocus
               />
             </div>
-
-            <div>
-              <label className="label">Lien Google Drive (galerie photos)</label>
-              <Input
-                type="url"
-                value={galleryUrlInput}
-                onChange={(e) => setGalleryUrlInput(e.target.value)}
-                placeholder="https://drive.google.com/drive/folders/..."
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Ce lien sera débloqué après l'avis Google (ou sous 24h sans avis)
-              </p>
-            </div>
-
-            {sendModal.booking?.publicUrl && (
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500 mb-1">Lien public existant :</p>
-                <p className="text-sm font-mono text-primary-600 break-all">{sendModal.booking.publicUrl}</p>
-              </div>
-            )}
 
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="outline" onClick={() => setSendModal(null)}>Annuler</Button>
-              <Button onClick={() => handleCreateAndSend(sendModal)} disabled={sending}>
+              <Button
+                onClick={() => handleSend(sendModal.event, sendModal.brand, sendEmail)}
+                disabled={sending}
+                className={sendModal.brand === 'SMAKK' ? '!bg-purple-600 hover:!bg-purple-700' : '!bg-orange-500 hover:!bg-orange-600'}
+              >
                 <PaperAirplaneIcon className="h-4 w-4 mr-2" />
-                {sending ? 'Envoi...' : 'Envoyer le lien'}
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Send Gallery Direct Modal */}
-      <Modal
-        isOpen={!!sendGalleryModal}
-        onClose={() => setSendGalleryModal(null)}
-        title={`Envoyer la galerie — ${sendGalleryModal?.booking?.customerName || sendGalleryModal?.clientName}`}
-      >
-        {sendGalleryModal && (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Le client recevra directement le lien Google Drive contenant ses photos (sans passer par la page d'avis).
-            </p>
-
-            {/* Brand selector */}
-            <div>
-              <label className="label">Envoyer depuis *</label>
-              <BrandSelector value={sendGalleryBrand} onChange={setSendGalleryBrand} />
-            </div>
-
-            <div>
-              <label className="label">Email du client *</label>
-              <Input
-                type="email"
-                value={sendGalleryEmail}
-                onChange={(e) => setSendGalleryEmail(e.target.value)}
-                placeholder="client@email.com"
-              />
-            </div>
-
-            <div>
-              <label className="label">Lien Google Drive *</label>
-              <Input
-                type="url"
-                value={sendGalleryUrl}
-                onChange={(e) => setSendGalleryUrl(e.target.value)}
-                placeholder="https://drive.google.com/drive/folders/..."
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <Button variant="outline" onClick={() => setSendGalleryModal(null)}>Annuler</Button>
-              <Button onClick={() => handleSendGalleryDirect(sendGalleryModal)} disabled={sendingGallery}>
-                <FolderOpenIcon className="h-4 w-4 mr-2" />
-                {sendingGallery ? 'Envoi...' : 'Envoyer la galerie'}
+                {sending ? 'Envoi...' : `Envoyer via ${sendModal.brand}`}
               </Button>
             </div>
           </div>
@@ -438,46 +311,14 @@ export default function GaleriesClientsPage() {
   );
 }
 
-function BrandSelector({ value, onChange }: { value: 'SHOOTNBOX' | 'SMAKK'; onChange: (v: 'SHOOTNBOX' | 'SMAKK') => void }) {
-  return (
-    <div className="flex gap-2">
-      <button
-        type="button"
-        onClick={() => onChange('SHOOTNBOX')}
-        className={clsx(
-          'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-bold transition-all',
-          value === 'SHOOTNBOX'
-            ? 'border-orange-500 bg-orange-50 text-orange-700'
-            : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
-        )}
-      >
-        SHOOTNBOX
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange('SMAKK')}
-        className={clsx(
-          'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-bold transition-all',
-          value === 'SMAKK'
-            ? 'border-purple-500 bg-purple-50 text-purple-700'
-            : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
-        )}
-      >
-        SMAKK
-      </button>
-    </div>
-  );
-}
-
-function EventCard({ event, onRename, onSendReviewLink, onSendGalleryDirect, onCopyLink }: {
+function EventCard({ event, onRename, onBrandSend, onCopyLink, sending }: {
   event: CalendarEvent;
   onRename: (newName: string) => void;
-  onSendReviewLink: () => void;
-  onSendGalleryDirect: () => void;
+  onBrandSend: (brand: 'SHOOTNBOX' | 'SMAKK') => void;
   onCopyLink: () => void;
+  sending: boolean;
 }) {
   const booking = event.booking;
-  // Only show status badge for meaningful statuses (not the default 'link_sent')
   const showStatus = booking && booking.status !== 'link_sent';
   const statusInfo = showStatus ? STATUS_LABELS[booking.status] || { label: booking.status, color: 'bg-gray-100 text-gray-600' } : null;
 
@@ -609,17 +450,25 @@ function EventCard({ event, onRename, onSendReviewLink, onSendGalleryDirect, onC
             <FolderOpenIcon className="h-4 w-4" />
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={onCopyLink} title="Copier le lien d'avis" className="flex-shrink-0">
+        <Button variant="outline" size="sm" onClick={onCopyLink} title="Copier le lien client" className="flex-shrink-0">
           {booking ? <ClipboardDocumentIcon className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
         </Button>
-        <Button variant="outline" size="sm" onClick={onSendReviewLink} title="Envoyer le lien d'avis Google" className="flex-1">
-          <StarIcon className="h-4 w-4 mr-1" />
-          Avis
-        </Button>
-        <Button size="sm" onClick={onSendGalleryDirect} title="Envoyer directement la galerie photos" className="flex-1">
-          <PhotoIcon className="h-4 w-4 mr-1" />
-          Galerie
-        </Button>
+        <button
+          onClick={() => onBrandSend('SHOOTNBOX')}
+          disabled={sending}
+          className="flex-1 py-1.5 px-3 rounded-lg border-2 border-orange-400 bg-orange-50 text-orange-700 text-xs font-bold hover:bg-orange-100 transition-all disabled:opacity-50"
+          title="Envoyer via SHOOTNBOX"
+        >
+          SHOOTNBOX
+        </button>
+        <button
+          onClick={() => onBrandSend('SMAKK')}
+          disabled={sending}
+          className="flex-1 py-1.5 px-3 rounded-lg border-2 border-purple-400 bg-purple-50 text-purple-700 text-xs font-bold hover:bg-purple-100 transition-all disabled:opacity-50"
+          title="Envoyer via SMAKK"
+        >
+          SMAKK
+        </button>
       </div>
     </Card>
   );
