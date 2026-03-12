@@ -106,7 +106,7 @@ export function usePhotoUpload({ tourneeId, pointId }: UsePhotoUploadOptions) {
         };
 
         // Auth token
-        const token = localStorage.getItem('auth-storage');
+        const token = localStorage.getItem('optitour-auth');
         if (token) {
           try {
             const parsed = JSON.parse(token);
