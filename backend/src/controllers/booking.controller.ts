@@ -196,14 +196,20 @@ export const handleReviewClick = asyncHandler(async (req: Request, res: Response
   let reviewUrl = booking.googleReviewUrl;
   if (!reviewUrl) {
     if (booking.senderBrand === 'SMAKK') {
-      reviewUrl = config.googleBusiness.reviewUrlSmakk || config.googleBusiness.defaultReviewUrl;
+      reviewUrl = config.googleBusiness.reviewUrlSmakk;
     } else {
-      reviewUrl = config.googleBusiness.reviewUrlShootnbox || config.googleBusiness.defaultReviewUrl;
+      reviewUrl = config.googleBusiness.reviewUrlShootnbox;
     }
   }
+  // Final fallback
+  if (!reviewUrl) {
+    reviewUrl = config.googleBusiness.defaultReviewUrl;
+  }
+
+  console.log(`[ReviewClick] brand=${booking.senderBrand}, reviewUrl=${reviewUrl}`);
 
   return apiResponse.success(res, {
-    redirect_url: reviewUrl,
+    redirect_url: reviewUrl || null,
   });
 });
 

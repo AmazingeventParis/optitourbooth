@@ -136,7 +136,9 @@ export default function ReviewPage() {
 
       const redirectUrl = res.data.data.redirect_url;
       if (redirectUrl) {
-        window.location.href = redirectUrl;
+        window.open(redirectUrl, '_blank');
+      } else {
+        setErrorMessage('Le lien d\'avis Google n\'est pas encore configuré.');
       }
     } catch {
       setErrorMessage('Une erreur est survenue. Veuillez réessayer.');
