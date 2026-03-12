@@ -129,7 +129,8 @@ function extractTimeSlotFromLine(line: string): string | null {
 
 function parseDescription(rawDescription: string): ParsedDescription {
   const text = cleanHtml(rawDescription);
-  const lines = text.split('\n').map(l => normalizeSpaces(l)).filter(l => l.length > 0);
+  // Split by newlines AND pipes (Google Calendar descriptions often use | as separator)
+  const lines = text.split(/[\n|]/).map(l => normalizeSpaces(l)).filter(l => l.length > 0);
 
   let adresse: string | null = null;
   const addressParts: string[] = [];
@@ -161,6 +162,15 @@ function parseDescription(rawDescription: string): ParsedDescription {
         creneauLivraison = slot;
         continue;
       }
+      // No time slot on this line — check the next line
+      if (i + 1 < lines.length) {
+        const nextSlot = extractTimeSlotFromLine(lines[i + 1]!);
+        if (nextSlot) {
+          creneauLivraison = nextSlot;
+          i++; // skip next line
+          continue;
+        }
+      }
     }
 
     // "Récupération : 10h-17h" ou "Ramassage 14h-18h"
@@ -169,6 +179,15 @@ function parseDescription(rawDescription: string): ParsedDescription {
       if (slot) {
         creneauRecuperation = slot;
         continue;
+      }
+      // No time slot on this line — check the next line
+      if (i + 1 < lines.length) {
+        const nextSlot = extractTimeSlotFromLine(lines[i + 1]!);
+        if (nextSlot) {
+          creneauRecuperation = nextSlot;
+          i++; // skip next line
+          continue;
+        }
       }
     }
 
