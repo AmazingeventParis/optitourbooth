@@ -106,8 +106,9 @@ function TarifsSection() {
                 </div>
               </div>
               <button
-                onClick={() => setEditUser(uc)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setEditUser(uc); }}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors cursor-pointer z-10"
               >
                 <PencilIcon className="h-4 w-4" />
               </button>
@@ -196,17 +197,25 @@ function EditConfigModal({ user, onClose, onSaved }: {
   };
 
   return (
-    <Modal isOpen onClose={onClose} title={`Tarifs - ${user.prenom} ${user.nom}`}>
+    <Modal isOpen onClose={onClose} title={`Tarifs - ${user.prenom} ${user.nom}`} size="lg">
       <div className="space-y-4">
         {/* Plage hors forfait */}
         <div>
-          <label className="label">Plage horaire hors forfait</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Plage horaire hors forfait</label>
           <div className="flex items-center gap-2">
-            <select value={debut} onChange={(e) => setDebut(e.target.value)} className="input text-sm flex-1">
+            <select
+              value={debut}
+              onChange={(e) => setDebut(e.target.value)}
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
               {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
             <span className="text-gray-400 text-sm">&rarr;</span>
-            <select value={fin} onChange={(e) => setFin(e.target.value)} className="input text-sm flex-1">
+            <select
+              value={fin}
+              onChange={(e) => setFin(e.target.value)}
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
               {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
@@ -215,7 +224,7 @@ function EditConfigModal({ user, onClose, onSaved }: {
 
         {/* Tarif point HF */}
         <div>
-          <label className="label">Tarif point hors forfait (&euro;)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tarif point hors forfait (&euro;)</label>
           <Input
             type="number"
             min={0}
@@ -227,7 +236,7 @@ function EditConfigModal({ user, onClose, onSaved }: {
 
         {/* Tarif heure supp */}
         <div>
-          <label className="label">Tarif heure supplémentaire (&euro;/h)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tarif heure supplémentaire (&euro;/h)</label>
           <Input
             type="number"
             min={0}
@@ -240,7 +249,7 @@ function EditConfigModal({ user, onClose, onSaved }: {
         {/* Custom items */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="label !mb-0">Tarifs personnalisés</label>
+            <label className="block text-sm font-medium text-gray-700">Tarifs personnalisés</label>
             <button
               onClick={addCustomItem}
               className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1"
@@ -260,7 +269,7 @@ function EditConfigModal({ user, onClose, onSaved }: {
                   value={item.name}
                   onChange={(e) => updateCustomItem(idx, 'name', e.target.value)}
                   placeholder="Intitulé"
-                  className="input text-sm flex-1"
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
                 <input
                   type="number"
@@ -268,7 +277,7 @@ function EditConfigModal({ user, onClose, onSaved }: {
                   onChange={(e) => updateCustomItem(idx, 'price', parseFloat(e.target.value) || 0)}
                   min={0}
                   step={0.5}
-                  className="input text-sm w-24"
+                  className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Prix"
                 />
                 <span className="text-xs text-gray-400">&euro;</span>
@@ -373,11 +382,11 @@ function HistoriqueSection() {
       <Card className="p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="label">Chauffeur</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Chauffeur</label>
             <select
               value={filterUser}
               onChange={(e) => { setFilterUser(e.target.value); setPage(1); }}
-              className="input text-sm"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="">Tous</option>
               {configs.map((c) => (
@@ -386,21 +395,21 @@ function HistoriqueSection() {
             </select>
           </div>
           <div>
-            <label className="label">Du</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Du</label>
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-              className="input text-sm"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <div>
-            <label className="label">Au</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Au</label>
             <input
               type="date"
               value={dateTo}
               onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-              className="input text-sm"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <Button variant="outline" size="sm" onClick={handleCompute} disabled={computing}>
@@ -551,8 +560,8 @@ function AddEntryModal({ configs, onClose, onCreated }: {
     <Modal isOpen onClose={onClose} title="Nouvelle entrée comptable">
       <div className="space-y-4">
         <div>
-          <label className="label">Chauffeur *</label>
-          <select value={userId} onChange={(e) => setUserId(e.target.value)} className="input text-sm">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Chauffeur *</label>
+          <select value={userId} onChange={(e) => setUserId(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500">
             {configs.map((c) => (
               <option key={c.userId} value={c.userId}>{c.prenom} {c.nom}</option>
             ))}
@@ -560,14 +569,14 @@ function AddEntryModal({ configs, onClose, onCreated }: {
         </div>
 
         <div>
-          <label className="label">Date *</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input text-sm" />
+          <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500" />
         </div>
 
         {/* Quick-fill from custom items */}
         {customItems.length > 0 && (
           <div>
-            <label className="label">Pré-remplir depuis tarifs</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Pré-remplir depuis tarifs</label>
             <div className="flex flex-wrap gap-1.5">
               {customItems.map((item, i) => (
                 <button
@@ -583,17 +592,17 @@ function AddEntryModal({ configs, onClose, onCreated }: {
         )}
 
         <div>
-          <label className="label">Description *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
           <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex: Livraison spéciale week-end" />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="label">Quantité</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Quantité</label>
             <Input type="number" min={0.1} step={0.5} value={quantity} onChange={(e) => setQuantity(parseFloat(e.target.value) || 1)} />
           </div>
           <div>
-            <label className="label">Prix unitaire (&euro;) *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Prix unitaire (&euro;) *</label>
             <Input type="number" min={0} step={0.5} value={unitPrice} onChange={(e) => setUnitPrice(parseFloat(e.target.value) || 0)} />
           </div>
         </div>
