@@ -27,7 +27,7 @@ function hashIp(ip: string): string {
  */
 export const getBookingByToken = asyncHandler(async (req: Request, res: Response) => {
   const { token } = req.params;
-  const { session_id } = req.query;
+  const { session_id, brand } = req.query;
 
   const booking = await prisma.booking.findUnique({
     where: { publicToken: token },
@@ -35,6 +35,16 @@ export const getBookingByToken = asyncHandler(async (req: Request, res: Response
 
   if (!booking) {
     return apiResponse.notFound(res, 'Page introuvable');
+  }
+
+  // Save brand from URL if provided and not yet set
+  const urlBrand = brand as string;
+  if (urlBrand && ['SHOOTNBOX', 'SMAKK'].includes(urlBrand) && booking.senderBrand !== urlBrand) {
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { senderBrand: urlBrand },
+    });
+    booking.senderBrand = urlBrand;
   }
 
   // Check if already closed/gallery sent
@@ -182,8 +192,15 @@ export const handleReviewClick = asyncHandler(async (req: Request, res: Response
   const scheduledFor = new Date(Date.now() + delayHours * 60 * 60 * 1000);
   await scheduleGalleryDispatch(booking.id, 'fallback_24h', scheduledFor);
 
-  // Return the Google review URL
-  const reviewUrl = booking.googleReviewUrl || config.googleBusiness.defaultReviewUrl;
+  // Return the brand-specific Google review URL
+  let reviewUrl = booking.googleReviewUrl;
+  if (!reviewUrl) {
+    if (booking.senderBrand === 'SMAKK') {
+      reviewUrl = config.googleBusiness.reviewUrlSmakk || config.googleBusiness.defaultReviewUrl;
+    } else {
+      reviewUrl = config.googleBusiness.reviewUrlShootnbox || config.googleBusiness.defaultReviewUrl;
+    }
+  }
 
   return apiResponse.success(res, {
     redirect_url: reviewUrl,

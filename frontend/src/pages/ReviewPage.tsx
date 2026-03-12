@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -46,6 +46,8 @@ function StarIcon({ filled, hovered }: { filled: boolean; hovered: boolean }) {
 
 export default function ReviewPage() {
   const { token } = useParams<{ token: string }>();
+  const [searchParams] = useSearchParams();
+  const urlBrand = searchParams.get('brand') || '';
   const [pageState, setPageState] = useState<PageState>('loading');
   const [booking, setBooking] = useState<BookingData | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -64,8 +66,11 @@ export default function ReviewPage() {
       return;
     }
 
+    const params = new URLSearchParams({ session_id: sessionId });
+    if (urlBrand) params.set('brand', urlBrand);
+
     axios
-      .get(`${API_URL}/public/bookings/${token}?session_id=${sessionId}`)
+      .get(`${API_URL}/public/bookings/${token}?${params.toString()}`)
       .then((res) => {
         const data = res.data.data;
         setBooking(data);

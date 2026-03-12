@@ -84,6 +84,8 @@ export const config = {
     accountId: process.env.GOOGLE_BP_ACCOUNT_ID || '',
     locationId: process.env.GOOGLE_BP_LOCATION_ID || '',
     defaultReviewUrl: process.env.GOOGLE_DEFAULT_REVIEW_URL || '',
+    reviewUrlShootnbox: process.env.GOOGLE_REVIEW_URL_SHOOTNBOX || process.env.GOOGLE_DEFAULT_REVIEW_URL || '',
+    reviewUrlSmakk: process.env.GOOGLE_REVIEW_URL_SMAKK || process.env.GOOGLE_DEFAULT_REVIEW_URL || '',
     pubsubProjectId: process.env.GOOGLE_PUBSUB_PROJECT_ID || '',
     pubsubTopicName: process.env.GOOGLE_PUBSUB_TOPIC_NAME || 'gbp-reviews',
   },

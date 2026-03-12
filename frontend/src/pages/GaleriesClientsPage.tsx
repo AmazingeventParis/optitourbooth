@@ -5,7 +5,6 @@ import {
   PhotoIcon,
   PaperAirplaneIcon,
   ClipboardDocumentIcon,
-  LinkIcon,
   CheckCircleIcon,
   CalendarDaysIcon,
   StarIcon,
@@ -47,6 +46,13 @@ function formatDateRange(start: string, end: string): string {
   return `${s.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} → ${e.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
+/** Build the public URL with brand query param */
+function buildBrandUrl(publicUrl: string, brand: 'SHOOTNBOX' | 'SMAKK'): string {
+  const url = new URL(publicUrl);
+  url.searchParams.set('brand', brand);
+  return url.toString();
+}
+
 export default function GaleriesClientsPage() {
   const [events, setEvents] = useState<{ upcoming: CalendarEvent[]; past: CalendarEvent[] }>({ upcoming: [], past: [] });
   const [loading, setLoading] = useState(true);
@@ -71,29 +77,52 @@ export default function GaleriesClientsPage() {
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
+  /** Ensure booking exists, return its id and publicUrl */
+  const ensureBooking = async (ev: CalendarEvent): Promise<{ id: string; publicUrl: string }> => {
+    if (ev.booking) return { id: ev.booking.id, publicUrl: ev.booking.publicUrl };
+    const booking = await bookingsService.createFromEvent({
+      googleEventId: ev.googleEventId,
+      customerName: ev.clientName,
+      eventDate: ev.startDate,
+      eventEndDate: ev.endDate,
+      produitNom: ev.produitNom || undefined,
+    });
+    fetchEvents();
+    return { id: booking.id, publicUrl: booking.publicUrl! };
+  };
+
+  /** Copy the branded public URL */
+  const handleCopyBrandUrl = async (ev: CalendarEvent, brand: 'SHOOTNBOX' | 'SMAKK') => {
+    try {
+      const { publicUrl } = await ensureBooking(ev);
+      const url = buildBrandUrl(publicUrl, brand);
+      await navigator.clipboard.writeText(url);
+      toast.success(`Lien ${brand} copié !`);
+    } catch {
+      toast.error('Erreur lors de la copie');
+    }
+  };
+
+  /** Copy Drive folder URL */
+  const handleCopyDrive = async (galleryUrl: string) => {
+    try {
+      await navigator.clipboard.writeText(galleryUrl);
+      toast.success('Lien Drive copié !');
+    } catch {
+      toast.error('Impossible de copier');
+    }
+  };
+
+  /** Send branded URL by email */
   const handleSend = async (ev: CalendarEvent, brand: 'SHOOTNBOX' | 'SMAKK', email: string) => {
     if (!email.trim()) {
       toast.error('Email requis');
       return;
     }
-
     setSending(true);
     try {
-      let bookingId = ev.booking?.id;
-
-      if (!bookingId) {
-        const booking = await bookingsService.createFromEvent({
-          googleEventId: ev.googleEventId,
-          customerName: ev.clientName,
-          customerEmail: email,
-          eventDate: ev.startDate,
-          eventEndDate: ev.endDate,
-          produitNom: ev.produitNom || undefined,
-        });
-        bookingId = booking.id;
-      }
-
-      await bookingsService.sendLinkEmail(bookingId, email, brand);
+      const { id } = await ensureBooking(ev);
+      await bookingsService.sendLinkEmail(id, email, brand);
       toast.success(`Lien envoyé à ${email} via ${brand}`);
       setSendModal(null);
       setSendEmail('');
@@ -105,41 +134,14 @@ export default function GaleriesClientsPage() {
     }
   };
 
-  const handleBrandClick = (ev: CalendarEvent, brand: 'SHOOTNBOX' | 'SMAKK') => {
+  /** Click send button: if email known, send directly; else open modal */
+  const handleSendClick = (ev: CalendarEvent, brand: 'SHOOTNBOX' | 'SMAKK') => {
     const email = ev.booking?.customerEmail;
     if (email) {
-      // Email already known, send directly
       handleSend(ev, brand, email);
     } else {
-      // Ask for email
       setSendEmail('');
       setSendModal({ event: ev, brand });
-    }
-  };
-
-  const handleCopyLink = async (ev: CalendarEvent) => {
-    if (!ev.booking?.publicUrl) {
-      try {
-        const booking = await bookingsService.createFromEvent({
-          googleEventId: ev.googleEventId,
-          customerName: ev.clientName,
-          eventDate: ev.startDate,
-          eventEndDate: ev.endDate,
-          produitNom: ev.produitNom || undefined,
-        });
-        await navigator.clipboard.writeText(booking.publicUrl);
-        toast.success('Lien copié !');
-        fetchEvents();
-      } catch {
-        toast.error('Erreur lors de la création du lien');
-      }
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(ev.booking.publicUrl);
-      toast.success('Lien copié !');
-    } catch {
-      toast.error('Impossible de copier');
     }
   };
 
@@ -157,10 +159,7 @@ export default function GaleriesClientsPage() {
   const filterBySearch = (list: CalendarEvent[]) => {
     if (!search.trim()) return list;
     const q = search.toLowerCase().trim();
-    return list.filter(ev => {
-      const name = (ev.booking?.customerName || ev.clientName).toLowerCase();
-      return name.includes(q);
-    });
+    return list.filter(ev => (ev.booking?.customerName || ev.clientName).toLowerCase().includes(q));
   };
 
   const filteredUpcoming = filterBySearch(events.upcoming);
@@ -261,26 +260,26 @@ export default function GaleriesClientsPage() {
               key={ev.googleEventId}
               event={ev}
               onRename={(newName) => handleRename(ev, newName)}
-              onBrandSend={(brand) => handleBrandClick(ev, brand)}
-              onCopyLink={() => handleCopyLink(ev)}
+              onCopyDrive={() => ev.booking?.galleryUrl && handleCopyDrive(ev.booking.galleryUrl)}
+              onCopyBrandUrl={(brand) => handleCopyBrandUrl(ev, brand)}
+              onSendBrand={(brand) => handleSendClick(ev, brand)}
               sending={sending}
             />
           ))}
         </div>
       )}
 
-      {/* Email Modal (when email not known) */}
+      {/* Email Modal */}
       <Modal
         isOpen={!!sendModal}
         onClose={() => setSendModal(null)}
-        title={`Envoyer via ${sendModal?.brand} — ${sendModal?.event.booking?.customerName || sendModal?.event.clientName}`}
+        title={`Envoyer via ${sendModal?.brand}`}
       >
         {sendModal && (
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Le client recevra un lien unique vers sa page de satisfaction et d'accès à ses photos.
+              Envoyer le lien de satisfaction à <strong>{sendModal.event.booking?.customerName || sendModal.event.clientName}</strong>
             </p>
-
             <div>
               <label className="label">Email du client *</label>
               <Input
@@ -292,7 +291,6 @@ export default function GaleriesClientsPage() {
                 autoFocus
               />
             </div>
-
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="outline" onClick={() => setSendModal(null)}>Annuler</Button>
               <Button
@@ -301,7 +299,7 @@ export default function GaleriesClientsPage() {
                 className={sendModal.brand === 'SMAKK' ? '!bg-purple-600 hover:!bg-purple-700' : '!bg-orange-500 hover:!bg-orange-600'}
               >
                 <PaperAirplaneIcon className="h-4 w-4 mr-2" />
-                {sending ? 'Envoi...' : `Envoyer via ${sendModal.brand}`}
+                {sending ? 'Envoi...' : 'Envoyer'}
               </Button>
             </div>
           </div>
@@ -311,11 +309,12 @@ export default function GaleriesClientsPage() {
   );
 }
 
-function EventCard({ event, onRename, onBrandSend, onCopyLink, sending }: {
+function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, sending }: {
   event: CalendarEvent;
   onRename: (newName: string) => void;
-  onBrandSend: (brand: 'SHOOTNBOX' | 'SMAKK') => void;
-  onCopyLink: () => void;
+  onCopyDrive: () => void;
+  onCopyBrandUrl: (brand: 'SHOOTNBOX' | 'SMAKK') => void;
+  onSendBrand: (brand: 'SHOOTNBOX' | 'SMAKK') => void;
   sending: boolean;
 }) {
   const booking = event.booking;
@@ -337,14 +336,9 @@ function EventCard({ event, onRename, onBrandSend, onCopyLink, sending }: {
     setEditing(false);
   };
 
-  const handleCancelRename = () => {
-    setEditing(false);
-    setEditName(displayName);
-  };
-
   return (
     <Card className="p-4 flex flex-col justify-between">
-      {/* Top: date + type de borne */}
+      {/* Header: date + status */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <span className="flex items-center gap-1 text-sm text-gray-500">
@@ -358,7 +352,7 @@ function EventCard({ event, onRename, onBrandSend, onCopyLink, sending }: {
           )}
         </div>
 
-        {/* Client Name - editable */}
+        {/* Client Name */}
         <div className="flex items-center gap-1.5 mb-2">
           {editing ? (
             <div className="flex items-center gap-1 flex-1">
@@ -366,14 +360,14 @@ function EventCard({ event, onRename, onBrandSend, onCopyLink, sending }: {
                 type="text"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRename(); if (e.key === 'Escape') handleCancelRename(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRename(); if (e.key === 'Escape') { setEditing(false); setEditName(displayName); } }}
                 className="flex-1 border border-primary-300 rounded px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500"
                 autoFocus
               />
               <button onClick={handleSaveRename} className="p-1 text-green-600 hover:text-green-700">
                 <CheckIcon className="h-4 w-4" />
               </button>
-              <button onClick={handleCancelRename} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setEditing(false); setEditName(displayName); }} className="p-1 text-gray-400 hover:text-gray-600">
                 <XMarkIcon className="h-4 w-4" />
               </button>
             </div>
@@ -381,11 +375,7 @@ function EventCard({ event, onRename, onBrandSend, onCopyLink, sending }: {
             <>
               <h3 className="font-semibold text-gray-900 truncate">{displayName}</h3>
               {booking && (
-                <button
-                  onClick={() => { setEditName(displayName); setEditing(true); }}
-                  className="p-0.5 text-gray-400 hover:text-primary-600 flex-shrink-0"
-                  title="Modifier le nom du client"
-                >
+                <button onClick={() => { setEditName(displayName); setEditing(true); }} className="p-0.5 text-gray-400 hover:text-primary-600 flex-shrink-0" title="Modifier le nom">
                   <PencilIcon className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -393,82 +383,83 @@ function EventCard({ event, onRename, onBrandSend, onCopyLink, sending }: {
           )}
         </div>
 
-        {/* Type de borne */}
-        {event.produitNom && (
-          <div className="mb-3">
-            <Badge variant="default" size="sm">{event.produitNom}</Badge>
-          </div>
-        )}
-
-        {/* Booking info */}
-        {booking && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 mb-3">
-            {booking.senderBrand && (
-              <span className={clsx('px-1.5 py-0.5 rounded text-xs font-bold',
-                booking.senderBrand === 'SHOOTNBOX' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'
-              )}>
-                {booking.senderBrand}
-              </span>
-            )}
-            {booking.galleryUrl && (
-              <a href={booking.galleryUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-600 hover:underline">
-                <FolderOpenIcon className="h-3 w-3" />
-                Drive
-              </a>
-            )}
-            {booking.emailSentAt && (
-              <span className="flex items-center gap-1">
-                <CheckCircleIcon className="h-3 w-3 text-green-500" />
-                Envoyé {new Date(booking.emailSentAt).toLocaleDateString('fr-FR')}
-              </span>
-            )}
-            {booking._count.events > 0 && (
-              <span className="flex items-center gap-1">
-                <EyeIcon className="h-3 w-3" />
-                {booking._count.events} visite{booking._count.events > 1 ? 's' : ''}
-              </span>
-            )}
-            {booking._count.reviewMatches > 0 && (
-              <span className="flex items-center gap-1 text-amber-600">
-                <StarIcon className="h-3 w-3" />
-                {booking._count.reviewMatches} avis
-              </span>
-            )}
-          </div>
-        )}
+        {/* Type de borne + infos */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {event.produitNom && <Badge variant="default" size="sm">{event.produitNom}</Badge>}
+          {booking?.emailSentAt && (
+            <span className="flex items-center gap-1 text-xs text-gray-400">
+              <CheckCircleIcon className="h-3 w-3 text-green-500" />
+              Envoyé {new Date(booking.emailSentAt).toLocaleDateString('fr-FR')}
+            </span>
+          )}
+          {booking && booking._count.events > 0 && (
+            <span className="flex items-center gap-1 text-xs text-gray-400">
+              <EyeIcon className="h-3 w-3" />
+              {booking._count.events}
+            </span>
+          )}
+          {booking && booking._count.reviewMatches > 0 && (
+            <span className="flex items-center gap-1 text-xs text-amber-600">
+              <StarIcon className="h-3 w-3" />
+              {booking._count.reviewMatches}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Bottom: Actions */}
-      <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+      {/* Actions */}
+      <div className="pt-3 border-t border-gray-100 space-y-2">
+        {/* Row 1: Drive */}
         {booking?.galleryUrl && (
-          <Button variant="outline" size="sm" onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(booking.galleryUrl!);
-              toast.success('Lien Drive copié !');
-            } catch { toast.error('Impossible de copier'); }
-          }} title="Copier le lien Google Drive" className="flex-shrink-0">
-            <FolderOpenIcon className="h-4 w-4" />
-          </Button>
+          <button
+            onClick={onCopyDrive}
+            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors"
+          >
+            <FolderOpenIcon className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate flex-1 text-left">Copier lien Drive</span>
+            <ClipboardDocumentIcon className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
+          </button>
         )}
-        <Button variant="outline" size="sm" onClick={onCopyLink} title="Copier le lien client" className="flex-shrink-0">
-          {booking ? <ClipboardDocumentIcon className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
-        </Button>
-        <button
-          onClick={() => onBrandSend('SHOOTNBOX')}
-          disabled={sending}
-          className="flex-1 py-1.5 px-3 rounded-lg border-2 border-orange-400 bg-orange-50 text-orange-700 text-xs font-bold hover:bg-orange-100 transition-all disabled:opacity-50"
-          title="Envoyer via SHOOTNBOX"
-        >
-          SHOOTNBOX
-        </button>
-        <button
-          onClick={() => onBrandSend('SMAKK')}
-          disabled={sending}
-          className="flex-1 py-1.5 px-3 rounded-lg border-2 border-purple-400 bg-purple-50 text-purple-700 text-xs font-bold hover:bg-purple-100 transition-all disabled:opacity-50"
-          title="Envoyer via SMAKK"
-        >
-          SMAKK
-        </button>
+
+        {/* Row 2: SHOOTNBOX — copier + envoyer */}
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => onCopyBrandUrl('SHOOTNBOX')}
+            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors"
+            title="Copier le lien avis SHOOTNBOX"
+          >
+            <ClipboardDocumentIcon className="h-3.5 w-3.5" />
+            SHOOTNBOX
+          </button>
+          <button
+            onClick={() => onSendBrand('SHOOTNBOX')}
+            disabled={sending}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50"
+            title="Envoyer par email via SHOOTNBOX"
+          >
+            <PaperAirplaneIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* Row 3: SMAKK — copier + envoyer */}
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => onCopyBrandUrl('SMAKK')}
+            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors"
+            title="Copier le lien avis SMAKK"
+          >
+            <ClipboardDocumentIcon className="h-3.5 w-3.5" />
+            SMAKK
+          </button>
+          <button
+            onClick={() => onSendBrand('SMAKK')}
+            disabled={sending}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors disabled:opacity-50"
+            title="Envoyer par email via SMAKK"
+          >
+            <PaperAirplaneIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </Card>
   );
