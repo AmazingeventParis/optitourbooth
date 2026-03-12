@@ -1,0 +1,85 @@
+import api, { ApiResponse } from './api';
+
+export interface CustomItem {
+  name: string;
+  price: number;
+}
+
+export interface BillingConfigData {
+  tarifPointHorsForfait: number;
+  tarifHeureSupp: number;
+  horsForfaitDebut: string;
+  horsForfaitFin: string;
+  customItems: CustomItem[];
+}
+
+export interface UserBillingConfig {
+  userId: string;
+  nom: string;
+  prenom: string;
+  roles: string[];
+  couleur: string | null;
+  config: BillingConfigData & { id?: string };
+}
+
+export interface BillingEntry {
+  id: string;
+  userId: string;
+  tourneeId: string | null;
+  pointId: string | null;
+  date: string;
+  type: string;
+  label: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  user?: { id: string; nom: string; prenom: string; couleur: string | null } | null;
+}
+
+export const billingService = {
+  async getConfigs(): Promise<UserBillingConfig[]> {
+    const res = await api.get<ApiResponse<UserBillingConfig[]>>('/billing/configs');
+    return res.data.data;
+  },
+
+  async upsertConfig(userId: string, data: BillingConfigData): Promise<BillingConfigData> {
+    const res = await api.put<ApiResponse<BillingConfigData>>(`/billing/configs/${userId}`, data);
+    return res.data.data;
+  },
+
+  async getEntries(params: {
+    userId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: BillingEntry[]; meta: { page: number; limit: number; total: number; totalPages: number; totalSum: number } }> {
+    const res = await api.get<ApiResponse<BillingEntry[]>>('/billing/entries', { params });
+    return { data: res.data.data, meta: res.data.meta as any };
+  },
+
+  async createEntry(data: {
+    userId: string;
+    date: string;
+    type?: string;
+    label: string;
+    quantity?: number;
+    unitPrice: number;
+    tourneeId?: string;
+    pointId?: string;
+  }): Promise<BillingEntry> {
+    const res = await api.post<ApiResponse<BillingEntry>>('/billing/entries', data);
+    return res.data.data;
+  },
+
+  async deleteEntry(id: string): Promise<void> {
+    await api.delete(`/billing/entries/${id}`);
+  },
+
+  async computeEntries(dateFrom: string, dateTo: string, userId?: string): Promise<{ created: number; message: string }> {
+    const res = await api.post<ApiResponse<{ created: number; message: string }>>('/billing/compute', { dateFrom, dateTo, userId });
+    return res.data.data;
+  },
+};

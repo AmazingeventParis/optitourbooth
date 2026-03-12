@@ -16,6 +16,7 @@ import tenantRoutes from './tenant.routes.js';
 import settingsRoutes from './settings.routes.js';
 import pendingPointRoutes from './pendingPoint.routes.js';
 import bookingRoutes from './booking.routes.js';
+import billingRoutes from './billing.routes.js';
 
 const router = Router();
 
@@ -170,6 +171,8 @@ router.use('/preparations', preparationRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/tenants', tenantRoutes);
 router.use('/pending-points', pendingPointRoutes);
+
+router.use('/billing', billingRoutes);
 
 // Booking / Review system routes (public + internal + admin)
 router.use('/', bookingRoutes);
