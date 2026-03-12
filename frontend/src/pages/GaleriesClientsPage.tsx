@@ -58,6 +58,7 @@ export default function GaleriesClientsPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
   const [search, setSearch] = useState('');
+  const [starFilter, setStarFilter] = useState<number | null>(null); // null = all, 0 = no rating, 1-5 = specific
 
   // Send modal state
   const [sendModal, setSendModal] = useState<{ event: CalendarEvent; brand: 'SHOOTNBOX' | 'SMAKK' } | null>(null);
@@ -156,14 +157,24 @@ export default function GaleriesClientsPage() {
     }
   };
 
-  const filterBySearch = (list: CalendarEvent[]) => {
-    if (!search.trim()) return list;
-    const q = search.toLowerCase().trim();
-    return list.filter(ev => (ev.booking?.customerName || ev.clientName).toLowerCase().includes(q));
+  const filterEvents = (list: CalendarEvent[]) => {
+    let result = list;
+    if (search.trim()) {
+      const q = search.toLowerCase().trim();
+      result = result.filter(ev => (ev.booking?.customerName || ev.clientName).toLowerCase().includes(q));
+    }
+    if (starFilter !== null) {
+      if (starFilter === 0) {
+        result = result.filter(ev => !ev.booking?.rating);
+      } else {
+        result = result.filter(ev => ev.booking?.rating === starFilter);
+      }
+    }
+    return result;
   };
 
-  const filteredUpcoming = filterBySearch(events.upcoming);
-  const filteredPast = filterBySearch(events.past);
+  const filteredUpcoming = filterEvents(events.upcoming);
+  const filteredPast = filterEvents(events.past);
   const currentEvents = tab === 'upcoming' ? filteredUpcoming : filteredPast;
 
   return (
@@ -221,6 +232,41 @@ export default function GaleriesClientsPage() {
             <XMarkIcon className="h-4 w-4" />
           </button>
         )}
+      </div>
+
+      {/* Star filter */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm text-gray-500">Filtrer :</span>
+        <button
+          onClick={() => setStarFilter(null)}
+          className={clsx('px-3 py-1 rounded-full text-xs font-medium transition-colors',
+            starFilter === null ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          )}
+        >
+          Tous
+        </button>
+        {[5, 4, 3, 2, 1].map((s) => (
+          <button
+            key={s}
+            onClick={() => setStarFilter(starFilter === s ? null : s)}
+            className={clsx('flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors',
+              starFilter === s ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+            )}
+          >
+            {s}
+            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+            </svg>
+          </button>
+        ))}
+        <button
+          onClick={() => setStarFilter(starFilter === 0 ? null : 0)}
+          className={clsx('px-3 py-1 rounded-full text-xs font-medium transition-colors',
+            starFilter === 0 ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+          )}
+        >
+          Sans note
+        </button>
       </div>
 
       {/* Tabs */}
