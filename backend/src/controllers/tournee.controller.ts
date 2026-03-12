@@ -2005,24 +2005,34 @@ export const tourneeController = {
       return;
     }
 
-    // Upload vers Cloudinary et créer les entrées en base
-    const { uploadToCloudinary } = await import('../config/cloudinary.js');
+    // Upload local sur le serveur
+    const fs = await import('fs/promises');
+    const pathModule = await import('path');
+    const crypto = await import('crypto');
+
+    const uploadsDir = process.env.UPLOAD_DIR || pathModule.default.join(__dirname, '..', 'uploads');
+    const pointDir = pathModule.default.join(uploadsDir, 'photos', pointId);
+    await fs.mkdir(pointDir, { recursive: true });
+
+    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
 
     const photos = [];
     for (const file of files) {
       try {
-        // Upload vers Cloudinary
-        const { url, publicId } = await uploadToCloudinary(
-          file.buffer,
-          `optitourbooth/points/${pointId}`
-        );
+        const ext = pathModule.default.extname(file.originalname) || '.jpg';
+        const filename = `${crypto.randomUUID()}${ext}`;
+        const filePath = pathModule.default.join(pointDir, filename);
 
-        // Créer l'entrée en base avec l'URL Cloudinary
+        await fs.writeFile(filePath, file.buffer);
+
+        const relativePath = `/uploads/photos/${pointId}/${filename}`;
+        const fullUrl = `${baseUrl}${relativePath}`;
+
         const photo = await prisma.photo.create({
           data: {
             pointId,
-            filename: publicId, // Stocker le publicId pour pouvoir supprimer plus tard
-            path: url, // L'URL Cloudinary
+            filename,
+            path: fullUrl,
             mimetype: file.mimetype,
             size: file.size,
             type: 'preuve',
@@ -2031,8 +2041,7 @@ export const tourneeController = {
         });
         photos.push(photo);
       } catch (uploadError) {
-        console.error('Erreur upload Cloudinary:', uploadError);
-        // Continuer avec les autres fichiers
+        console.error('Erreur upload photo locale:', uploadError);
       }
     }
 
