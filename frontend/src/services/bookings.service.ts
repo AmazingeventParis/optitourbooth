@@ -91,6 +91,7 @@ export interface CalendarEvent {
     customerEmail: string | null;
     customerPhone: string | null;
     senderBrand: string | null;
+    rating: number | null;
     galleryUrl: string | null;
     googleReviewUrl: string | null;
     status: string;

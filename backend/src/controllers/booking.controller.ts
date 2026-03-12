@@ -645,6 +645,7 @@ export const listCalendarEvents = asyncHandler(async (_req: Request, res: Respon
         customerEmail: booking.customerEmail,
         customerPhone: booking.customerPhone,
         senderBrand: booking.senderBrand,
+        rating: booking.rating,
         galleryUrl: booking.galleryUrl,
         googleReviewUrl: booking.googleReviewUrl,
         status: booking.status,
