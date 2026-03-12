@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { bookingsService, CalendarEvent } from '@/services/bookings.service';
 import { Card, Button, Badge, Modal, Input } from '@/components/ui';
 import {
@@ -235,50 +235,11 @@ export default function GaleriesClientsPage() {
       </div>
 
       {/* Star filter */}
-      {(() => {
-        const allEvents = [...events.upcoming, ...events.past];
-        const countByRating = (r: number) => allEvents.filter(ev => ev.booking?.rating === r).length;
-        const countNoRating = allEvents.filter(ev => !ev.booking?.rating).length;
-        return (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-gray-500">Filtrer :</span>
-            <button
-              onClick={() => setStarFilter(null)}
-              className={clsx('px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                starFilter === null ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              )}
-            >
-              Tous ({allEvents.length})
-            </button>
-            {[5, 4, 3, 2, 1].map((s) => {
-              const count = countByRating(s);
-              return (
-                <button
-                  key={s}
-                  onClick={() => setStarFilter(starFilter === s ? null : s)}
-                  className={clsx('flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                    starFilter === s ? 'bg-amber-500 text-white' : count > 0 ? 'bg-amber-50 text-amber-700 hover:bg-amber-100' : 'bg-gray-50 text-gray-400'
-                  )}
-                >
-                  {s}
-                  <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
-                  </svg>
-                  <span className="opacity-70">({count})</span>
-                </button>
-              );
-            })}
-            <button
-              onClick={() => setStarFilter(starFilter === 0 ? null : 0)}
-              className={clsx('px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                starFilter === 0 ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              )}
-            >
-              Sans note ({countNoRating})
-            </button>
-          </div>
-        );
-      })()}
+      <StarFilter
+        events={[...events.upcoming, ...events.past]}
+        value={starFilter}
+        onChange={setStarFilter}
+      />
 
       {/* Tabs */}
       <div className="flex gap-2 border-b">
@@ -530,5 +491,62 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
         </div>
       </div>
     </Card>
+  );
+}
+
+const STAR_PATH = "M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z";
+
+function StarFilter({ events, value, onChange }: {
+  events: CalendarEvent[];
+  value: number | null;
+  onChange: (v: number | null) => void;
+}) {
+  const counts = useMemo(() => {
+    const map: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const ev of events) {
+      const r = ev.booking?.rating;
+      if (r && r >= 1 && r <= 5) map[r]++;
+      else map[0]++;
+    }
+    return map;
+  }, [events]);
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-sm text-gray-500">Filtrer :</span>
+      <button
+        onClick={() => onChange(null)}
+        className={clsx('px-3 py-1 rounded-full text-xs font-medium',
+          value === null ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        )}
+      >
+        Tous ({events.length})
+      </button>
+      {[5, 4, 3, 2, 1].map((s) => (
+        <button
+          key={s}
+          onClick={() => onChange(value === s ? null : s)}
+          className={clsx('flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium',
+            value === s
+              ? 'bg-amber-500 text-white'
+              : counts[s] > 0
+                ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                : 'bg-gray-50 text-gray-400'
+          )}
+        >
+          {s}
+          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24"><path d={STAR_PATH} /></svg>
+          <span className="opacity-70">({counts[s]})</span>
+        </button>
+      ))}
+      <button
+        onClick={() => onChange(value === 0 ? null : 0)}
+        className={clsx('px-3 py-1 rounded-full text-xs font-medium',
+          value === 0 ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+        )}
+      >
+        Sans note ({counts[0]})
+      </button>
+    </div>
   );
 }
