@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { billingService, UserBillingConfig, BillingEntry, CustomItem } from '@/services/billing.service';
-import { Card, Button, Badge, Modal, Input } from '@/components/ui';
+import { Card, Button, Modal, Input } from '@/components/ui';
 import {
   PencilIcon,
   TrashIcon,
@@ -9,7 +9,6 @@ import {
   XMarkIcon,
   BanknotesIcon,
   ClockIcon,
-  UserIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
@@ -417,9 +416,9 @@ function HistoriqueSection() {
 
       {/* Summary */}
       <div className="flex items-center gap-4">
-        <Badge variant="default" size="lg" className="!text-base !px-4 !py-1.5">
+        <span className="px-4 py-1.5 rounded-full text-base font-semibold bg-primary-100 text-primary-800">
           Total : {meta.totalSum?.toFixed(2) || '0.00'} &euro;
-        </Badge>
+        </span>
         <span className="text-sm text-gray-400">{meta.total} entrée(s)</span>
       </div>
 
