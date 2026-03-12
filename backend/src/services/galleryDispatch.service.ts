@@ -55,10 +55,10 @@ export async function scheduleGalleryDispatch(
     return;
   }
 
-  // Schedule delayed job via BullMQ
+  // Schedule delayed job via BullMQ (non-blocking with timeout)
   if (areQueuesAvailable() && galleryQueue) {
     const delay = scheduledFor.getTime() - Date.now();
-    await galleryQueue.add(
+    const queuePromise = galleryQueue.add(
       'send-gallery',
       { dispatchId: dispatch.id, bookingId },
       {
@@ -68,7 +68,14 @@ export async function scheduleGalleryDispatch(
         backoff: { type: 'exponential', delay: 60000 },
       }
     );
-    console.log(`[GalleryDispatch] Job scheduled for booking ${bookingId} at ${scheduledFor.toISOString()}`);
+    // Timeout after 3 seconds - poller will pick it up if queue fails
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Queue timeout')), 3000));
+    try {
+      await Promise.race([queuePromise, timeoutPromise]);
+      console.log(`[GalleryDispatch] Job scheduled for booking ${bookingId} at ${scheduledFor.toISOString()}`);
+    } catch (err) {
+      console.warn(`[GalleryDispatch] Queue add failed/timed out for dispatch ${dispatch.id}, poller will handle it:`, (err as Error).message);
+    }
   } else {
     console.warn(`[GalleryDispatch] Queues unavailable, dispatch ${dispatch.id} will be picked up by poller`);
   }

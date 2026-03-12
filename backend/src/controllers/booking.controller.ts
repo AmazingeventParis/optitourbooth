@@ -187,10 +187,12 @@ export const handleReviewClick = asyncHandler(async (req: Request, res: Response
     data: { status: 'review_clicked' },
   });
 
-  // Schedule fallback gallery dispatch at H+24
+  // Schedule fallback gallery dispatch at H+24 (non-blocking)
   const delayHours = config.reviewSystem.galleryDelayHours;
   const scheduledFor = new Date(Date.now() + delayHours * 60 * 60 * 1000);
-  await scheduleGalleryDispatch(booking.id, 'fallback_24h', scheduledFor);
+  scheduleGalleryDispatch(booking.id, 'fallback_24h', scheduledFor).catch(err =>
+    console.error(`[ReviewClick] Failed to schedule gallery dispatch:`, err)
+  );
 
   // Return the brand-specific Google review URL
   let reviewUrl = booking.googleReviewUrl;
@@ -247,10 +249,12 @@ export const handleNoReviewClick = asyncHandler(async (req: Request, res: Respon
     data: { status: 'no_review_selected' },
   });
 
-  // Schedule gallery dispatch at H+24
+  // Schedule gallery dispatch at H+24 (non-blocking)
   const delayHours = config.reviewSystem.galleryDelayHours;
   const scheduledFor = new Date(Date.now() + delayHours * 60 * 60 * 1000);
-  await scheduleGalleryDispatch(booking.id, 'after_no_review_24h', scheduledFor);
+  scheduleGalleryDispatch(booking.id, 'after_no_review_24h', scheduledFor).catch(err =>
+    console.error(`[NoReviewClick] Failed to schedule gallery dispatch:`, err)
+  );
 
   return apiResponse.success(res, {
     message: 'C\'est bien noté. Votre galerie vous sera envoyée automatiquement dans les 24 heures.',
