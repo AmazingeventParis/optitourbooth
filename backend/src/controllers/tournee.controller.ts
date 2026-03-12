@@ -2014,7 +2014,8 @@ export const tourneeController = {
     const pointDir = pathModule.default.join(uploadsDir, 'photos', pointId);
     await fs.mkdir(pointDir, { recursive: true });
 
-    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    // Use UPLOADS_BASE_URL (API domain) — not PUBLIC_BASE_URL (frontend domain)
+    const baseUrl = process.env.UPLOADS_BASE_URL || `${req.protocol}://${req.get('host')}`;
 
     const photos = [];
     for (const file of files) {
