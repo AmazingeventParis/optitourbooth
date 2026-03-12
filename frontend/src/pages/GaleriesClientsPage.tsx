@@ -178,7 +178,10 @@ export default function GaleriesClientsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Galeries Clients</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">Galeries Clients</h1>
+            <AverageRating events={[...events.upcoming, ...events.past]} />
+          </div>
           <p className="text-sm text-gray-500 mt-1">
             Envoyez les galeries photos et collectez les avis Google
           </p>
@@ -508,6 +511,30 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
 }
 
 const STAR_PATH = "M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z";
+
+function AverageRating({ events }: { events: CalendarEvent[] }) {
+  const { avg, count } = useMemo(() => {
+    const ratings = events.map(e => e.booking?.rating).filter((r): r is number => !!r && r >= 1 && r <= 5);
+    if (ratings.length === 0) return { avg: 0, count: 0 };
+    return { avg: ratings.reduce((a, b) => a + b, 0) / ratings.length, count: ratings.length };
+  }, [events]);
+
+  if (count === 0) return null;
+
+  return (
+    <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
+      <div className="flex items-center gap-0.5">
+        {[1, 2, 3, 4, 5].map((s) => (
+          <svg key={s} className={clsx('h-4 w-4', s <= Math.round(avg) ? 'text-amber-400' : 'text-gray-200')} fill="currentColor" viewBox="0 0 24 24">
+            <path d={STAR_PATH} />
+          </svg>
+        ))}
+      </div>
+      <span className="text-sm font-bold text-amber-700">{avg.toFixed(1)}</span>
+      <span className="text-xs text-amber-500">({count})</span>
+    </div>
+  );
+}
 
 function StarFilter({ events, value, onChange }: {
   events: CalendarEvent[];
