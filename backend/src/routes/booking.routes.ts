@@ -3,6 +3,7 @@ import { authenticate, requireAdmin } from '../middlewares/auth.middleware.js';
 import {
   // Public
   getBookingByToken,
+  handleStarRating,
   handleReviewClick,
   handleNoReviewClick,
   // Internal
@@ -30,6 +31,9 @@ const router = Router();
 
 // Get booking page data by public token
 router.get('/public/bookings/:token', getBookingByToken);
+
+// Handle star rating (1-5)
+router.post('/public/bookings/:token/actions/rate', handleStarRating);
 
 // Handle "Leave a Google review" click
 router.post('/public/bookings/:token/actions/review-click', handleReviewClick);

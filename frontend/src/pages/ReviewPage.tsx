@@ -4,18 +4,44 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
-type PageState = 'loading' | 'active' | 'closed' | 'gallery_sent' | 'no_review_done' | 'error';
+type PageState = 'loading' | 'rating' | 'low_rating' | 'ask_review' | 'no_review_done' | 'closed' | 'gallery_sent' | 'error';
 
 interface BookingData {
   status: string;
   customerName: string;
   eventDate: string;
+  galleryUrl?: string | null;
+  senderBrand?: string | null;
+  rating?: number | null;
   hasGoogleReview: boolean;
-  message?: string;
 }
 
 function generateSessionId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+
+function StarIcon({ filled, hovered }: { filled: boolean; hovered: boolean }) {
+  return (
+    <svg
+      className={`w-12 h-12 sm:w-14 sm:h-14 transition-all duration-200 ${
+        filled
+          ? 'text-amber-400 drop-shadow-lg'
+          : hovered
+            ? 'text-amber-300'
+            : 'text-gray-300'
+      }`}
+      fill={filled || hovered ? 'currentColor' : 'none'}
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={filled || hovered ? 0 : 1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"
+      />
+    </svg>
+  );
 }
 
 export default function ReviewPage() {
@@ -24,6 +50,12 @@ export default function ReviewPage() {
   const [booking, setBooking] = useState<BookingData | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [sessionId] = useState(() => generateSessionId());
+  const [hoveredStar, setHoveredStar] = useState(0);
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [galleryUrl, setGalleryUrl] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const brandName = booking?.senderBrand === 'SMAKK' ? 'Smakk' : 'Shootnbox';
 
   useEffect(() => {
     if (!token) {
@@ -41,8 +73,18 @@ export default function ReviewPage() {
           setPageState('closed');
         } else if (data.status === 'gallery_sent') {
           setPageState('gallery_sent');
+        } else if (data.status === 'rated_low' && data.galleryUrl) {
+          // Already rated low - show gallery directly
+          setGalleryUrl(data.galleryUrl);
+          setSelectedRating(data.rating || 0);
+          setPageState('low_rating');
+        } else if (data.status === 'rated_high') {
+          setSelectedRating(data.rating || 0);
+          setPageState('ask_review');
+        } else if (data.status === 'no_review_selected') {
+          setPageState('no_review_done');
         } else {
-          setPageState('active');
+          setPageState('rating');
         }
       })
       .catch((err) => {
@@ -50,6 +92,32 @@ export default function ReviewPage() {
         setErrorMessage(err.response?.status === 404 ? 'Page introuvable' : 'Une erreur est survenue');
       });
   }, [token, sessionId]);
+
+  const handleRate = async (rating: number) => {
+    if (!token || submitting) return;
+    setSelectedRating(rating);
+    setSubmitting(true);
+
+    try {
+      const res = await axios.post(`${API_URL}/public/bookings/${token}/actions/rate`, {
+        rating,
+        session_id: sessionId,
+        user_agent: navigator.userAgent,
+        referrer: document.referrer,
+      });
+
+      const data = res.data.data;
+      if (data.action === 'show_gallery') {
+        setGalleryUrl(data.galleryUrl);
+        setPageState('low_rating');
+      } else {
+        setPageState('ask_review');
+      }
+    } catch {
+      setErrorMessage('Une erreur est survenue. Veuillez réessayer.');
+      setSubmitting(false);
+    }
+  };
 
   const handleReviewClick = async () => {
     if (!token) return;
@@ -84,6 +152,14 @@ export default function ReviewPage() {
     } catch {
       setErrorMessage('Une erreur est survenue. Veuillez réessayer.');
     }
+  };
+
+  const ratingLabel = (r: number) => {
+    if (r <= 1) return 'Très insatisfait';
+    if (r === 2) return 'Insatisfait';
+    if (r === 3) return 'Correct';
+    if (r === 4) return 'Satisfait';
+    return 'Très satisfait';
   };
 
   return (
@@ -130,7 +206,7 @@ export default function ReviewPage() {
                 </svg>
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Page fermée</h2>
-              <p className="text-gray-500">{booking?.message || 'Cette page n\'est plus disponible.'}</p>
+              <p className="text-gray-500">Cette page n'est plus disponible.</p>
             </div>
           )}
 
@@ -147,35 +223,112 @@ export default function ReviewPage() {
             </div>
           )}
 
-          {/* No review confirmation */}
-          {pageState === 'no_review_done' && (
-            <div className="p-8 text-center">
-              <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
-                <svg className="w-7 h-7 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">C'est bien noté</h2>
-              <p className="text-gray-500">
-                Votre galerie vous sera envoyée automatiquement dans les 24 heures.
+          {/* Star Rating */}
+          {pageState === 'rating' && (
+            <div className="p-8">
+              <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
+                Merci d'avoir choisi {brandName} !
+              </h1>
+              <p className="text-gray-600 text-center mb-8">
+                Comment évaluez-vous votre expérience ?
               </p>
+
+              {/* Stars */}
+              <div className="flex justify-center gap-2 mb-4">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    onMouseEnter={() => setHoveredStar(star)}
+                    onMouseLeave={() => setHoveredStar(0)}
+                    onClick={() => handleRate(star)}
+                    disabled={submitting}
+                    className="focus:outline-none transform hover:scale-110 transition-transform duration-150 disabled:opacity-50"
+                  >
+                    <StarIcon
+                      filled={star <= selectedRating}
+                      hovered={star <= hoveredStar && selectedRating === 0}
+                    />
+                  </button>
+                ))}
+              </div>
+
+              {/* Rating label */}
+              <p className="text-center text-sm text-gray-500 h-6">
+                {hoveredStar > 0 && selectedRating === 0
+                  ? ratingLabel(hoveredStar)
+                  : selectedRating > 0
+                    ? ratingLabel(selectedRating)
+                    : 'Cliquez sur les étoiles pour évaluer'}
+              </p>
+
+              {submitting && (
+                <div className="flex justify-center mt-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-500" />
+                </div>
+              )}
+
+              {errorMessage && (
+                <p className="text-sm text-red-500 text-center mt-3">{errorMessage}</p>
+              )}
             </div>
           )}
 
-          {/* Active - Main page */}
-          {pageState === 'active' && (
-            <div className="p-8">
-              <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
-                Merci pour votre location Photobooth
-              </h1>
-              <p className="text-gray-600 text-center mb-8">
-                Votre galerie est prête. Choisissez simplement l'option qui vous convient.
+          {/* Low rating (1-3) - Show gallery link */}
+          {pageState === 'low_rating' && (
+            <div className="p-8 text-center">
+              <div className="flex justify-center gap-1 mb-6">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <StarIcon key={star} filled={star <= selectedRating} hovered={false} />
+                ))}
+              </div>
+
+              <h2 className="text-xl font-bold text-gray-900 mb-2">
+                Merci pour votre retour
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Nous sommes désolés que l'expérience n'ait pas été à la hauteur de vos attentes. Voici l'accès à vos photos :
               </p>
 
-              {/* CTA 1: Leave a Google review */}
+              {galleryUrl ? (
+                <a
+                  href={galleryUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-3 w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Accéder à mes photos
+                </a>
+              ) : (
+                <p className="text-gray-500">
+                  Votre galerie sera bientôt disponible. Vous recevrez un email avec le lien d'accès.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* High rating (4-5) - Ask for Google review */}
+          {pageState === 'ask_review' && (
+            <div className="p-8">
+              <div className="flex justify-center gap-1 mb-6">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <StarIcon key={star} filled={star <= selectedRating} hovered={false} />
+                ))}
+              </div>
+
+              <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
+                Merci beaucoup !
+              </h2>
+              <p className="text-gray-600 text-center mb-8">
+                Votre satisfaction nous fait très plaisir. Accepteriez-vous de partager votre expérience sur Google ? Cela nous aide énormément !
+              </p>
+
+              {/* CTA: Leave a Google review */}
               <button
                 onClick={handleReviewClick}
-                className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 mb-2"
+                className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 mb-3"
               >
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
@@ -183,38 +336,45 @@ export default function ReviewPage() {
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                 </svg>
-                Laisser un avis Google
+                Je laisse un avis Google
               </button>
-              <p className="text-xs text-green-600 font-medium text-center mb-6">
-                Galerie disponible immédiatement
-              </p>
 
-              {/* CTA 2: No review */}
+              {/* CTA: No review */}
               <button
                 onClick={handleNoReviewClick}
-                className="w-full py-3 px-6 rounded-xl border-2 border-gray-200 text-gray-600 font-medium hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 mb-2"
+                className="w-full py-3 px-6 rounded-xl border-2 border-gray-200 text-gray-600 font-medium hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
               >
-                Je ne laisse pas d'avis
+                Je ne souhaite pas laisser d'avis
               </button>
-              <p className="text-xs text-gray-400 text-center mb-4">
-                Galerie disponible sous 24h
-              </p>
-
-              {/* Reassurance */}
-              <p className="text-sm text-gray-400 text-center mt-4 pt-4 border-t border-gray-100">
-                Dans tous les cas, votre galerie vous sera bien envoyée.
-              </p>
 
               {errorMessage && (
                 <p className="text-sm text-red-500 text-center mt-3">{errorMessage}</p>
               )}
             </div>
           )}
+
+          {/* No review confirmation - gallery in 24h */}
+          {pageState === 'no_review_done' && (
+            <div className="p-8 text-center">
+              <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-7 h-7 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">C'est bien noté !</h2>
+              <p className="text-gray-600">
+                Votre lien d'accès à vos photos vous sera envoyé automatiquement sous <strong>24 heures</strong>.
+              </p>
+              <p className="text-gray-400 text-sm mt-4">
+                Surveillez votre boîte mail, vous recevrez un email de {brandName}.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <p className="text-center text-gray-500 text-xs mt-6">
-          Propulsé par OptiTour Booth
+          Propulsé par {brandName}
         </p>
       </div>
     </div>

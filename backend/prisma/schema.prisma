@@ -602,6 +602,8 @@ model Preparation {
 enum BookingStatus {
   link_sent
   page_viewed
+  rated_low
+  rated_high
   review_clicked
   no_review_selected
   review_detected
@@ -614,6 +616,7 @@ enum BookingStatus {
 
 enum BookingEventType {
   landing_view
+  star_rating
   review_click
   no_review_click
   review_redirected
@@ -654,6 +657,7 @@ model Booking {
   businessAccountId   String?       @map("business_account_id")
   businessLocationId  String?       @map("business_location_id")
   senderBrand         String?       @map("sender_brand")
+  rating              Int?          @map("rating")
   status              BookingStatus @default(link_sent)
   emailSentAt         DateTime?     @map("email_sent_at")
 

@@ -76,7 +76,70 @@ export const getBookingByToken = asyncHandler(async (req: Request, res: Response
     status: 'active',
     customerName: booking.customerName,
     eventDate: booking.eventDate,
+    galleryUrl: booking.galleryUrl,
+    senderBrand: booking.senderBrand,
+    rating: booking.rating,
     hasGoogleReview: !!booking.googleReviewUrl,
+  });
+});
+
+/**
+ * POST /api/public/bookings/:token/actions/rate
+ * Handle star rating submission (1-5)
+ * - 1-3 stars: return galleryUrl for immediate access
+ * - 4-5 stars: return ask_review to prompt Google review
+ */
+export const handleStarRating = asyncHandler(async (req: Request, res: Response) => {
+  const { token } = req.params;
+  const { rating, session_id, user_agent, referrer } = req.body;
+
+  if (!rating || rating < 1 || rating > 5) {
+    return apiResponse.badRequest(res, 'Note entre 1 et 5 requise');
+  }
+
+  const booking = await prisma.booking.findUnique({
+    where: { publicToken: token },
+  });
+
+  if (!booking) {
+    return apiResponse.notFound(res, 'Réservation introuvable');
+  }
+
+  // Log star_rating event
+  await prisma.bookingEvent.create({
+    data: {
+      bookingId: booking.id,
+      eventType: 'star_rating',
+      sessionId: session_id || null,
+      ipHash: hashIp(req.ip || ''),
+      userAgent: user_agent || req.headers['user-agent'] || null,
+      referer: referrer || null,
+      metadataJson: { rating },
+    },
+  });
+
+  // Save rating on booking
+  const isLowRating = rating <= 3;
+
+  await prisma.booking.update({
+    where: { id: booking.id },
+    data: {
+      rating,
+      status: isLowRating ? 'rated_low' : 'rated_high',
+    },
+  });
+
+  if (isLowRating) {
+    // Low rating: give immediate access to gallery
+    return apiResponse.success(res, {
+      action: 'show_gallery',
+      galleryUrl: booking.galleryUrl,
+    });
+  }
+
+  // High rating: ask for Google review
+  return apiResponse.success(res, {
+    action: 'ask_review',
   });
 });
 
