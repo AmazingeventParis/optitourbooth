@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { useToast } from '@/hooks/useToast';
+import { useAuthStore } from '@/store/authStore';
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // Upload timeout: 60 seconds per photo
@@ -105,16 +106,10 @@ export function usePhotoUpload({ tourneeId, pointId }: UsePhotoUploadOptions) {
           reject(new Error('Délai dépassé'));
         };
 
-        // Auth token
-        const token = localStorage.getItem('optitour-auth');
-        if (token) {
-          try {
-            const parsed = JSON.parse(token);
-            const authToken = parsed?.state?.token;
-            if (authToken) {
-              xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
-            }
-          } catch { /* ignore */ }
+        // Auth token - use Zustand store directly (same as Axios interceptor)
+        const authToken = useAuthStore.getState().token;
+        if (authToken) {
+          xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
         }
 
         xhr.upload.onprogress = (e) => {
