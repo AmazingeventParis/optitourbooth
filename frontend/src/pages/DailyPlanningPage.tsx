@@ -2110,14 +2110,26 @@ export default function DailyPlanningPage() {
           const exact = results.find(c => c.nom.toLowerCase() === pendingPoint.clientName.toLowerCase());
           let client = exact;
           if (!client) {
-            // Auto-créer le client
+            // Auto-créer le client avec les infos de contact
             client = await clientsService.create({
               nom: pendingPoint.clientName,
               adresse: pendingPoint.adresse || 'Adresse à définir',
+              contactNom: pendingPoint.contactNom,
+              contactTelephone: pendingPoint.contactTelephone,
             });
             // Géocoder
             if (pendingPoint.adresse) {
               try { client = await clientsService.geocode(client.id); } catch { /* ignore */ }
+            }
+          } else if (pendingPoint.contactTelephone || pendingPoint.contactNom) {
+            // Mettre à jour le client existant avec les infos de contact si manquantes
+            if (!client.contactTelephone && pendingPoint.contactTelephone || !client.contactNom && pendingPoint.contactNom) {
+              try {
+                client = await clientsService.update(client.id, {
+                  ...(pendingPoint.contactNom && !client.contactNom && { contactNom: pendingPoint.contactNom }),
+                  ...(pendingPoint.contactTelephone && !client.contactTelephone && { contactTelephone: pendingPoint.contactTelephone }),
+                });
+              } catch { /* ignore */ }
             }
           }
           pendingPoint = { ...pendingPoint, clientId: client.id, clientFound: true };
@@ -2173,6 +2185,8 @@ export default function DailyPlanningPage() {
           pays: 'France',
           latitude: clientCoords?.latitude,
           longitude: clientCoords?.longitude,
+          contactNom: pendingPoint.contactNom,
+          contactTelephone: pendingPoint.contactTelephone,
           createdAt: now,
           updatedAt: now,
         } as Client,

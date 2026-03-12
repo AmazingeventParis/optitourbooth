@@ -207,6 +207,17 @@ export const autoDispatchService = {
 
       // Créer le point dans la tournée
       try {
+        // Mettre à jour le client avec les infos de contact si disponibles
+        if (point.contactNom || point.contactTelephone) {
+          await prisma.client.update({
+            where: { id: point.clientId },
+            data: {
+              ...(point.contactNom && { contactNom: point.contactNom }),
+              ...(point.contactTelephone && { contactTelephone: point.contactTelephone }),
+            },
+          });
+        }
+
         const newPoint = await prisma.point.create({
           data: {
             tourneeId: bestTournee.tourneeId,
