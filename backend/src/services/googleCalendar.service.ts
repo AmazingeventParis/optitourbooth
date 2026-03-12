@@ -129,8 +129,7 @@ function extractTimeSlotFromLine(line: string): string | null {
 
 function parseDescription(rawDescription: string): ParsedDescription {
   const text = cleanHtml(rawDescription);
-  // Split by newlines AND pipes (Google Calendar descriptions often use | as separator)
-  const lines = text.split(/[\n|]/).map(l => normalizeSpaces(l)).filter(l => l.length > 0);
+  const lines = text.split('\n').map(l => normalizeSpaces(l)).filter(l => l.length > 0);
 
   let adresse: string | null = null;
   const addressParts: string[] = [];
