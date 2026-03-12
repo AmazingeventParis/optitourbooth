@@ -73,7 +73,7 @@ export const getBookingByToken = asyncHandler(async (req: Request, res: Response
   }
 
   return apiResponse.success(res, {
-    status: 'active',
+    status: booking.status,
     customerName: booking.customerName,
     eventDate: booking.eventDate,
     galleryUrl: booking.galleryUrl,

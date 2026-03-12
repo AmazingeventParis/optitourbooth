@@ -1,6 +1,7 @@
 import { prisma } from '../config/database.js';
 import { galleryQueue, areQueuesAvailable } from '../config/queue.js';
 import { config } from '../config/index.js';
+import { sendGalleryDirectEmail } from './email.service.js';
 
 /**
  * Schedule a gallery dispatch for a booking.
@@ -107,11 +108,28 @@ export async function sendGallery(dispatchId: string): Promise<void> {
     return;
   }
 
-  // TODO: Integrate with actual email/SMS provider
-  // For now, log the send and mark as sent
-  console.log(`[GalleryDispatch] Sending gallery to ${booking.customerEmail || booking.customerPhone}`);
-  console.log(`[GalleryDispatch] Gallery URL: ${booking.galleryUrl}`);
-  console.log(`[GalleryDispatch] Channel: ${dispatch.channel}`);
+  // Send email if customer has an email address
+  if (booking.customerEmail) {
+    const brand = (booking.senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
+    try {
+      await sendGalleryDirectEmail({
+        to: booking.customerEmail,
+        customerName: booking.customerName,
+        galleryUrl: booking.galleryUrl,
+        brand,
+      });
+      console.log(`[GalleryDispatch] Email sent to ${booking.customerEmail} via ${brand}`);
+    } catch (err) {
+      console.error(`[GalleryDispatch] Email send failed for ${booking.customerEmail}:`, err);
+      await prisma.galleryDispatch.update({
+        where: { id: dispatchId },
+        data: { deliveryStatus: 'failed', payloadJson: { error: (err as Error).message } },
+      });
+      return;
+    }
+  } else {
+    console.warn(`[GalleryDispatch] No email for booking ${booking.id}, marking as sent (manual follow-up needed)`);
+  }
 
   // Mark as sent
   await prisma.galleryDispatch.update({

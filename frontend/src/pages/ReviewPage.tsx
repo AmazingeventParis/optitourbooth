@@ -73,17 +73,17 @@ export default function ReviewPage() {
           setPageState('closed');
         } else if (data.status === 'gallery_sent') {
           setPageState('gallery_sent');
-        } else if (data.status === 'rated_low' && data.galleryUrl) {
-          // Already rated low - show gallery directly
+        } else if (data.status === 'rated_low') {
           setGalleryUrl(data.galleryUrl);
           setSelectedRating(data.rating || 0);
           setPageState('low_rating');
-        } else if (data.status === 'rated_high') {
+        } else if (data.status === 'rated_high' || data.status === 'review_clicked') {
           setSelectedRating(data.rating || 0);
           setPageState('ask_review');
-        } else if (data.status === 'no_review_selected') {
+        } else if (data.status === 'no_review_selected' || data.status === 'gallery_scheduled_24h') {
           setPageState('no_review_done');
         } else {
+          // link_sent, page_viewed, or any new status → show rating
           setPageState('rating');
         }
       })
