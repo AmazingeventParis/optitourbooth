@@ -65,7 +65,7 @@ export const upsertConfig = asyncHandler(async (req: Request, res: Response) => 
       customItems: customItems || [],
     },
     create: {
-      userId,
+      userId: userId!,
       tarifPointHorsForfait: tarifPointHorsForfait ?? 0,
       tarifHeureSupp: tarifHeureSupp ?? 0,
       horsForfaitDebut: horsForfaitDebut || '18:00',
@@ -124,12 +124,16 @@ export const getEntries = asyncHandler(async (req: Request, res: Response) => {
     _sum: { totalPrice: true },
   });
 
-  return apiResponse.success(res, enriched, {
-    page: pageNum,
-    limit: limitNum,
-    total,
-    totalPages: Math.ceil(total / limitNum),
-    totalSum: totalSum._sum.totalPrice || 0,
+  return res.status(200).json({
+    success: true,
+    data: enriched,
+    meta: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum),
+      totalSum: totalSum._sum.totalPrice || 0,
+    },
   });
 });
 
