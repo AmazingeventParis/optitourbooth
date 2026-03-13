@@ -279,6 +279,7 @@ export default function PreparationsPage() {
     try {
       await preparationsService.markPhotosNotUnloaded(preparationId);
       success('Photos marquées comme non déchargées');
+      setIsModalOpen(false);
       fetchMachines();
     } catch (err) {
       showError('Erreur', (err as Error).message);
