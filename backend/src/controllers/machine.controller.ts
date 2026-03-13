@@ -132,26 +132,36 @@ export const markMachineDefect = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Description du défaut requise' });
     }
 
-    const machine = await prisma.machine.update({
-      where: { id },
-      data: {
-        aDefaut: true,
-        defaut,
-      },
-      include: {
-        preparations: {
-          where: {
-            statut: {
-              in: ['en_preparation', 'prete', 'en_cours', 'a_decharger', 'hors_service'],
-            },
-          },
-          orderBy: {
-            dateEvenement: 'desc',
-          },
-          take: 1,
+    const [machine] = await prisma.$transaction([
+      prisma.machine.update({
+        where: { id },
+        data: {
+          aDefaut: true,
+          defaut,
         },
-      },
-    });
+        include: {
+          preparations: {
+            where: {
+              statut: {
+                in: ['en_preparation', 'prete', 'en_cours', 'a_decharger', 'hors_service'],
+              },
+            },
+            orderBy: {
+              dateEvenement: 'desc',
+            },
+            take: 1,
+          },
+        },
+      }),
+      prisma.machineIncident.create({
+        data: {
+          machine: { connect: { id } },
+          type: 'defaut',
+          description: defaut,
+          reportedBy: (req as any).user?.email || null,
+        },
+      }),
+    ]);
 
     const { socketEmit } = await import('../config/socket.js');
     socketEmit.toAdmins('machines:updated', {});
@@ -182,20 +192,30 @@ export const markMachineOutOfService = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Raison requise' });
     }
 
-    // Créer une préparation avec le statut hors_service
-    const preparation = await prisma.preparation.create({
-      data: {
-        machineId: id as string,
-        dateEvenement: new Date(),
-        client: 'HORS SERVICE',
-        preparateur: 'Système',
-        statut: 'hors_service',
-        notes: raison,
-      },
-      include: {
-        machine: true,
-      },
-    });
+    // Créer une préparation avec le statut hors_service + incident
+    const [preparation] = await prisma.$transaction([
+      prisma.preparation.create({
+        data: {
+          machineId: id as string,
+          dateEvenement: new Date(),
+          client: 'HORS SERVICE',
+          preparateur: 'Système',
+          statut: 'hors_service',
+          notes: raison,
+        },
+        include: {
+          machine: true,
+        },
+      }),
+      prisma.machineIncident.create({
+        data: {
+          machine: { connect: { id } },
+          type: 'hors_service',
+          description: raison,
+          reportedBy: (req as any).user?.email || null,
+        },
+      }),
+    ]);
 
     const { socketEmit } = await import('../config/socket.js');
     socketEmit.toAdmins('machines:updated', {});
@@ -208,11 +228,37 @@ export const markMachineOutOfService = async (req: Request, res: Response) => {
 };
 
 /**
+ * Liste l'historique des incidents d'une machine
+ */
+export const listMachineIncidents = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const incidents = await prisma.machineIncident.findMany({
+      where: { machineId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return res.json(incidents);
+  } catch (error) {
+    console.error('Error listing machine incidents:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
  * Retire le défaut d'une machine
  */
 export const clearMachineDefect = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+
+    // Resolve open defaut incidents
+    await prisma.machineIncident.updateMany({
+      where: { machineId: id, type: 'defaut', resolvedAt: null },
+      data: { resolvedAt: new Date() },
+    });
 
     const machine = await prisma.machine.update({
       where: { id },
@@ -267,13 +313,17 @@ export const restoreMachineToService = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Aucune préparation hors service trouvée' });
     }
 
-    // Archiver la préparation
+    // Archiver la préparation + résoudre les incidents
     await prisma.preparation.update({
       where: { id: preparation.id },
       data: {
         statut: 'archivee',
         dateArchivage: new Date(),
       },
+    });
+    await prisma.machineIncident.updateMany({
+      where: { machineId: id, type: 'hors_service', resolvedAt: null },
+      data: { resolvedAt: new Date() },
     });
 
     // Retourner la machine mise à jour

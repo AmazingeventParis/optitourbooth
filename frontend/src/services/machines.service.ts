@@ -1,6 +1,16 @@
 import api from './api';
 import { Machine, MachineType } from '../types';
 
+export interface MachineIncident {
+  id: string;
+  machineId: string;
+  type: 'defaut' | 'hors_service';
+  description: string;
+  reportedBy: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
 export const machinesService = {
   /**
    * Liste toutes les machines
@@ -66,6 +76,14 @@ export const machinesService = {
    */
   async restoreToService(id: string): Promise<Machine> {
     const { data } = await api.post<Machine>(`/machines/${id}/restore-service`);
+    return data;
+  },
+
+  /**
+   * Liste l'historique des incidents d'une machine
+   */
+  async listIncidents(id: string): Promise<MachineIncident[]> {
+    const { data } = await api.get<MachineIncident[]>(`/machines/${id}/incidents`);
     return data;
   },
 };

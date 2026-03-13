@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, Button, Modal, Input, Badge } from '@/components/ui';
-import { machinesService } from '@/services/machines.service';
+import { machinesService, MachineIncident } from '@/services/machines.service';
 import { preparationsService } from '@/services/preparations.service';
 import { pendingPointsService, CalendarEvent } from '@/services/pendingPoints.service';
 import { socketService } from '@/services/socket.service';
@@ -96,6 +96,7 @@ export default function PreparationsPage() {
   const [isViewMode, setIsViewMode] = useState(false);
   const [defautText, setDefautText] = useState('');
   const [horsServiceText, setHorsServiceText] = useState('');
+  const [machineIncidents, setMachineIncidents] = useState<MachineIncident[]>([]);
 
   // Fil d'actualité - toujours visible
   const prepNotifications = useNotificationStore((s) =>
@@ -174,7 +175,11 @@ export default function PreparationsPage() {
 
     setDefautText('');
     setHorsServiceText('');
+    setMachineIncidents([]);
     setIsModalOpen(true);
+
+    // Fetch incident history
+    machinesService.listIncidents(machine.id).then(setMachineIncidents).catch(() => {});
   };
 
   const handleCreatePreparation = async () => {
@@ -1293,6 +1298,51 @@ export default function PreparationsPage() {
                 </div>
               )}
             </div>
+
+            {/* Historique des pannes */}
+            {machineIncidents.length > 0 && (
+              <div className="mt-4">
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Historique des pannes</h4>
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {machineIncidents.map((incident) => (
+                    <div
+                      key={incident.id}
+                      className={clsx(
+                        'p-3 rounded-lg border text-sm',
+                        incident.type === 'hors_service'
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-amber-50 border-amber-200'
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={clsx(
+                          'text-xs font-semibold uppercase',
+                          incident.type === 'hors_service' ? 'text-red-700' : 'text-amber-700'
+                        )}>
+                          {incident.type === 'hors_service' ? 'Hors service' : 'Défaut'}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {format(parseISO(incident.createdAt), "d MMM yyyy 'à' HH:mm", { locale: fr })}
+                        </span>
+                      </div>
+                      <p className="text-gray-800">{incident.description}</p>
+                      <div className="flex items-center justify-between mt-1">
+                        {incident.reportedBy && (
+                          <span className="text-xs text-gray-500">Par {incident.reportedBy}</span>
+                        )}
+                        {incident.resolvedAt ? (
+                          <span className="text-xs text-green-600 font-medium">
+                            Résolu le {format(parseISO(incident.resolvedAt), "d MMM yyyy 'à' HH:mm", { locale: fr })}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-red-600 font-medium">En cours</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
         </div>

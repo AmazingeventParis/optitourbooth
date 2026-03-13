@@ -552,11 +552,34 @@ model Machine {
 
   // Relations
   preparations Preparation[]
+  incidents    MachineIncident[]
 
   @@unique([type, numero])
   @@index([type])
   @@index([actif])
   @@map("machines")
+}
+
+/// Historique des pannes et hors-service
+model MachineIncident {
+  id          String              @id @default(uuid())
+  machineId   String              @map("machine_id")
+  type        MachineIncidentType
+  description String              @db.Text
+  reportedBy  String?             @map("reported_by")
+  resolvedAt  DateTime?           @map("resolved_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+
+  machine     Machine             @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@index([machineId])
+  @@index([createdAt])
+  @@map("machine_incidents")
+}
+
+enum MachineIncidentType {
+  defaut
+  hors_service
 }
 
 /// Préparations d'événements

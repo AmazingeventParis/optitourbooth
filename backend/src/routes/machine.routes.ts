@@ -37,6 +37,7 @@ router.post(
 );
 
 // Actions sur les machines
+router.get('/:id/incidents', asyncHandler(machineController.listMachineIncidents));
 router.post('/:id/defect', asyncHandler(machineController.markMachineDefect));
 router.delete('/:id/defect', asyncHandler(machineController.clearMachineDefect));
 router.post('/:id/out-of-service', asyncHandler(machineController.markMachineOutOfService));
