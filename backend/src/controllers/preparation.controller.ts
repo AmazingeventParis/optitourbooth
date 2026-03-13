@@ -437,6 +437,7 @@ export const markAsReady = async (req: Request, res: Response) => {
 
 /**
  * Marque les photos comme déchargées
+ * + envoie automatiquement le mail d'avis (URL unique) au client
  */
 export const markPhotosUnloaded = async (req: Request, res: Response) => {
   try {
@@ -457,6 +458,11 @@ export const markPhotosUnloaded = async (req: Request, res: Response) => {
     const { socketEmit } = await import('../config/socket.js');
     socketEmit.toAdmins('machines:updated', {});
 
+    // Auto-send review link email to matching booking
+    triggerReviewEmailForPreparation(preparation).catch(err => {
+      console.error('[PhotosUnloaded] Failed to trigger review email:', err);
+    });
+
     return res.json(preparation);
   } catch (error) {
     console.error('Error marking photos as unloaded:', error);
@@ -466,6 +472,93 @@ export const markPhotosUnloaded = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+/**
+ * Find the matching booking for a preparation and send the review link email.
+ * Brand routing: Vegas/Ring → SHOOTNBOX, Smakk → SMAKK
+ */
+async function triggerReviewEmailForPreparation(preparation: any): Promise<void> {
+  const { sendReviewLinkEmail } = await import('../services/email.service.js');
+  const { config } = await import('../config/index.js');
+
+  // Determine brand from machine type
+  const machineType: string = preparation.machine?.type || '';
+  const brand: 'SHOOTNBOX' | 'SMAKK' = machineType === 'Smakk' ? 'SMAKK' : 'SHOOTNBOX';
+
+  // Find matching booking via pendingPoint → externalId → booking.googleEventId
+  let booking = null;
+
+  if (preparation.pendingPointId) {
+    const pendingPoint = await prisma.pendingPoint.findUnique({
+      where: { id: preparation.pendingPointId },
+    });
+
+    if (pendingPoint?.externalId) {
+      booking = await prisma.booking.findUnique({
+        where: { googleEventId: pendingPoint.externalId },
+      });
+    }
+  }
+
+  // Fallback: match by client name + event date
+  if (!booking) {
+    booking = await prisma.booking.findFirst({
+      where: {
+        customerName: preparation.client,
+        eventDate: preparation.dateEvenement,
+      },
+    });
+  }
+
+  if (!booking) {
+    console.log(`[PhotosUnloaded] No matching booking found for preparation "${preparation.client}" (${preparation.id})`);
+    return;
+  }
+
+  if (!booking.customerEmail) {
+    console.log(`[PhotosUnloaded] Booking "${booking.customerName}" has no email, skipping`);
+    return;
+  }
+
+  // Check if review email was already sent
+  if (booking.emailSentAt) {
+    console.log(`[PhotosUnloaded] Email already sent for booking "${booking.customerName}", skipping`);
+    return;
+  }
+
+  // Build public URL with brand
+  const publicUrl = `${config.reviewSystem.publicBaseUrl}/galerie/${booking.publicToken}?brand=${brand}`;
+
+  // Update booking brand if not set
+  if (!booking.senderBrand) {
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { senderBrand: brand },
+    });
+  }
+
+  // Send review link email
+  await sendReviewLinkEmail({
+    to: booking.customerEmail,
+    customerName: booking.customerName,
+    publicUrl,
+    galleryUrl: booking.galleryUrl,
+    brand,
+  });
+
+  // Mark email as sent
+  await prisma.booking.update({
+    where: { id: booking.id },
+    data: {
+      emailSentAt: new Date(),
+      status: booking.status === 'link_sent' || booking.status === 'page_viewed'
+        ? 'link_sent'
+        : booking.status,
+    },
+  });
+
+  console.log(`[PhotosUnloaded] Review email sent to ${booking.customerEmail} via ${brand} for "${booking.customerName}"`);
+}
 
 /**
  * Marque une machine avec un défaut
