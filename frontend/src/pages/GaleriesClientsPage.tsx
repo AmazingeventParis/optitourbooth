@@ -67,6 +67,11 @@ function getBookingBadges(booking: CalendarEvent['booking']): Array<{ label: str
     badges.push({ label: 'Photos envoyées', color: 'bg-emerald-100 text-emerald-800' });
   }
 
+  // 8. Photos non déchargées warning
+  if (booking.photosNotUnloaded) {
+    badges.push({ label: '⚠️ Photos non déchargées', color: 'bg-amber-100 text-amber-800' });
+  }
+
   return badges;
 }
 

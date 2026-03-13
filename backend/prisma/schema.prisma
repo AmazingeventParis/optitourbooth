@@ -663,6 +663,7 @@ model Booking {
   rating              Int?          @map("rating")
   status              BookingStatus @default(link_sent)
   emailSentAt         DateTime?     @map("email_sent_at")
+  photosNotUnloaded   Boolean       @default(false) @map("photos_not_unloaded")
 
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")

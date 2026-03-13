@@ -22,6 +22,7 @@ import {
   XMarkIcon,
   MagnifyingGlassIcon,
   BellAlertIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -260,6 +261,19 @@ export default function PreparationsPage() {
     try {
       await preparationsService.markPhotosUnloaded(preparationId);
       success('Photos déchargées et événement archivé');
+      fetchMachines();
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleMarkPhotosNotUnloaded = async (preparationId: string) => {
+    setIsSaving(true);
+    try {
+      await preparationsService.markPhotosNotUnloaded(preparationId);
+      success('Photos marquées comme non déchargées');
       fetchMachines();
     } catch (err) {
       showError('Erreur', (err as Error).message);
@@ -609,20 +623,36 @@ export default function PreparationsPage() {
                         Photos déchargées
                       </Badge>
                     ) : (
-                      <button
-                        onClick={async () => {
-                          try {
-                            await preparationsService.markPhotosUnloaded(prep.id);
-                            success('Photos marquées comme déchargées');
-                            fetchArchive();
-                          } catch (err) {
-                            showError('Erreur', (err as Error).message);
-                          }
-                        }}
-                        className="px-3 py-1.5 bg-red-500 text-white text-sm font-medium rounded-full hover:bg-red-600 active:scale-95 transition-all shadow-sm"
-                      >
-                        Photos non déchargées
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            try {
+                              await preparationsService.markPhotosUnloaded(prep.id);
+                              success('Photos marquées comme déchargées');
+                              fetchArchive();
+                            } catch (err) {
+                              showError('Erreur', (err as Error).message);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-full hover:bg-blue-600 active:scale-95 transition-all shadow-sm"
+                        >
+                          Photos déchargées
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await preparationsService.markPhotosNotUnloaded(prep.id);
+                              success('Photos marquées comme non déchargées');
+                              fetchArchive();
+                            } catch (err) {
+                              showError('Erreur', (err as Error).message);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-amber-500 text-white text-sm font-medium rounded-full hover:bg-amber-600 active:scale-95 transition-all shadow-sm"
+                        >
+                          Photos non déchargées
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -928,17 +958,30 @@ export default function PreparationsPage() {
                       </button>
                     )}
                     {statut === 'a_decharger' && preparation && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleMarkPhotosUnloaded(preparation.id);
-                        }}
-                        className="flex-1 p-1 bg-blue-500 text-white rounded hover:bg-blue-600 active:scale-95 transition-all disabled:opacity-50"
-                        title="Marquer photos déchargées"
-                        disabled={isSaving}
-                      >
-                        <PhotoIcon className="h-3 w-3 mx-auto" />
-                      </button>
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkPhotosUnloaded(preparation.id);
+                          }}
+                          className="flex-1 p-1 bg-blue-500 text-white rounded hover:bg-blue-600 active:scale-95 transition-all disabled:opacity-50"
+                          title="Marquer photos déchargées"
+                          disabled={isSaving}
+                        >
+                          <PhotoIcon className="h-3 w-3 mx-auto" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkPhotosNotUnloaded(preparation.id);
+                          }}
+                          className="flex-1 p-1 bg-amber-500 text-white rounded hover:bg-amber-600 active:scale-95 transition-all disabled:opacity-50"
+                          title="Photos non déchargées"
+                          disabled={isSaving}
+                        >
+                          <ExclamationTriangleIcon className="h-3 w-3 mx-auto" />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1161,6 +1204,18 @@ export default function PreparationsPage() {
                           ? 'Marquer les photos comme déchargées et archiver'
                           : 'Disponible après la date de l\'événement'}
                       </p>
+                      {isPastDate && (
+                        <Button
+                          variant="secondary"
+                          className="w-full mt-2 !bg-amber-500 !text-white hover:!bg-amber-600"
+                          onClick={() => handleMarkPhotosNotUnloaded(prep.id)}
+                          disabled={isSaving}
+                          isLoading={isSaving}
+                        >
+                          <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
+                          Photos non déchargées
+                        </Button>
+                      )}
                     </>
                   );
                 })()}

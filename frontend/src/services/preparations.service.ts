@@ -101,6 +101,14 @@ export const preparationsService = {
   },
 
   /**
+   * Marque les photos comme non déchargées et archive
+   */
+  async markPhotosNotUnloaded(id: string): Promise<Preparation> {
+    const { data } = await api.post<Preparation>(`/preparations/${id}/photos-not-unloaded`);
+    return data;
+  },
+
+  /**
    * Marque une machine avec un défaut
    */
   async markDefect(id: string, defaut: string): Promise<any> {

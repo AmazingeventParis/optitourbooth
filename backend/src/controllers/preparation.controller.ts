@@ -474,6 +474,95 @@ export const markPhotosUnloaded = async (req: Request, res: Response) => {
 };
 
 /**
+ * Marque les photos comme NON déchargées (problème)
+ * + flag le booking correspondant pour alerte dans galeries clients
+ */
+export const markPhotosNotUnloaded = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const preparation = await prisma.preparation.update({
+      where: { id },
+      data: {
+        photosDechargees: false,
+        statut: 'archivee',
+        dateArchivage: new Date(),
+      },
+      include: {
+        machine: true,
+      },
+    });
+
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
+
+    // Flag the matching booking
+    flagBookingPhotosNotUnloaded(preparation).catch(err => {
+      console.error('[PhotosNotUnloaded] Failed to flag booking:', err);
+    });
+
+    return res.json(preparation);
+  } catch (error) {
+    console.error('Error marking photos as not unloaded:', error);
+    if ((error as any).code === 'P2025') {
+      return res.status(404).json({ error: 'Preparation not found' });
+    }
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * Find matching booking and flag photosNotUnloaded = true
+ */
+async function flagBookingPhotosNotUnloaded(preparation: any): Promise<void> {
+  let booking = null;
+
+  // Match via pendingPoint → googleEventId
+  if (preparation.pendingPointId) {
+    const pendingPoint = await prisma.pendingPoint.findUnique({
+      where: { id: preparation.pendingPointId },
+    });
+    if (pendingPoint?.externalId) {
+      booking = await prisma.booking.findUnique({
+        where: { googleEventId: pendingPoint.externalId },
+      });
+    }
+  }
+
+  // Fallback: fuzzy name + date
+  if (!booking) {
+    booking = await prisma.booking.findFirst({
+      where: {
+        customerName: preparation.client,
+        eventDate: preparation.dateEvenement,
+      },
+    });
+  }
+  if (!booking) {
+    const candidates = await prisma.booking.findMany({
+      where: { eventDate: preparation.dateEvenement },
+    });
+    const prepName = preparation.client.toLowerCase().trim();
+    booking = candidates.find(b => {
+      const bookingName = b.customerName.toLowerCase().trim();
+      return prepName.includes(bookingName) || bookingName.includes(prepName);
+    }) || null;
+  }
+
+  if (!booking) {
+    console.log(`[PhotosNotUnloaded] No matching booking for "${preparation.client}"`);
+    return;
+  }
+
+  await prisma.booking.update({
+    where: { id: booking.id },
+    data: { photosNotUnloaded: true },
+  });
+
+  console.log(`[PhotosNotUnloaded] Flagged booking "${booking.customerName}" as photos not unloaded`);
+}
+
+/**
  * Find the matching booking for a preparation and send the review link email.
  * Brand routing: Vegas/Ring → SHOOTNBOX, Smakk → SMAKK
  */

@@ -96,6 +96,7 @@ export interface CalendarEvent {
     googleReviewUrl: string | null;
     status: string;
     emailSentAt: string | null;
+    photosNotUnloaded: boolean;
     createdAt: string;
     _count: { events: number; reviewMatches: number; galleryDispatches: number };
   } | null;

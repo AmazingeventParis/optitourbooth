@@ -703,6 +703,7 @@ export const listCalendarEvents = asyncHandler(async (_req: Request, res: Respon
         googleReviewUrl: booking.googleReviewUrl,
         status: booking.status,
         emailSentAt: booking.emailSentAt,
+        photosNotUnloaded: booking.photosNotUnloaded,
         createdAt: booking.createdAt,
         _count: booking._count,
       } : null,
