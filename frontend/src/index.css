@@ -215,16 +215,13 @@
   transition: none !important;
 }
 
-/* Review page - photo background slow scroll animation */
-@keyframes photo-scroll {
-  0% {
-    transform: translateY(0);
-  }
-  100% {
-    transform: translateY(-33.33%);
-  }
+/* Review page - photo background column animations */
+@keyframes photo-col-up {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
 }
 
-.animate-photo-scroll {
-  animation: photo-scroll 30s linear infinite;
+@keyframes photo-col-down {
+  0% { transform: translateY(-50%); }
+  100% { transform: translateY(0); }
 }

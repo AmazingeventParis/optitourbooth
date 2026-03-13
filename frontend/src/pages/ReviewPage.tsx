@@ -24,27 +24,42 @@ function generateSessionId(): string {
 function PhotoBackground({ thumbnails }: { thumbnails: string[] }) {
   if (!thumbnails.length) return null;
 
+  // Build columns with staggered scrolling
+  const cols = 4;
+  const columns: string[][] = Array.from({ length: cols }, () => []);
+  const extended = [...thumbnails, ...thumbnails, ...thumbnails];
+  extended.forEach((url, i) => columns[i % cols].push(url));
+
   return (
     <div className="fixed inset-0 overflow-hidden z-0">
-      {/* Grid of photos */}
-      <div className="absolute inset-0 grid grid-cols-3 sm:grid-cols-4 gap-1 p-1 animate-photo-scroll">
-        {[...thumbnails, ...thumbnails, ...thumbnails].slice(0, 36).map((url, i) => (
+      <div className="absolute inset-[-20%] flex gap-2 p-2" style={{ transform: 'rotate(-8deg) scale(1.3)' }}>
+        {columns.map((col, colIdx) => (
           <div
-            key={i}
-            className="aspect-square overflow-hidden rounded-lg"
-            style={{ animationDelay: `${i * 0.15}s` }}
+            key={colIdx}
+            className="flex-1 flex flex-col gap-2"
+            style={{
+              animation: `photo-col-${colIdx % 2 === 0 ? 'up' : 'down'} ${8 + colIdx * 2}s linear infinite`,
+            }}
           >
-            <img
-              src={url}
-              alt=""
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
+            {[...col, ...col].map((url, i) => (
+              <div
+                key={i}
+                className="w-full rounded-xl overflow-hidden flex-shrink-0"
+                style={{ aspectRatio: colIdx % 2 === 0 ? '3/4' : '4/5' }}
+              >
+                <img
+                  src={url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            ))}
           </div>
         ))}
       </div>
       {/* Blur + dark overlay */}
-      <div className="absolute inset-0 backdrop-blur-md bg-gray-900/60" />
+      <div className="absolute inset-0 backdrop-blur-sm bg-gray-900/50" />
     </div>
   );
 }
