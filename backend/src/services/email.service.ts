@@ -52,27 +52,17 @@ function getTransporter(brand: Brand) {
 function buildThumbnailGrid(thumbnails: string[]): string {
   if (!thumbnails.length) return '';
 
-  // Show max 6 photos in a 3x2 grid
+  // Show max 6 photos in a 3x2 grid, using background-image (not downloadable)
   const photos = thumbnails.slice(0, 6);
 
-  const cells = photos.map((url) => `
+  const makeCell = (url: string) => `
     <td style="width:33.33%;padding:3px;">
-      <img src="${url}" alt="" style="width:100%;height:120px;object-fit:cover;border-radius:8px;display:block;" />
+      <div style="width:100%;height:120px;border-radius:8px;background:url('${url}') center/cover no-repeat;"></div>
     </td>
-  `).join('');
+  `;
 
-  // Split into rows of 3
-  const row1 = cells.slice(0, 3) ? photos.slice(0, 3).map(url => `
-    <td style="width:33.33%;padding:3px;">
-      <img src="${url}" alt="" style="width:100%;height:120px;object-fit:cover;border-radius:8px;display:block;" />
-    </td>
-  `).join('') : '';
-
-  const row2 = photos.length > 3 ? photos.slice(3, 6).map(url => `
-    <td style="width:33.33%;padding:3px;">
-      <img src="${url}" alt="" style="width:100%;height:120px;object-fit:cover;border-radius:8px;display:block;" />
-    </td>
-  `).join('') : '';
+  const row1 = photos.slice(0, 3).map(makeCell).join('');
+  const row2 = photos.length > 3 ? photos.slice(3, 6).map(makeCell).join('') : '';
 
   return `
     <table role="presentation" style="width:100%;border-collapse:collapse;margin:20px 0;">
@@ -82,13 +72,13 @@ function buildThumbnailGrid(thumbnails: string[]): string {
   `;
 }
 
-async function fetchThumbnails(galleryUrl?: string | null): Promise<string[]> {
-  if (!galleryUrl) return [];
+async function fetchThumbnails(galleryUrl?: string | null): Promise<{ thumbnails: string[]; totalCount: number }> {
+  if (!galleryUrl) return { thumbnails: [], totalCount: 0 };
   try {
     return await listFolderThumbnails(galleryUrl);
   } catch (err) {
     console.error('[Email] Failed to fetch thumbnails:', err);
-    return [];
+    return { thumbnails: [], totalCount: 0 };
   }
 }
 
@@ -107,9 +97,10 @@ export async function sendReviewLinkEmail(opts: {
   const theme = BRAND_THEMES[brand];
   const transporter = getTransporter(brand);
 
-  const thumbnails = await fetchThumbnails(galleryUrl);
+  const { thumbnails, totalCount } = await fetchThumbnails(galleryUrl);
   const photoGrid = buildThumbnailGrid(thumbnails);
   const hasPhotos = thumbnails.length > 0;
+  const remainingCount = totalCount - Math.min(thumbnails.length, 6);
 
   const html = `
     <!DOCTYPE html>
@@ -154,7 +145,7 @@ export async function sendReviewLinkEmail(opts: {
                   </div>
                   ${photoGrid}
                   <p style="margin:0 0 25px;color:#9ca3af;font-size:12px;text-align:center;font-style:italic;">
-                    ${thumbnails.length > 6 ? `et ${thumbnails.length - 6} autres photos vous attendent...` : 'Vos souvenirs vous attendent !'}
+                    ${remainingCount > 0 ? `et ${remainingCount} autres photos vous attendent...` : 'Vos souvenirs vous attendent !'}
                   </p>
                   ` : ''}
 
@@ -231,9 +222,10 @@ export async function sendGalleryDirectEmail(opts: {
   const theme = BRAND_THEMES[brand];
   const transporter = getTransporter(brand);
 
-  const thumbnails = await fetchThumbnails(galleryUrl);
+  const { thumbnails, totalCount } = await fetchThumbnails(galleryUrl);
   const photoGrid = buildThumbnailGrid(thumbnails);
   const hasPhotos = thumbnails.length > 0;
+  const remainingCount = totalCount - Math.min(thumbnails.length, 6);
 
   const html = `
     <!DOCTYPE html>
@@ -278,7 +270,7 @@ export async function sendGalleryDirectEmail(opts: {
                   </div>
                   ${photoGrid}
                   <p style="margin:0 0 25px;color:#9ca3af;font-size:12px;text-align:center;font-style:italic;">
-                    ${thumbnails.length > 6 ? `et ${thumbnails.length - 6} autres photos vous attendent...` : 'Tous vos souvenirs sont dans la galerie !'}
+                    ${remainingCount > 0 ? `et ${remainingCount} autres photos vous attendent...` : 'Tous vos souvenirs sont dans la galerie !'}
                   </p>
                   ` : ''}
 

@@ -86,7 +86,8 @@ export const getBookingByToken = asyncHandler(async (req: Request, res: Response
   let thumbnails: string[] = [];
   if (booking.galleryUrl) {
     try {
-      thumbnails = await listFolderThumbnails(booking.galleryUrl);
+      const result = await listFolderThumbnails(booking.galleryUrl);
+      thumbnails = result.thumbnails;
     } catch (err) {
       console.error('[BookingByToken] Failed to fetch thumbnails:', err);
     }

@@ -172,15 +172,25 @@ export async function renameDriveFolder(galleryUrl: string, newName: string): Pr
 
 /**
  * List image thumbnails from a Google Drive folder (by folder URL).
- * Returns an array of thumbnail URLs (max 20 images).
+ * Returns thumbnail URLs (max 20) and total file count in folder.
  */
-export async function listFolderThumbnails(galleryUrl: string): Promise<string[]> {
+export async function listFolderThumbnails(galleryUrl: string): Promise<{ thumbnails: string[]; totalCount: number }> {
   const match = galleryUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-  if (!match) return [];
+  if (!match) return { thumbnails: [], totalCount: 0 };
 
   const folderId = match[1];
   const drive = getDriveClient();
 
+  // Get total count of all files (images + videos)
+  const countResponse = await drive.files.list({
+    q: `'${folderId}' in parents and trashed = false`,
+    fields: 'files(id)',
+    pageSize: 1000,
+    supportsAllDrives: true,
+  });
+  const totalCount = countResponse.data.files?.length || 0;
+
+  // Get thumbnails for preview (max 20 images)
   const response = await drive.files.list({
     q: `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`,
     fields: 'files(id, thumbnailLink)',
@@ -189,11 +199,11 @@ export async function listFolderThumbnails(galleryUrl: string): Promise<string[]
     orderBy: 'createdTime desc',
   });
 
-  if (!response.data.files) return [];
-
-  return response.data.files
+  const thumbnails = (response.data.files || [])
     .filter(f => f.thumbnailLink)
     .map(f => f.thumbnailLink!.replace(/=s\d+/, '=s400'));
+
+  return { thumbnails, totalCount };
 }
 
 /**
