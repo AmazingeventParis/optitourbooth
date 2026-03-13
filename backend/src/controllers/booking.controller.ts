@@ -475,6 +475,7 @@ export const deleteBooking = asyncHandler(async (req: Request, res: Response) =>
  */
 export const manualSendGallery = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
+  const { brand: requestedBrand } = req.body || {};
 
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) {
@@ -489,7 +490,9 @@ export const manualSendGallery = asyncHandler(async (req: Request, res: Response
     return apiResponse.badRequest(res, 'Aucun email client configuré pour cette réservation');
   }
 
-  const brand = (booking.senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
+  const brand = (requestedBrand === 'SMAKK' || requestedBrand === 'SHOOTNBOX')
+    ? requestedBrand
+    : (booking.senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
 
   try {
     await sendGalleryDirectEmail({

@@ -143,8 +143,8 @@ export const bookingsService = {
     await api.delete(`/bookings/${id}`);
   },
 
-  async sendGallery(id: string) {
-    const response = await api.post<ApiResponse<{ message: string }>>(`/bookings/${id}/send-gallery`);
+  async sendGallery(id: string, brand?: 'SHOOTNBOX' | 'SMAKK') {
+    const response = await api.post<ApiResponse<{ message: string }>>(`/bookings/${id}/send-gallery`, brand ? { brand } : {});
     return response.data.data;
   },
 

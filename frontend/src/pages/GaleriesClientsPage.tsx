@@ -111,6 +111,25 @@ export default function GaleriesClientsPage() {
     }
   };
 
+  /** Send Drive gallery link by email */
+  const handleSendDrive = async (ev: CalendarEvent, brand: 'SHOOTNBOX' | 'SMAKK') => {
+    if (!ev.booking?.id) return;
+    if (!ev.booking?.customerEmail) {
+      toast.error('Sauvegardez un email d\'abord');
+      return;
+    }
+    setSending(true);
+    try {
+      await bookingsService.sendGallery(ev.booking.id, brand);
+      toast.success(`Photos envoyées via ${brand} à ${ev.booking.customerEmail}`);
+      fetchEvents();
+    } catch (err: any) {
+      toast.error(err?.message || "Erreur lors de l'envoi");
+    } finally {
+      setSending(false);
+    }
+  };
+
   /** Send branded URL by email */
   const handleSend = async (ev: CalendarEvent, brand: 'SHOOTNBOX' | 'SMAKK', email: string) => {
     if (!email.trim()) {
@@ -280,6 +299,7 @@ export default function GaleriesClientsPage() {
               onCopyDrive={() => ev.booking?.galleryUrl && handleCopyDrive(ev.booking.galleryUrl)}
               onCopyBrandUrl={(brand) => handleCopyBrandUrl(ev, brand)}
               onSendBrand={(brand, email) => handleSend(ev, brand, email)}
+              onSendDrive={(brand) => handleSendDrive(ev, brand)}
               onSaveEmail={(email) => handleSaveEmail(ev, email)}
               sending={sending}
             />
@@ -291,12 +311,13 @@ export default function GaleriesClientsPage() {
   );
 }
 
-function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, onSaveEmail, sending }: {
+function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, onSendDrive, onSaveEmail, sending }: {
   event: CalendarEvent;
   onRename: (newName: string) => void;
   onCopyDrive: () => void;
   onCopyBrandUrl: (brand: 'SHOOTNBOX' | 'SMAKK') => void;
   onSendBrand: (brand: 'SHOOTNBOX' | 'SMAKK', email: string) => void;
+  onSendDrive: (brand: 'SHOOTNBOX' | 'SMAKK') => void;
   onSaveEmail: (email: string) => void;
   sending: boolean;
 }) {
@@ -454,16 +475,38 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
 
       {/* Actions */}
       <div className="pt-3 border-t border-gray-100 space-y-2">
-        {/* Row 1: Drive */}
+        {/* Row 1: Drive — copier + envoyer */}
         {booking?.galleryUrl && (
-          <button
-            onClick={onCopyDrive}
-            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors"
-          >
-            <FolderOpenIcon className="h-4 w-4 flex-shrink-0" />
-            <span className="truncate flex-1 text-left">Copier lien Drive</span>
-            <ClipboardDocumentIcon className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
-          </button>
+          <div className="space-y-1.5">
+            <button
+              onClick={onCopyDrive}
+              className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors"
+            >
+              <FolderOpenIcon className="h-4 w-4 flex-shrink-0" />
+              <span className="truncate flex-1 text-left">Copier lien Drive</span>
+              <ClipboardDocumentIcon className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
+            </button>
+            <div className="flex gap-1.5">
+              <button
+                onClick={() => onSendDrive('SHOOTNBOX')}
+                disabled={sending || !emailValue.trim()}
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50"
+                title={emailValue.trim() ? `Envoyer les photos via SHOOTNBOX à ${emailValue}` : "Saisissez un email d'abord"}
+              >
+                <PaperAirplaneIcon className="h-3.5 w-3.5" />
+                Envoyer SHOOTNBOX
+              </button>
+              <button
+                onClick={() => onSendDrive('SMAKK')}
+                disabled={sending || !emailValue.trim()}
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors disabled:opacity-50"
+                title={emailValue.trim() ? `Envoyer les photos via SMAKK à ${emailValue}` : "Saisissez un email d'abord"}
+              >
+                <PaperAirplaneIcon className="h-3.5 w-3.5" />
+                Envoyer SMAKK
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Row 2: SHOOTNBOX — copier + envoyer */}
