@@ -500,14 +500,33 @@ async function triggerReviewEmailForPreparation(preparation: any): Promise<void>
     }
   }
 
-  // Fallback: match by client name + event date
+  // Fallback: match by event date + fuzzy name matching
   if (!booking) {
+    // First try exact match
     booking = await prisma.booking.findFirst({
       where: {
         customerName: preparation.client,
         eventDate: preparation.dateEvenement,
       },
     });
+
+    // If no exact match, fuzzy match: one name contains the other
+    if (!booking) {
+      const candidates = await prisma.booking.findMany({
+        where: { eventDate: preparation.dateEvenement },
+      });
+
+      const prepName = preparation.client.toLowerCase().trim();
+      booking = candidates.find(b => {
+        const bookingName = b.customerName.toLowerCase().trim();
+        // Either the booking name is part of the prep name, or vice versa
+        return prepName.includes(bookingName) || bookingName.includes(prepName);
+      }) || null;
+
+      if (booking) {
+        console.log(`[PhotosUnloaded] Fuzzy matched: prep="${preparation.client}" → booking="${booking.customerName}"`);
+      }
+    }
   }
 
   if (!booking) {
