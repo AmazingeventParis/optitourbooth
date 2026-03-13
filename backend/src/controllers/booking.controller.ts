@@ -152,7 +152,21 @@ export const handleStarRating = asyncHandler(async (req: Request, res: Response)
   });
 
   if (isLowRating) {
-    // Low rating: give immediate access to gallery
+    // Low rating: give immediate access to gallery + send Drive link by email
+    if (booking.customerEmail && booking.galleryUrl) {
+      const brand = (booking.senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
+      sendGalleryDirectEmail({
+        to: booking.customerEmail,
+        customerName: booking.customerName,
+        galleryUrl: booking.galleryUrl,
+        brand,
+      }).then(() => {
+        console.log(`[StarRating] Gallery email sent to ${booking.customerEmail} (low rating ${rating})`);
+      }).catch(err => {
+        console.error(`[StarRating] Failed to send gallery email:`, err);
+      });
+    }
+
     return apiResponse.success(res, {
       action: 'show_gallery',
       galleryUrl: booking.galleryUrl,
