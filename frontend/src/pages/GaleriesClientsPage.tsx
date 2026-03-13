@@ -447,6 +447,8 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
           <div className="flex items-center gap-1.5">
             <input
               type="email"
+              name={`email-${event.googleEventId}`}
+              autoComplete="off"
               value={emailValue}
               onChange={(e) => { setEmailValue(e.target.value); setEmailSaved(false); }}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEmail(); }}
