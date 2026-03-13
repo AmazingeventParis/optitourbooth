@@ -10,6 +10,7 @@ interface BrandTheme {
   accent: string;
   gradient: string;
   logo: string;
+  logoUrl: string;
   website: string;
 }
 
@@ -20,6 +21,7 @@ const BRAND_THEMES: Record<Brand, BrandTheme> = {
     accent: '#E74C25',
     gradient: 'linear-gradient(135deg, #E60A81 0%, #E74C25 100%)',
     logo: 'Shoot\'n\'Box',
+    logoUrl: 'https://optitourbooth.swipego.app/logo-shootnbox.png',
     website: 'shootnbox.fr',
   },
   SMAKK: {
@@ -28,6 +30,7 @@ const BRAND_THEMES: Record<Brand, BrandTheme> = {
     accent: '#A855F7',
     gradient: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)',
     logo: 'Smakk',
+    logoUrl: '',
     website: 'smakk.fr',
   },
 };
@@ -112,14 +115,15 @@ export async function sendReviewLinkEmail(opts: {
           <td style="padding:20px 10px;">
             <table role="presentation" style="max-width:600px;margin:0 auto;border-collapse:collapse;width:100%;">
 
-              <!-- Header with gradient -->
+              <!-- Header -->
               <tr>
-                <td style="background:${theme.gradient};padding:40px 30px 30px;border-radius:16px 16px 0 0;text-align:center;">
-                  <h1 style="margin:0;color:white;font-size:28px;font-weight:800;letter-spacing:-0.5px;">
-                    ${theme.logo}
-                  </h1>
-                  <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">
-                    Votre Événement, Notre Animation Photo
+                <td style="background-color:white;padding:35px 30px 20px;border-radius:16px 16px 0 0;text-align:center;border-bottom:3px solid ${theme.primary};">
+                  ${theme.logoUrl
+                    ? `<img src="${theme.logoUrl}" alt="${theme.logo}" style="max-width:220px;height:auto;display:inline-block;" />`
+                    : `<h1 style="margin:0;color:${theme.primary};font-size:28px;font-weight:800;">${theme.logo}</h1>`
+                  }
+                  <p style="margin:10px 0 0;color:#6b7280;font-size:13px;font-style:italic;letter-spacing:0.5px;">
+                    Créateur de souvenirs
                   </p>
                 </td>
               </tr>
@@ -237,14 +241,15 @@ export async function sendGalleryDirectEmail(opts: {
           <td style="padding:20px 10px;">
             <table role="presentation" style="max-width:600px;margin:0 auto;border-collapse:collapse;width:100%;">
 
-              <!-- Header with gradient -->
+              <!-- Header -->
               <tr>
-                <td style="background:${theme.gradient};padding:40px 30px 30px;border-radius:16px 16px 0 0;text-align:center;">
-                  <h1 style="margin:0;color:white;font-size:28px;font-weight:800;letter-spacing:-0.5px;">
-                    ${theme.logo}
-                  </h1>
-                  <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">
-                    Votre Événement, Notre Animation Photo
+                <td style="background-color:white;padding:35px 30px 20px;border-radius:16px 16px 0 0;text-align:center;border-bottom:3px solid ${theme.primary};">
+                  ${theme.logoUrl
+                    ? `<img src="${theme.logoUrl}" alt="${theme.logo}" style="max-width:220px;height:auto;display:inline-block;" />`
+                    : `<h1 style="margin:0;color:${theme.primary};font-size:28px;font-weight:800;">${theme.logo}</h1>`
+                  }
+                  <p style="margin:10px 0 0;color:#6b7280;font-size:13px;font-style:italic;letter-spacing:0.5px;">
+                    Créateur de souvenirs
                   </p>
                 </td>
               </tr>
