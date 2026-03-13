@@ -17,57 +17,62 @@ import {
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
-/** Compute all badges to show for a booking */
+/** Compute all badges to show for a booking (chronological: only show most advanced state) */
 function getBookingBadges(booking: CalendarEvent['booking']): Array<{ label: string; color: string }> {
   if (!booking) return [];
   const badges: Array<{ label: string; color: string }> = [];
 
-  // 1. Email saved
-  if (booking.customerEmail) {
-    badges.push({ label: 'Email', color: 'bg-blue-100 text-blue-800' });
-  }
+  const hasRating = !!booking.rating;
+  const hasPageViewed = booking._count.events > 0 && ['page_viewed', 'rated_low', 'rated_high', 'review_clicked', 'no_review_selected', 'review_detected', 'review_matched', 'gallery_sent', 'manual_check_required', 'closed'].includes(booking.status);
+  const hasReviewAction = ['review_clicked', 'review_detected', 'review_matched', 'gallery_sent'].includes(booking.status);
+  const hasGallerySent = booking.status === 'gallery_sent';
+  const hasReviewConfirmed = booking.status === 'review_matched' || booking.status === 'review_detected';
 
-  // 2. Link sent (email with review link was sent)
-  if (booking.emailSentAt) {
+  // 1. Lien envoyé — masqué dès que le client a ouvert la page
+  if (booking.emailSentAt && !hasPageViewed) {
     badges.push({ label: 'Lien envoyé', color: 'bg-indigo-100 text-indigo-800' });
   }
 
-  // 3. Page viewed
-  if (booking._count.events > 0 && ['page_viewed', 'rated_low', 'rated_high', 'review_clicked', 'no_review_selected', 'review_detected', 'review_matched', 'gallery_sent', 'manual_check_required', 'closed'].includes(booking.status)) {
+  // 2. Page vue — masqué dès que le client a noté
+  if (hasPageViewed && !hasRating) {
     badges.push({ label: 'Page vue', color: 'bg-sky-100 text-sky-800' });
   }
 
-  // 4. Rating
-  if (booking.rating) {
-    if (booking.rating >= 4) {
+  // 3. Rating — haute note masquée si avis cliqué/détecté, basse note masquée si photos envoyées
+  if (hasRating) {
+    if (booking.rating! >= 4 && !hasReviewAction) {
       badges.push({ label: `${booking.rating}★`, color: 'bg-amber-100 text-amber-800' });
-    } else {
+    } else if (booking.rating! <= 3 && !hasGallerySent) {
       badges.push({ label: `${booking.rating}★`, color: 'bg-red-100 text-red-800' });
     }
   }
 
-  // 5. Review status
-  if (booking.status === 'review_clicked') {
+  // 4. Avis cliqué — masqué si avis confirmé
+  if (booking.status === 'review_clicked' && !hasReviewConfirmed) {
     badges.push({ label: 'Avis cliqué', color: 'bg-amber-100 text-amber-700' });
-  } else if (booking.status === 'no_review_selected') {
+  }
+
+  // 5. Sans avis — masqué si photos envoyées
+  if (booking.status === 'no_review_selected' && !hasGallerySent) {
     badges.push({ label: 'Sans avis', color: 'bg-gray-100 text-gray-700' });
-  } else if (booking.status === 'review_matched' || booking.status === 'review_detected') {
+  }
+
+  // 6. Avis Google (état final — toujours visible)
+  if (hasReviewConfirmed) {
     badges.push({ label: 'Avis Google', color: 'bg-green-100 text-green-800' });
-  } else if (booking.status === 'manual_check_required') {
+  }
+
+  // 7. Vérif. manuelle (action requise — toujours visible)
+  if (booking.status === 'manual_check_required') {
     badges.push({ label: 'Vérif. manuelle', color: 'bg-red-100 text-red-800' });
   }
 
-  // 6. Gallery
-  if (booking.galleryUrl) {
-    badges.push({ label: 'Drive', color: 'bg-green-50 text-green-700' });
-  }
-
-  // 7. Gallery sent
-  if (booking.status === 'gallery_sent') {
+  // 8. Photos envoyées (état final — toujours visible)
+  if (hasGallerySent) {
     badges.push({ label: 'Photos envoyées', color: 'bg-emerald-100 text-emerald-800' });
   }
 
-  // 8. Photos non déchargées warning
+  // 9. Photos non déchargées (alerte — toujours visible)
   if (booking.photosNotUnloaded) {
     badges.push({ label: '⚠️ Photos non déchargées', color: 'bg-amber-100 text-amber-800' });
   }
