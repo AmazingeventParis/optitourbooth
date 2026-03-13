@@ -25,18 +25,18 @@ function PhotoBackground({ thumbnails }: { thumbnails: string[] }) {
   if (!thumbnails.length) return null;
 
   // Build columns with staggered scrolling
-  const cols = 4;
+  const cols = 8;
   const columns: string[][] = Array.from({ length: cols }, () => []);
   const extended = [...thumbnails, ...thumbnails, ...thumbnails];
   extended.forEach((url, i) => columns[i % cols].push(url));
 
   return (
     <div className="fixed inset-0 overflow-hidden z-0">
-      <div className="absolute inset-[-20%] flex gap-2 p-2" style={{ transform: 'rotate(-8deg) scale(1.3)' }}>
+      <div className="absolute inset-[-20%] flex gap-1.5 p-1" style={{ transform: 'rotate(-8deg) scale(1.3)' }}>
         {columns.map((col, colIdx) => (
           <div
             key={colIdx}
-            className="flex-1 flex flex-col gap-2"
+            className="flex-1 flex flex-col gap-1.5"
             style={{
               animation: `photo-col-${colIdx % 2 === 0 ? 'up' : 'down'} ${8 + colIdx * 2}s linear infinite`,
             }}
@@ -200,7 +200,7 @@ export default function ReviewPage() {
     return 'Très satisfait';
   };
 
-  const showPhotoBg = (pageState === 'ask_review' || pageState === 'rating') && (booking?.thumbnails?.length ?? 0) > 0;
+  const showPhotoBg = (booking?.thumbnails?.length ?? 0) > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 relative">
