@@ -392,6 +392,26 @@ export default function ReviewPage() {
                 </button>
               </div>
 
+              {/* Info: no review → 48h delay */}
+              <div className="flex items-center gap-3 my-4">
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-xs text-gray-400 uppercase font-medium">ou</span>
+                <div className="flex-1 h-px bg-gray-200" />
+              </div>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="font-semibold text-gray-700">Sans avis</h3>
+                </div>
+                <p className="text-sm text-gray-500">
+                  Si vous ne laissez pas d'avis, vous recevrez vos photos automatiquement sous <strong>48 heures</strong>.
+                </p>
+              </div>
 
               {errorMessage && (
                 <p className="text-sm text-red-500 text-center mt-3">{errorMessage}</p>
