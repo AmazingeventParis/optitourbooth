@@ -494,7 +494,7 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
                 title={emailValue.trim() ? `Envoyer les photos via SHOOTNBOX à ${emailValue}` : "Saisissez un email d'abord"}
               >
                 <PaperAirplaneIcon className="h-3.5 w-3.5" />
-                Envoyer SHOOTNBOX
+                Photos via SHOOTNBOX
               </button>
               <button
                 onClick={() => onSendDrive('SMAKK')}
@@ -503,13 +503,13 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
                 title={emailValue.trim() ? `Envoyer les photos via SMAKK à ${emailValue}` : "Saisissez un email d'abord"}
               >
                 <PaperAirplaneIcon className="h-3.5 w-3.5" />
-                Envoyer SMAKK
+                Photos via SMAKK
               </button>
             </div>
           </div>
         )}
 
-        {/* Row 2: SHOOTNBOX — copier + envoyer */}
+        {/* Row 2: Lien avis — copier + envoyer */}
         <div className="flex gap-1.5">
           <button
             onClick={() => onCopyBrandUrl('SHOOTNBOX')}
@@ -517,19 +517,18 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
             title="Copier le lien avis SHOOTNBOX"
           >
             <ClipboardDocumentIcon className="h-3.5 w-3.5" />
-            SHOOTNBOX
+            Copier avis SHOOTNBOX
           </button>
           <button
             onClick={() => handleSendBrand('SHOOTNBOX')}
             disabled={sending || !emailValue.trim()}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50"
-            title={emailValue.trim() ? `Envoyer via SHOOTNBOX à ${emailValue}` : "Saisissez un email d'abord"}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors disabled:opacity-50"
+            title={emailValue.trim() ? `Envoyer lien avis SHOOTNBOX à ${emailValue}` : "Saisissez un email d'abord"}
           >
             <PaperAirplaneIcon className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        {/* Row 3: SMAKK — copier + envoyer */}
         <div className="flex gap-1.5">
           <button
             onClick={() => onCopyBrandUrl('SMAKK')}
@@ -537,13 +536,13 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
             title="Copier le lien avis SMAKK"
           >
             <ClipboardDocumentIcon className="h-3.5 w-3.5" />
-            SMAKK
+            Copier avis SMAKK
           </button>
           <button
             onClick={() => handleSendBrand('SMAKK')}
             disabled={sending || !emailValue.trim()}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors disabled:opacity-50"
-            title={emailValue.trim() ? `Envoyer via SMAKK à ${emailValue}` : "Saisissez un email d'abord"}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors disabled:opacity-50"
+            title={emailValue.trim() ? `Envoyer lien avis SMAKK à ${emailValue}` : "Saisissez un email d'abord"}
           >
             <PaperAirplaneIcon className="h-3.5 w-3.5" />
           </button>
