@@ -487,80 +487,87 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="pt-3 border-t border-gray-100 space-y-2">
-        {/* Row 1: Drive — copier + envoyer */}
-        {booking?.galleryUrl && (
+      {/* Actions — two columns: SHOOTNBOX | SMAKK */}
+      <div className="pt-3 border-t border-gray-100">
+        <div className="grid grid-cols-2 gap-2">
+          {/* Column SHOOTNBOX */}
           <div className="space-y-1.5">
-            <button
-              onClick={onCopyDrive}
-              className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors"
-            >
-              <FolderOpenIcon className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate flex-1 text-left">Copier lien Drive</span>
-              <ClipboardDocumentIcon className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
-            </button>
-            <div className="flex gap-1.5">
+            <div className="text-[10px] font-bold text-orange-600 uppercase text-center tracking-wider">Shootnbox</div>
+            {booking?.galleryUrl && (
               <button
                 onClick={() => onSendDrive('SHOOTNBOX')}
                 disabled={sending || !emailValue.trim()}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50"
-                title={emailValue.trim() ? `Envoyer les photos via SHOOTNBOX à ${emailValue}` : "Saisissez un email d'abord"}
+                className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50"
+                title={emailValue.trim() ? `Envoyer lien Drive via SHOOTNBOX à ${emailValue}` : "Saisissez un email d'abord"}
               >
-                <PaperAirplaneIcon className="h-3.5 w-3.5" />
-                Photos via SHOOTNBOX
+                <FolderOpenIcon className="h-3.5 w-3.5" />
+                Envoyer Drive
               </button>
+            )}
+            <button
+              onClick={() => onCopyBrandUrl('SHOOTNBOX')}
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors"
+              title="Copier le lien avis SHOOTNBOX"
+            >
+              <ClipboardDocumentIcon className="h-3.5 w-3.5" />
+              Copier URL avis
+            </button>
+            <button
+              onClick={() => handleSendBrand('SHOOTNBOX')}
+              disabled={sending || !emailValue.trim()}
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors disabled:opacity-50"
+              title={emailValue.trim() ? `Envoyer lien avis SHOOTNBOX à ${emailValue}` : "Saisissez un email d'abord"}
+            >
+              <PaperAirplaneIcon className="h-3.5 w-3.5" />
+              Envoyer URL avis
+            </button>
+          </div>
+
+          {/* Column SMAKK */}
+          <div className="space-y-1.5">
+            <div className="text-[10px] font-bold text-purple-600 uppercase text-center tracking-wider">Smakk</div>
+            {booking?.galleryUrl && (
               <button
                 onClick={() => onSendDrive('SMAKK')}
                 disabled={sending || !emailValue.trim()}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors disabled:opacity-50"
-                title={emailValue.trim() ? `Envoyer les photos via SMAKK à ${emailValue}` : "Saisissez un email d'abord"}
+                className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-colors disabled:opacity-50"
+                title={emailValue.trim() ? `Envoyer lien Drive via SMAKK à ${emailValue}` : "Saisissez un email d'abord"}
               >
-                <PaperAirplaneIcon className="h-3.5 w-3.5" />
-                Photos via SMAKK
+                <FolderOpenIcon className="h-3.5 w-3.5" />
+                Envoyer Drive
               </button>
-            </div>
+            )}
+            <button
+              onClick={() => onCopyBrandUrl('SMAKK')}
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors"
+              title="Copier le lien avis SMAKK"
+            >
+              <ClipboardDocumentIcon className="h-3.5 w-3.5" />
+              Copier URL avis
+            </button>
+            <button
+              onClick={() => handleSendBrand('SMAKK')}
+              disabled={sending || !emailValue.trim()}
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors disabled:opacity-50"
+              title={emailValue.trim() ? `Envoyer lien avis SMAKK à ${emailValue}` : "Saisissez un email d'abord"}
+            >
+              <PaperAirplaneIcon className="h-3.5 w-3.5" />
+              Envoyer URL avis
+            </button>
           </div>
+        </div>
+
+        {/* Copier lien Drive (commun) */}
+        {booking?.galleryUrl && (
+          <button
+            onClick={onCopyDrive}
+            className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors"
+          >
+            <FolderOpenIcon className="h-3.5 w-3.5" />
+            Copier lien Drive
+            <ClipboardDocumentIcon className="h-3 w-3 opacity-50" />
+          </button>
         )}
-
-        {/* Row 2: Lien avis — copier + envoyer */}
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => onCopyBrandUrl('SHOOTNBOX')}
-            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors"
-            title="Copier le lien avis SHOOTNBOX"
-          >
-            <ClipboardDocumentIcon className="h-3.5 w-3.5" />
-            Copier avis SHOOTNBOX
-          </button>
-          <button
-            onClick={() => handleSendBrand('SHOOTNBOX')}
-            disabled={sending || !emailValue.trim()}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors disabled:opacity-50"
-            title={emailValue.trim() ? `Envoyer lien avis SHOOTNBOX à ${emailValue}` : "Saisissez un email d'abord"}
-          >
-            <PaperAirplaneIcon className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => onCopyBrandUrl('SMAKK')}
-            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors"
-            title="Copier le lien avis SMAKK"
-          >
-            <ClipboardDocumentIcon className="h-3.5 w-3.5" />
-            Copier avis SMAKK
-          </button>
-          <button
-            onClick={() => handleSendBrand('SMAKK')}
-            disabled={sending || !emailValue.trim()}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors disabled:opacity-50"
-            title={emailValue.trim() ? `Envoyer lien avis SMAKK à ${emailValue}` : "Saisissez un email d'abord"}
-          >
-            <PaperAirplaneIcon className="h-3.5 w-3.5" />
-          </button>
-        </div>
       </div>
     </Card>
   );

@@ -159,7 +159,7 @@ export const handleStarRating = asyncHandler(async (req: Request, res: Response)
  */
 export const handleReviewClick = asyncHandler(async (req: Request, res: Response) => {
   const { token } = req.params;
-  const { session_id, user_agent, referrer } = req.body;
+  const { session_id, user_agent, referrer, platform } = req.body;
 
   const booking = await prisma.booking.findUnique({
     where: { publicToken: token },
@@ -169,7 +169,9 @@ export const handleReviewClick = asyncHandler(async (req: Request, res: Response
     return apiResponse.notFound(res, 'Réservation introuvable');
   }
 
-  // Log review_click event
+  const reviewPlatform = platform === 'trustpilot' ? 'trustpilot' : 'google';
+
+  // Log review_click event with platform info
   await prisma.bookingEvent.create({
     data: {
       bookingId: booking.id,
@@ -178,6 +180,7 @@ export const handleReviewClick = asyncHandler(async (req: Request, res: Response
       ipHash: hashIp(req.ip || ''),
       userAgent: user_agent || req.headers['user-agent'] || null,
       referer: referrer || null,
+      metadataJson: { platform: reviewPlatform },
     },
   });
 
@@ -187,32 +190,39 @@ export const handleReviewClick = asyncHandler(async (req: Request, res: Response
     data: { status: 'review_clicked' },
   });
 
-  // Schedule fallback gallery dispatch at H+24 (non-blocking)
+  // Schedule fallback gallery dispatch at H+2 (non-blocking)
   const delayHours = config.reviewSystem.galleryDelayHours;
   const scheduledFor = new Date(Date.now() + delayHours * 60 * 60 * 1000);
-  scheduleGalleryDispatch(booking.id, 'fallback_24h', scheduledFor).catch(err =>
+  scheduleGalleryDispatch(booking.id, 'fallback_after_review_click', scheduledFor).catch(err =>
     console.error(`[ReviewClick] Failed to schedule gallery dispatch:`, err)
   );
 
-  // Start active review polling (every 1 min for 1 hour)
-  const { startActivePolling } = await import('../services/reviewPolling.service.js');
-  startActivePolling();
+  // Start active review polling for Google reviews (every 1 min for 1 hour)
+  if (reviewPlatform === 'google') {
+    const { startActivePolling } = await import('../services/reviewPolling.service.js');
+    startActivePolling();
+  }
 
-  // Return the brand-specific Google review URL
-  let reviewUrl = booking.googleReviewUrl;
-  if (!reviewUrl) {
-    if (booking.senderBrand === 'SMAKK') {
-      reviewUrl = config.googleBusiness.reviewUrlSmakk;
-    } else {
-      reviewUrl = config.googleBusiness.reviewUrlShootnbox;
+  // Return the appropriate review URL based on platform
+  let reviewUrl: string | null = null;
+
+  if (reviewPlatform === 'trustpilot') {
+    reviewUrl = booking.senderBrand === 'SMAKK'
+      ? config.trustpilot.reviewUrlSmakk
+      : config.trustpilot.reviewUrlShootnbox;
+  } else {
+    reviewUrl = booking.googleReviewUrl;
+    if (!reviewUrl) {
+      reviewUrl = booking.senderBrand === 'SMAKK'
+        ? config.googleBusiness.reviewUrlSmakk
+        : config.googleBusiness.reviewUrlShootnbox;
+    }
+    if (!reviewUrl) {
+      reviewUrl = config.googleBusiness.defaultReviewUrl;
     }
   }
-  // Final fallback
-  if (!reviewUrl) {
-    reviewUrl = config.googleBusiness.defaultReviewUrl;
-  }
 
-  console.log(`[ReviewClick] brand=${booking.senderBrand}, reviewUrl=${reviewUrl}`);
+  console.log(`[ReviewClick] platform=${reviewPlatform}, brand=${booking.senderBrand}, reviewUrl=${reviewUrl}`);
 
   return apiResponse.success(res, {
     redirect_url: reviewUrl || null,
@@ -253,15 +263,15 @@ export const handleNoReviewClick = asyncHandler(async (req: Request, res: Respon
     data: { status: 'no_review_selected' },
   });
 
-  // Schedule gallery dispatch at H+24 (non-blocking)
-  const delayHours = config.reviewSystem.galleryDelayHours;
+  // Schedule gallery dispatch at H+48 for no-review (non-blocking)
+  const delayHours = config.reviewSystem.noReviewDelayHours;
   const scheduledFor = new Date(Date.now() + delayHours * 60 * 60 * 1000);
-  scheduleGalleryDispatch(booking.id, 'after_no_review_24h', scheduledFor).catch(err =>
+  scheduleGalleryDispatch(booking.id, 'after_no_review_48h', scheduledFor).catch(err =>
     console.error(`[NoReviewClick] Failed to schedule gallery dispatch:`, err)
   );
 
   return apiResponse.success(res, {
-    message: 'C\'est bien noté. Votre galerie vous sera envoyée automatiquement dans les 24 heures.',
+    message: 'C\'est bien noté. Votre galerie vous sera envoyée automatiquement sous 48 heures.',
   });
 });
 

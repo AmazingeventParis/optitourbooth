@@ -9,7 +9,7 @@ import { sendGalleryDirectEmail } from './email.service.js';
  */
 export async function scheduleGalleryDispatch(
   bookingId: string,
-  dispatchType: 'after_review' | 'after_no_review_24h' | 'fallback_24h' | 'manual',
+  dispatchType: 'after_review' | 'after_no_review_24h' | 'after_no_review_48h' | 'fallback_24h' | 'fallback_after_review_click' | 'manual',
   scheduledFor: Date
 ): Promise<void> {
   // Check if gallery already sent
