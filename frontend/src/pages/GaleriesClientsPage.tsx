@@ -38,11 +38,11 @@ function getBookingBadges(booking: CalendarEvent['booking']): Array<{ label: str
     badges.push({ label: 'Page vue', color: 'bg-sky-100 text-sky-800' });
   }
 
-  // 3. Rating — haute note masquée si avis cliqué/détecté, basse note masquée si photos envoyées
+  // 3. Rating — toujours visible
   if (hasRating) {
-    if (booking.rating! >= 4 && !hasReviewAction) {
+    if (booking.rating! >= 4) {
       badges.push({ label: `${booking.rating}★`, color: 'bg-amber-100 text-amber-800' });
-    } else if (booking.rating! <= 3 && !hasGallerySent) {
+    } else {
       badges.push({ label: `${booking.rating}★`, color: 'bg-red-100 text-red-800' });
     }
   }
