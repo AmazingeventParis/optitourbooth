@@ -23,12 +23,37 @@ interface PlaceDetailsResponse {
 
 type Brand = 'SHOOTNBOX' | 'SMAKK';
 
+// Active polling state
+let pollingTimer: ReturnType<typeof setInterval> | null = null;
+const ACTIVE_POLL_INTERVAL = 60_000; // 1 minute when actively watching
+const ACTIVE_POLL_DURATION = 60 * 60 * 1000; // Stop after 1 hour
+
 /**
  * Check if Google Places review polling is configured
  */
 export function isReviewPollingConfigured(): boolean {
   const { apiKey, placeIds } = config.googlePlaces;
   return !!(apiKey && (placeIds.SHOOTNBOX || placeIds.SMAKK));
+}
+
+/**
+ * Check if there are pending review clicks within the last hour
+ * (someone clicked "Leave a review" and we're waiting for their review)
+ */
+async function hasPendingReviewClicks(): Promise<boolean> {
+  const oneHourAgo = new Date(Date.now() - ACTIVE_POLL_DURATION);
+
+  const count = await prisma.bookingEvent.count({
+    where: {
+      eventType: 'review_click',
+      occurredAt: { gte: oneHourAgo },
+      booking: {
+        status: { in: ['review_clicked'] },
+      },
+    },
+  });
+
+  return count > 0;
 }
 
 /**
@@ -49,7 +74,7 @@ async function fetchLatestReviews(placeId: string): Promise<PlacesReview[]> {
 }
 
 /**
- * Generate a stable review ID from author + timestamp (Places API doesn't provide a unique ID)
+ * Generate a stable review ID from author + timestamp
  */
 function generateReviewId(placeId: string, review: PlacesReview): string {
   return `places_${placeId}_${review.author_name.replace(/\s+/g, '_')}_${review.time}`;
@@ -109,29 +134,77 @@ async function pollBrandReviews(brand: Brand, placeId: string): Promise<number> 
 }
 
 /**
- * Poll all configured brands for new reviews
- * Called by CRON every N minutes
+ * Execute a single poll cycle for all brands
  */
-export async function pollAllReviews(): Promise<void> {
+async function doPoll(): Promise<void> {
+  const { placeIds } = config.googlePlaces;
+  let total = 0;
+
+  if (placeIds.SHOOTNBOX) {
+    total += await pollBrandReviews('SHOOTNBOX', placeIds.SHOOTNBOX);
+  }
+  if (placeIds.SMAKK) {
+    total += await pollBrandReviews('SMAKK', placeIds.SMAKK);
+  }
+
+  if (total > 0) {
+    console.log(`[ReviewPolling] Processed ${total} new review(s)`);
+  }
+}
+
+/**
+ * Start active polling (called when a client clicks "Leave a review")
+ * Polls every 1 minute for up to 1 hour, then stops automatically.
+ * Only polls when there are actually pending review clicks.
+ */
+export function startActivePolling(): void {
+  if (!isReviewPollingConfigured()) return;
+  if (pollingTimer) return; // Already polling
+
+  console.log('[ReviewPolling] Starting active polling (every 1 min)');
+
+  // Poll immediately
+  doPoll().catch(console.error);
+
+  // Then poll every minute
+  pollingTimer = setInterval(async () => {
+    try {
+      // Check if there are still pending review clicks
+      const hasPending = await hasPendingReviewClicks();
+      if (!hasPending) {
+        stopActivePolling();
+        return;
+      }
+      await doPoll();
+    } catch (error) {
+      console.error('[ReviewPolling] Poll error:', error);
+    }
+  }, ACTIVE_POLL_INTERVAL);
+
+  // Auto-stop after 1 hour
+  setTimeout(() => stopActivePolling(), ACTIVE_POLL_DURATION);
+}
+
+/**
+ * Stop active polling
+ */
+function stopActivePolling(): void {
+  if (pollingTimer) {
+    clearInterval(pollingTimer);
+    pollingTimer = null;
+    console.log('[ReviewPolling] Active polling stopped');
+  }
+}
+
+/**
+ * Called by CRON every 5 min — only polls if there are pending review clicks
+ * This is a lightweight check (1 DB query) that starts active polling if needed
+ */
+export async function checkAndPoll(): Promise<void> {
   if (!isReviewPollingConfigured()) return;
 
-  const { placeIds } = config.googlePlaces;
-
-  try {
-    let total = 0;
-
-    if (placeIds.SHOOTNBOX) {
-      total += await pollBrandReviews('SHOOTNBOX', placeIds.SHOOTNBOX);
-    }
-
-    if (placeIds.SMAKK) {
-      total += await pollBrandReviews('SMAKK', placeIds.SMAKK);
-    }
-
-    if (total > 0) {
-      console.log(`[ReviewPolling] Processed ${total} new review(s)`);
-    }
-  } catch (error) {
-    console.error('[ReviewPolling] Error polling reviews:', error);
+  const hasPending = await hasPendingReviewClicks();
+  if (hasPending && !pollingTimer) {
+    startActivePolling();
   }
 }

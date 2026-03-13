@@ -20,7 +20,7 @@ import routes from './routes/index.js';
 import { autoUpdatePreparationStatuses } from './controllers/preparation.controller.js';
 import { initializeQueues } from './config/queue.js';
 import { processOverdueDispatches } from './services/galleryDispatch.service.js';
-import { pollAllReviews, isReviewPollingConfigured } from './services/reviewPolling.service.js';
+import { checkAndPoll, isReviewPollingConfigured } from './services/reviewPolling.service.js';
 import { startGalleryWorker, stopGalleryWorker } from './workers/galleryWorker.js';
 
 // Créer l'application Express
@@ -153,19 +153,18 @@ async function startServer(): Promise<void> {
       }, 5 * 60 * 1000);
       console.log('⏰ CRON: Gallery dispatch poll every 5 min');
 
-      // CRON: Poll Google reviews every N minutes
+      // CRON: Check for pending review clicks every 5 min
+      // If someone clicked "Leave a review", starts active polling (every 1 min)
+      // Otherwise costs nothing (just a DB query)
       if (isReviewPollingConfigured()) {
-        const intervalMs = (parseInt(process.env.REVIEW_POLLING_INTERVAL || '5', 10)) * 60 * 1000;
         setInterval(async () => {
           try {
-            await pollAllReviews();
+            await checkAndPoll();
           } catch (error) {
-            console.error('[CRON] Review polling error:', error);
+            console.error('[CRON] Review check error:', error);
           }
-        }, intervalMs);
-        // Run once at startup after a short delay
-        setTimeout(() => pollAllReviews().catch(console.error), 30_000);
-        console.log('⏰ CRON: Google review polling every 5 min');
+        }, 5 * 60 * 1000);
+        console.log('⏰ CRON: Review polling ready (activates on review-click, 1 min interval)');
       } else {
         console.log('⚠️  Google Places review polling not configured (GOOGLE_PLACES_API_KEY / GOOGLE_PLACE_ID_*)');
       }

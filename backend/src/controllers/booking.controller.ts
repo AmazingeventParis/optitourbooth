@@ -194,6 +194,10 @@ export const handleReviewClick = asyncHandler(async (req: Request, res: Response
     console.error(`[ReviewClick] Failed to schedule gallery dispatch:`, err)
   );
 
+  // Start active review polling (every 1 min for 1 hour)
+  const { startActivePolling } = await import('../services/reviewPolling.service.js');
+  startActivePolling();
+
   // Return the brand-specific Google review URL
   let reviewUrl = booking.googleReviewUrl;
   if (!reviewUrl) {
