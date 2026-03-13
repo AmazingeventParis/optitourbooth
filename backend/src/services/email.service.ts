@@ -226,11 +226,6 @@ export async function sendGalleryDirectEmail(opts: {
   const theme = BRAND_THEMES[brand];
   const transporter = getTransporter(brand);
 
-  const { thumbnails, totalCount } = await fetchThumbnails(galleryUrl);
-  const photoGrid = buildThumbnailGrid(thumbnails);
-  const hasPhotos = thumbnails.length > 0;
-  const remainingCount = totalCount - Math.min(thumbnails.length, 6);
-
   const html = `
     <!DOCTYPE html>
     <html>
@@ -265,19 +260,6 @@ export async function sendGalleryDirectEmail(opts: {
                   <p style="margin:0 0 25px;color:#6b7280;font-size:15px;line-height:1.6;">
                     Merci d'avoir fait confiance à <strong style="color:${theme.primary};">${brandConfig.name}</strong> ! Vos photos sont prêtes, rien que pour vous.
                   </p>
-
-                  ${hasPhotos ? `
-                  <!-- Photo preview -->
-                  <div style="margin:0 0 10px;">
-                    <p style="margin:0 0 8px;color:#1a1a2e;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
-                      Aperçu de vos photos
-                    </p>
-                  </div>
-                  ${photoGrid}
-                  <p style="margin:0 0 25px;color:#9ca3af;font-size:12px;text-align:center;font-style:italic;">
-                    ${remainingCount > 0 ? `et ${remainingCount} autres photos vous attendent...` : 'Tous vos souvenirs sont dans la galerie !'}
-                  </p>
-                  ` : ''}
 
                   <!-- CTA -->
                   <table role="presentation" style="width:100%;border-collapse:collapse;">
