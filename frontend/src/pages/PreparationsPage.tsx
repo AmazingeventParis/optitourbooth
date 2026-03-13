@@ -353,34 +353,6 @@ export default function PreparationsPage() {
     }
   };
 
-  const handleClearDefect = async (machineId: string) => {
-    setIsSaving(true);
-    try {
-      await machinesService.clearDefect(machineId);
-      success('Défaut retiré');
-      setIsModalOpen(false);
-      fetchMachines();
-    } catch (err) {
-      showError('Erreur', (err as Error).message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleRestoreToService = async (machineId: string) => {
-    setIsSaving(true);
-    try {
-      await machinesService.restoreToService(machineId);
-      success('Machine remise en service');
-      setIsModalOpen(false);
-      fetchMachines();
-    } catch (err) {
-      showError('Erreur', (err as Error).message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0 || !selectedType) return;
 
@@ -1231,7 +1203,7 @@ export default function PreparationsPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Préciser la panne</label>
               <textarea
-                value={selectedMachine?.aDefaut ? selectedMachine.defaut || '' : (defautText || horsServiceText)}
+                value={defautText || horsServiceText}
                 onChange={(e) => {
                   const value = e.target.value;
                   setDefautText(value);
@@ -1240,63 +1212,33 @@ export default function PreparationsPage() {
                 rows={2}
                 className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
                 placeholder="Décrire la panne..."
-                disabled={Boolean(selectedMachine?.aDefaut || (selectedMachine && getMachineStatut(selectedMachine) === 'hors_service'))}
               />
 
-              {/* Boutons d'action - côte à côte */}
-              {selectedMachine?.aDefaut ? (
+              <div className="flex gap-2">
                 <Button
-                  variant="primary"
-                  className="w-full"
+                  variant="warning"
+                  className="flex-1"
                   onClick={() => {
-                    if (selectedMachine) handleClearDefect(selectedMachine.id);
+                    if (selectedMachine) handleMarkDefect(selectedMachine.id);
                   }}
-                  disabled={isSaving}
+                  disabled={isSaving || !defautText}
                   isLoading={isSaving}
                 >
-                  <CheckCircleIcon className="h-5 w-5 mr-2" />
-                  Retirer le défaut
+                  <WrenchScrewdriverIcon className="h-5 w-5 mr-2" />
+                  Signaler un défaut
                 </Button>
-              ) : selectedMachine && getMachineStatut(selectedMachine) === 'hors_service' ? (
                 <Button
-                  variant="primary"
-                  className="w-full"
+                  variant="danger"
+                  className="flex-1"
                   onClick={() => {
-                    if (selectedMachine) handleRestoreToService(selectedMachine.id);
+                    if (selectedMachine) handleMarkOutOfService(selectedMachine.id);
                   }}
-                  disabled={isSaving}
+                  disabled={isSaving || !horsServiceText}
                   isLoading={isSaving}
                 >
-                  <CheckCircleIcon className="h-5 w-5 mr-2" />
-                  Remettre en service
+                  Mettre hors service
                 </Button>
-              ) : (
-                <div className="flex gap-2">
-                  <Button
-                    variant="warning"
-                    className="flex-1"
-                    onClick={() => {
-                      if (selectedMachine) handleMarkDefect(selectedMachine.id);
-                    }}
-                    disabled={isSaving || !defautText}
-                    isLoading={isSaving}
-                  >
-                    <WrenchScrewdriverIcon className="h-5 w-5 mr-2" />
-                    Signaler un défaut
-                  </Button>
-                  <Button
-                    variant="danger"
-                    className="flex-1"
-                    onClick={() => {
-                      if (selectedMachine) handleMarkOutOfService(selectedMachine.id);
-                    }}
-                    disabled={isSaving || !horsServiceText}
-                    isLoading={isSaving}
-                  >
-                    Mettre hors service
-                  </Button>
-                </div>
-              )}
+              </div>
             </div>
 
             {/* Historique des pannes */}
@@ -1327,15 +1269,43 @@ export default function PreparationsPage() {
                       </div>
                       <p className="text-gray-800">{incident.description}</p>
                       <div className="flex items-center justify-between mt-1">
-                        {incident.reportedBy && (
-                          <span className="text-xs text-gray-500">Par {incident.reportedBy}</span>
-                        )}
+                        <div>
+                          {incident.reportedBy && (
+                            <span className="text-xs text-gray-500">Par {incident.reportedBy}</span>
+                          )}
+                        </div>
                         {incident.resolvedAt ? (
                           <span className="text-xs text-green-600 font-medium">
                             Résolu le {format(parseISO(incident.resolvedAt), "d MMM yyyy 'à' HH:mm", { locale: fr })}
                           </span>
                         ) : (
-                          <span className="text-xs text-red-600 font-medium">En cours</span>
+                          <button
+                            onClick={async () => {
+                              if (!selectedMachine) return;
+                              try {
+                                if (incident.type === 'defaut') {
+                                  await machinesService.clearDefect(selectedMachine.id);
+                                  success('Défaut retiré');
+                                } else {
+                                  await machinesService.restoreToService(selectedMachine.id);
+                                  success('Machine remise en service');
+                                }
+                                fetchMachines();
+                                machinesService.listIncidents(selectedMachine.id).then(setMachineIncidents).catch(() => {});
+                              } catch (err) {
+                                showError('Erreur', (err as Error).message);
+                              }
+                            }}
+                            disabled={isSaving}
+                            className={clsx(
+                              'text-xs font-medium px-2 py-1 rounded-full transition-all active:scale-95',
+                              incident.type === 'hors_service'
+                                ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                            )}
+                          >
+                            {incident.type === 'hors_service' ? 'Remettre en service' : 'Retirer le défaut'}
+                          </button>
                         )}
                       </div>
                     </div>
