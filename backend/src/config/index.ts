@@ -131,7 +131,7 @@ export const config = {
 
   // Trustpilot
   trustpilot: {
-    reviewUrlShootnbox: process.env.TRUSTPILOT_REVIEW_URL_SHOOTNBOX || '',
+    reviewUrlShootnbox: process.env.TRUSTPILOT_REVIEW_URL_SHOOTNBOX || 'https://fr.trustpilot.com/evaluate/shootnbox.fr',
     reviewUrlSmakk: process.env.TRUSTPILOT_REVIEW_URL_SMAKK || '',
   },
 
