@@ -424,7 +424,7 @@ export default function ReviewPage() {
                   <h3 className="font-semibold text-gray-700">Sans avis</h3>
                 </div>
                 <p className="text-sm text-gray-500">
-                  Si vous ne laissez pas d'avis, vous recevrez vos photos automatiquement sous <strong>48 heures</strong>.
+                  Je ne souhaite pas laisser d'avis, je recevrai mes photos automatiquement dans <strong>48 heures</strong> par mail.
                 </p>
               </div>
 
