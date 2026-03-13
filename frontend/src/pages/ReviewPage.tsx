@@ -375,33 +375,6 @@ export default function ReviewPage() {
                 </button>
               </div>
 
-              {/* Divider */}
-              <div className="flex items-center gap-3 my-4">
-                <div className="flex-1 h-px bg-gray-200" />
-                <span className="text-xs text-gray-400 uppercase font-medium">ou</span>
-                <div className="flex-1 h-px bg-gray-200" />
-              </div>
-
-              {/* Section 2: No review → 48h delay */}
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="font-semibold text-gray-700">Sans avis</h3>
-                </div>
-                <p className="text-sm text-gray-500 mb-4">
-                  Vous recevrez vos photos automatiquement sous <strong>48 heures</strong>.
-                </p>
-                <button
-                  onClick={handleNoReviewClick}
-                  className="w-full py-3 px-5 rounded-xl border-2 border-gray-200 text-gray-500 font-medium hover:bg-white hover:border-gray-300 transition-all duration-200 text-sm"
-                >
-                  Je ne souhaite pas laisser d'avis
-                </button>
-              </div>
 
               {errorMessage && (
                 <p className="text-sm text-red-500 text-center mt-3">{errorMessage}</p>
