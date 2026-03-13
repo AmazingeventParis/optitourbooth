@@ -273,20 +273,6 @@ export async function sendGalleryDirectEmail(opts: {
                     </tr>
                   </table>
 
-                  <!-- Review nudge -->
-                  <table role="presentation" style="width:100%;border-collapse:collapse;background-color:#fdf2f8;border-radius:12px;">
-                    <tr>
-                      <td style="padding:20px;text-align:center;">
-                        <p style="margin:0 0 5px;color:${theme.primary};font-size:14px;font-weight:700;">
-                          Votre avis nous aide !
-                        </p>
-                        <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
-                          En partageant votre expérience sur Google ou Trustpilot, vous soutenez notre travail et aidez de futurs clients à nous découvrir.
-                        </p>
-                      </td>
-                    </tr>
-                  </table>
-
                 </td>
               </tr>
 
