@@ -363,7 +363,7 @@ export default function ReviewPage() {
                 Merci beaucoup !
               </h2>
               <p className="text-gray-600 text-center mb-6">
-                Votre satisfaction nous fait très plaisir !
+                Votre avis compte énormément pour nous !
               </p>
 
               {/* Section 1: Leave a review → instant photos */}
@@ -377,7 +377,7 @@ export default function ReviewPage() {
                   <h3 className="font-bold text-gray-900">Recevez vos photos instantanément</h3>
                 </div>
                 <p className="text-sm text-gray-600 mb-4">
-                  Laissez un avis et recevez votre galerie photo par email dans les minutes qui suivent.
+                  En partageant votre expérience, vous aidez de futurs clients à nous découvrir et vous soutenez notre travail. En remerciement, recevez votre galerie photo par email dans les minutes qui suivent.
                 </p>
 
                 {/* Google review button */}
