@@ -24,7 +24,6 @@ function getBookingBadges(booking: CalendarEvent['booking']): Array<{ label: str
 
   const hasRating = !!booking.rating;
   const hasPageViewed = booking._count.events > 0 && ['page_viewed', 'rated_low', 'rated_high', 'review_clicked', 'no_review_selected', 'review_detected', 'review_matched', 'gallery_sent', 'manual_check_required', 'closed'].includes(booking.status);
-  const hasReviewAction = ['review_clicked', 'review_detected', 'review_matched', 'gallery_sent'].includes(booking.status);
   const hasGallerySent = booking.status === 'gallery_sent';
   const hasReviewConfirmed = booking.status === 'review_matched' || booking.status === 'review_detected';
 
