@@ -123,7 +123,7 @@ export const config = {
 
   // Review system
   reviewSystem: {
-    galleryDelayHours: parseInt(process.env.GALLERY_DELAY_HOURS || '24', 10),
+    galleryDelayHours: parseInt(process.env.GALLERY_DELAY_HOURS || '2', 10),
     matchingWindowMinutes: parseInt(process.env.MATCHING_WINDOW_MINUTES || '60', 10),
     publicBaseUrl: process.env.PUBLIC_BASE_URL || 'http://localhost:5173',
   },
