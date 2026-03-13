@@ -253,6 +253,7 @@ export default function PreparationsPage() {
     try {
       await preparationsService.markAsReady(preparationId);
       success('Machine marquée comme prête');
+      setIsModalOpen(false);
       fetchMachines();
     } catch (err) {
       showError('Erreur', (err as Error).message);
@@ -266,6 +267,7 @@ export default function PreparationsPage() {
     try {
       await preparationsService.markPhotosUnloaded(preparationId);
       success('Photos déchargées et événement archivé');
+      setIsModalOpen(false);
       fetchMachines();
     } catch (err) {
       showError('Erreur', (err as Error).message);
