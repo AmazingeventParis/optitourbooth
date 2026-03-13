@@ -90,6 +90,16 @@ export const config = {
     pubsubTopicName: process.env.GOOGLE_PUBSUB_TOPIC_NAME || 'gbp-reviews',
   },
 
+  // Google Places API (Review polling)
+  googlePlaces: {
+    apiKey: process.env.GOOGLE_PLACES_API_KEY || '',
+    placeIds: {
+      SHOOTNBOX: process.env.GOOGLE_PLACE_ID_SHOOTNBOX || '',
+      SMAKK: process.env.GOOGLE_PLACE_ID_SMAKK || '',
+    },
+    pollingIntervalMinutes: parseInt(process.env.REVIEW_POLLING_INTERVAL || '5', 10),
+  },
+
   // Email (Outlook Exchange SMTP)
   email: {
     smtp: {

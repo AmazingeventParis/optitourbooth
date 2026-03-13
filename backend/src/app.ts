@@ -20,6 +20,7 @@ import routes from './routes/index.js';
 import { autoUpdatePreparationStatuses } from './controllers/preparation.controller.js';
 import { initializeQueues } from './config/queue.js';
 import { processOverdueDispatches } from './services/galleryDispatch.service.js';
+import { pollAllReviews, isReviewPollingConfigured } from './services/reviewPolling.service.js';
 import { startGalleryWorker, stopGalleryWorker } from './workers/galleryWorker.js';
 
 // Créer l'application Express
@@ -151,6 +152,23 @@ async function startServer(): Promise<void> {
         }
       }, 5 * 60 * 1000);
       console.log('⏰ CRON: Gallery dispatch poll every 5 min');
+
+      // CRON: Poll Google reviews every N minutes
+      if (isReviewPollingConfigured()) {
+        const intervalMs = (parseInt(process.env.REVIEW_POLLING_INTERVAL || '5', 10)) * 60 * 1000;
+        setInterval(async () => {
+          try {
+            await pollAllReviews();
+          } catch (error) {
+            console.error('[CRON] Review polling error:', error);
+          }
+        }, intervalMs);
+        // Run once at startup after a short delay
+        setTimeout(() => pollAllReviews().catch(console.error), 30_000);
+        console.log('⏰ CRON: Google review polling every 5 min');
+      } else {
+        console.log('⚠️  Google Places review polling not configured (GOOGLE_PLACES_API_KEY / GOOGLE_PLACE_ID_*)');
+      }
 
       // Keep-alive: ping self every 10 min to prevent Render free tier sleep
       if (!config.isDev && process.env.RENDER_EXTERNAL_URL) {
