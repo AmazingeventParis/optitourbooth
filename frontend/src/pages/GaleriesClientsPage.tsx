@@ -7,8 +7,6 @@ import {
   ClipboardDocumentIcon,
   CheckCircleIcon,
   CalendarDaysIcon,
-  StarIcon,
-  EyeIcon,
   ArrowPathIcon,
   FolderOpenIcon,
   PencilIcon,
@@ -19,20 +17,58 @@ import {
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  link_sent: { label: 'Lien envoyé', color: 'bg-blue-100 text-blue-800' },
-  page_viewed: { label: 'Page vue', color: 'bg-indigo-100 text-indigo-800' },
-  rated_low: { label: 'Note faible', color: 'bg-red-100 text-red-800' },
-  rated_high: { label: 'Note haute', color: 'bg-green-100 text-green-800' },
-  review_clicked: { label: 'Avis cliqué', color: 'bg-amber-100 text-amber-800' },
-  no_review_selected: { label: 'Sans avis', color: 'bg-gray-100 text-gray-800' },
-  review_detected: { label: 'Avis détecté', color: 'bg-green-100 text-green-800' },
-  review_matched: { label: 'Avis validé', color: 'bg-green-100 text-green-800' },
-  gallery_scheduled_24h: { label: 'Galerie H+24', color: 'bg-orange-100 text-orange-800' },
-  gallery_sent: { label: 'Galerie envoyée', color: 'bg-emerald-100 text-emerald-800' },
-  manual_check_required: { label: 'Vérification', color: 'bg-red-100 text-red-800' },
-  closed: { label: 'Fermé', color: 'bg-gray-100 text-gray-600' },
-};
+/** Compute all badges to show for a booking */
+function getBookingBadges(booking: CalendarEvent['booking']): Array<{ label: string; color: string }> {
+  if (!booking) return [];
+  const badges: Array<{ label: string; color: string }> = [];
+
+  // 1. Email saved
+  if (booking.customerEmail) {
+    badges.push({ label: 'Email', color: 'bg-blue-100 text-blue-800' });
+  }
+
+  // 2. Link sent (email with review link was sent)
+  if (booking.emailSentAt) {
+    badges.push({ label: 'Lien envoyé', color: 'bg-indigo-100 text-indigo-800' });
+  }
+
+  // 3. Page viewed
+  if (booking._count.events > 0 && ['page_viewed', 'rated_low', 'rated_high', 'review_clicked', 'no_review_selected', 'review_detected', 'review_matched', 'gallery_sent', 'manual_check_required', 'closed'].includes(booking.status)) {
+    badges.push({ label: 'Page vue', color: 'bg-sky-100 text-sky-800' });
+  }
+
+  // 4. Rating
+  if (booking.rating) {
+    if (booking.rating >= 4) {
+      badges.push({ label: `${booking.rating}★`, color: 'bg-amber-100 text-amber-800' });
+    } else {
+      badges.push({ label: `${booking.rating}★`, color: 'bg-red-100 text-red-800' });
+    }
+  }
+
+  // 5. Review status
+  if (booking.status === 'review_clicked') {
+    badges.push({ label: 'Avis cliqué', color: 'bg-amber-100 text-amber-700' });
+  } else if (booking.status === 'no_review_selected') {
+    badges.push({ label: 'Sans avis', color: 'bg-gray-100 text-gray-700' });
+  } else if (booking.status === 'review_matched' || booking.status === 'review_detected') {
+    badges.push({ label: 'Avis Google', color: 'bg-green-100 text-green-800' });
+  } else if (booking.status === 'manual_check_required') {
+    badges.push({ label: 'Vérif. manuelle', color: 'bg-red-100 text-red-800' });
+  }
+
+  // 6. Gallery
+  if (booking.galleryUrl) {
+    badges.push({ label: 'Drive', color: 'bg-green-50 text-green-700' });
+  }
+
+  // 7. Gallery sent
+  if (booking.status === 'gallery_sent') {
+    badges.push({ label: 'Photos envoyées', color: 'bg-emerald-100 text-emerald-800' });
+  }
+
+  return badges;
+}
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00Z');
@@ -322,8 +358,7 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
   sending: boolean;
 }) {
   const booking = event.booking;
-  const showStatus = booking && booking.status !== 'link_sent';
-  const statusInfo = showStatus ? STATUS_LABELS[booking.status] || { label: booking.status, color: 'bg-gray-100 text-gray-600' } : null;
+  const badges = getBookingBadges(booking);
 
   const displayName = booking?.customerName || event.clientName;
   const [editing, setEditing] = useState(false);
@@ -363,17 +398,21 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
 
   return (
     <Card className="p-4 flex flex-col justify-between">
-      {/* Header: date + status */}
+      {/* Header: date + badges */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="flex items-center gap-1 text-sm text-gray-500">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <span className="flex items-center gap-1 text-sm text-gray-500 flex-shrink-0">
             <CalendarDaysIcon className="h-4 w-4" />
             {formatDateRange(event.startDate, event.endDate)}
           </span>
-          {statusInfo && (
-            <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap', statusInfo.color)}>
-              {statusInfo.label}
-            </span>
+          {badges.length > 0 && (
+            <div className="flex flex-wrap justify-end gap-1">
+              {badges.map((b, i) => (
+                <span key={i} className={clsx('px-1.5 py-0.5 text-[10px] font-medium rounded-full whitespace-nowrap', b.color)}>
+                  {b.label}
+                </span>
+              ))}
+            </div>
           )}
         </div>
 
@@ -408,39 +447,12 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
           )}
         </div>
 
-        {/* Star rating */}
-        {booking?.rating && (
-          <div className="flex items-center gap-0.5 mb-2">
-            {[1, 2, 3, 4, 5].map((s) => (
-              <svg key={s} className={clsx('h-4 w-4', s <= booking.rating! ? 'text-amber-400' : 'text-gray-200')} fill="currentColor" viewBox="0 0 24 24">
-                <path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
-              </svg>
-            ))}
+        {/* Type de borne */}
+        {event.produitNom && (
+          <div className="mb-2">
+            <Badge variant="default" size="sm">{event.produitNom}</Badge>
           </div>
         )}
-
-        {/* Type de borne + infos */}
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          {event.produitNom && <Badge variant="default" size="sm">{event.produitNom}</Badge>}
-          {booking?.emailSentAt && (
-            <span className="flex items-center gap-1 text-xs text-gray-400">
-              <CheckCircleIcon className="h-3 w-3 text-green-500" />
-              Envoyé {new Date(booking.emailSentAt).toLocaleDateString('fr-FR')}
-            </span>
-          )}
-          {booking && booking._count.events > 0 && (
-            <span className="flex items-center gap-1 text-xs text-gray-400">
-              <EyeIcon className="h-3 w-3" />
-              {booking._count.events}
-            </span>
-          )}
-          {booking && booking._count.reviewMatches > 0 && (
-            <span className="flex items-center gap-1 text-xs text-amber-600">
-              <StarIcon className="h-3 w-3" />
-              {booking._count.reviewMatches}
-            </span>
-          )}
-        </div>
 
         {/* Inline email field */}
         <div className="mb-3">
