@@ -7,7 +7,7 @@ import { config } from '../config/index.js';
 import { scheduleGalleryDispatch } from '../services/galleryDispatch.service.js';
 import { processNewReview } from '../services/reviewMatching.service.js';
 import { fetchReview, parsePubSubMessage, isGoogleBusinessConfigured } from '../services/googleBusiness.service.js';
-import { renameDriveFolder, buildFolderName, isDriveConfigured } from '../services/googleDrive.service.js';
+import { renameDriveFolder, buildFolderName, isDriveConfigured, listFolderThumbnails } from '../services/googleDrive.service.js';
 import { sendReviewLinkEmail, sendGalleryDirectEmail } from '../services/email.service.js';
 
 // ===========================
@@ -82,6 +82,16 @@ export const getBookingByToken = asyncHandler(async (req: Request, res: Response
     });
   }
 
+  // Fetch thumbnails from Drive folder (non-blocking, fail-safe)
+  let thumbnails: string[] = [];
+  if (booking.galleryUrl) {
+    try {
+      thumbnails = await listFolderThumbnails(booking.galleryUrl);
+    } catch (err) {
+      console.error('[BookingByToken] Failed to fetch thumbnails:', err);
+    }
+  }
+
   return apiResponse.success(res, {
     status: booking.status,
     customerName: booking.customerName,
@@ -90,6 +100,7 @@ export const getBookingByToken = asyncHandler(async (req: Request, res: Response
     senderBrand: booking.senderBrand,
     rating: booking.rating,
     hasGoogleReview: !!booking.googleReviewUrl,
+    thumbnails,
   });
 });
 

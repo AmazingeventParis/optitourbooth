@@ -171,6 +171,32 @@ export async function renameDriveFolder(galleryUrl: string, newName: string): Pr
 }
 
 /**
+ * List image thumbnails from a Google Drive folder (by folder URL).
+ * Returns an array of thumbnail URLs (max 20 images).
+ */
+export async function listFolderThumbnails(galleryUrl: string): Promise<string[]> {
+  const match = galleryUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (!match) return [];
+
+  const folderId = match[1];
+  const drive = getDriveClient();
+
+  const response = await drive.files.list({
+    q: `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`,
+    fields: 'files(id, thumbnailLink)',
+    pageSize: 20,
+    supportsAllDrives: true,
+    orderBy: 'createdTime desc',
+  });
+
+  if (!response.data.files) return [];
+
+  return response.data.files
+    .filter(f => f.thumbnailLink)
+    .map(f => f.thumbnailLink!.replace(/=s\d+/, '=s400'));
+}
+
+/**
  * Check if Google Drive integration is configured and enabled
  */
 export function isDriveConfigured(): boolean {

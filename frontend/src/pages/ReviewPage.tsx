@@ -14,10 +14,39 @@ interface BookingData {
   senderBrand?: string | null;
   rating?: number | null;
   hasGoogleReview: boolean;
+  thumbnails?: string[];
 }
 
 function generateSessionId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+
+function PhotoBackground({ thumbnails }: { thumbnails: string[] }) {
+  if (!thumbnails.length) return null;
+
+  return (
+    <div className="fixed inset-0 overflow-hidden z-0">
+      {/* Grid of photos */}
+      <div className="absolute inset-0 grid grid-cols-3 sm:grid-cols-4 gap-1 p-1 animate-photo-scroll">
+        {[...thumbnails, ...thumbnails, ...thumbnails].slice(0, 36).map((url, i) => (
+          <div
+            key={i}
+            className="aspect-square overflow-hidden rounded-lg"
+            style={{ animationDelay: `${i * 0.15}s` }}
+          >
+            <img
+              src={url}
+              alt=""
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          </div>
+        ))}
+      </div>
+      {/* Blur + dark overlay */}
+      <div className="absolute inset-0 backdrop-blur-md bg-gray-900/60" />
+    </div>
+  );
 }
 
 function StarIcon({ filled, hovered }: { filled: boolean; hovered: boolean }) {
@@ -148,21 +177,6 @@ export default function ReviewPage() {
     }
   };
 
-  const handleNoReviewClick = async () => {
-    if (!token) return;
-
-    try {
-      await axios.post(`${API_URL}/public/bookings/${token}/actions/no-review-click`, {
-        session_id: sessionId,
-        user_agent: navigator.userAgent,
-        referrer: document.referrer,
-      });
-
-      setPageState('no_review_done');
-    } catch {
-      setErrorMessage('Une erreur est survenue. Veuillez réessayer.');
-    }
-  };
 
   const ratingLabel = (r: number) => {
     if (r <= 1) return 'Très insatisfait';
@@ -172,9 +186,12 @@ export default function ReviewPage() {
     return 'Très satisfait';
   };
 
+  const showPhotoBg = (pageState === 'ask_review' || pageState === 'rating') && (booking?.thumbnails?.length ?? 0) > 0;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 relative">
+      {showPhotoBg && <PhotoBackground thumbnails={booking!.thumbnails!} />}
+      <div className="w-full max-w-md relative z-10">
         {/* Logo / Branding */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 mb-4">

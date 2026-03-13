@@ -214,3 +214,17 @@
   animation: none !important;
   transition: none !important;
 }
+
+/* Review page - photo background slow scroll animation */
+@keyframes photo-scroll {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-33.33%);
+  }
+}
+
+.animate-photo-scroll {
+  animation: photo-scroll 30s linear infinite;
+}
