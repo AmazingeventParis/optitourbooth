@@ -45,7 +45,6 @@ function PhotoBackground({ thumbnails }: { thumbnails: string[] }) {
               <div
                 key={i}
                 className="w-full rounded-xl overflow-hidden flex-shrink-0"
-                style={{ aspectRatio: colIdx % 2 === 0 ? '3/4' : '4/5' }}
               >
                 <img
                   src={url}
