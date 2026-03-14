@@ -4,7 +4,7 @@ import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { config } from '../config/index.js';
-import { scheduleGalleryDispatch } from '../services/galleryDispatch.service.js';
+import { scheduleGalleryDispatch, cancelPendingDispatches } from '../services/galleryDispatch.service.js';
 import { processNewReview } from '../services/reviewMatching.service.js';
 import { fetchReview, parsePubSubMessage, isGoogleBusinessConfigured } from '../services/googleBusiness.service.js';
 import { renameDriveFolder, buildFolderName, isDriveConfigured, listFolderThumbnails } from '../services/googleDrive.service.js';
@@ -152,18 +152,10 @@ export const handleStarRating = asyncHandler(async (req: Request, res: Response)
   });
 
   if (isLowRating) {
-    // Low rating: give immediate access to gallery + send Drive link by email
+    // Low rating: give immediate access to gallery via dispatch system (prevents duplicates)
     if (booking.customerEmail && booking.galleryUrl) {
-      const brand = (booking.senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
-      sendGalleryDirectEmail({
-        to: booking.customerEmail,
-        customerName: booking.customerName,
-        galleryUrl: booking.galleryUrl,
-        brand,
-      }).then(() => {
-        console.log(`[StarRating] Gallery email sent to ${booking.customerEmail} (low rating ${rating})`);
-      }).catch(err => {
-        console.error(`[StarRating] Failed to send gallery email:`, err);
+      scheduleGalleryDispatch(booking.id, 'after_review', new Date()).catch(err => {
+        console.error(`[StarRating] Failed to schedule gallery dispatch:`, err);
       });
     }
 
@@ -530,6 +522,9 @@ export const manualSendGallery = asyncHandler(async (req: Request, res: Response
     ? requestedBrand
     : (booking.senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
 
+  // Cancel any pending automatic dispatches before sending manually
+  await cancelPendingDispatches(booking.id);
+
   try {
     await sendGalleryDirectEmail({
       to: booking.customerEmail,
@@ -541,6 +536,23 @@ export const manualSendGallery = asyncHandler(async (req: Request, res: Response
     console.error(`[Booking] Erreur envoi galerie:`, err);
     return apiResponse.serverError(res, `Erreur lors de l'envoi: ${(err as Error).message}`);
   }
+
+  // Record as dispatch to prevent future duplicates
+  await prisma.galleryDispatch.create({
+    data: {
+      booking: { connect: { id } },
+      dispatchType: 'manual',
+      scheduledFor: new Date(),
+      channel: 'email',
+      deliveryStatus: 'sent',
+      sentAt: new Date(),
+      payloadJson: {
+        to: booking.customerEmail,
+        galleryUrl: booking.galleryUrl,
+        customerName: booking.customerName,
+      },
+    },
+  });
 
   await prisma.booking.update({
     where: { id },

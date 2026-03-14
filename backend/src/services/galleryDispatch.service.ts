@@ -106,6 +106,16 @@ export async function sendGallery(dispatchId: string): Promise<void> {
 
   const { booking } = dispatch;
 
+  // Anti-doublon: check if booking already has gallery sent (e.g. manual send)
+  if (booking.status === 'gallery_sent') {
+    console.log(`[GalleryDispatch] Booking ${booking.id} already has gallery_sent status, cancelling dispatch`);
+    await prisma.galleryDispatch.update({
+      where: { id: dispatchId },
+      data: { deliveryStatus: 'cancelled' },
+    });
+    return;
+  }
+
   if (!booking.galleryUrl) {
     console.warn(`[GalleryDispatch] No gallery URL for booking ${booking.id}`);
     await prisma.galleryDispatch.update({
