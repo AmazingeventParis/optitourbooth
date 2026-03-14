@@ -794,19 +794,14 @@ export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) =>
     return apiResponse.notFound(res, 'Réservation introuvable');
   }
 
+  // Anti-doublon: check if review email already sent
+  if (booking.emailSentAt) {
+    return apiResponse.badRequest(res, `Un email d'avis a déjà été envoyé pour ce client le ${booking.emailSentAt.toLocaleDateString('fr-FR')}`);
+  }
+
   const publicUrl = `${config.reviewSystem.publicBaseUrl}/galerie/${booking.publicToken}`;
 
   const brand = (senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
-
-  // Update email + sender brand on booking
-  await prisma.booking.update({
-    where: { id },
-    data: {
-      customerEmail: email,
-      emailSentAt: new Date(),
-      senderBrand: brand,
-    },
-  });
 
   // Send actual email
   try {
@@ -821,6 +816,16 @@ export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) =>
     console.error(`[Booking] Erreur envoi email:`, err);
     return apiResponse.serverError(res, `Erreur lors de l'envoi de l'email: ${(err as Error).message}`);
   }
+
+  // Update email + sender brand + mark as sent
+  await prisma.booking.update({
+    where: { id },
+    data: {
+      customerEmail: email,
+      emailSentAt: new Date(),
+      senderBrand: brand,
+    },
+  });
 
   return apiResponse.success(res, {
     message: `Lien envoyé à ${email} via ${brand}`,
