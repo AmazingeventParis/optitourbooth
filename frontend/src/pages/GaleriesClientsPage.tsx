@@ -91,6 +91,24 @@ function formatDateRange(start: string, end: string): string {
   return `${s.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} → ${e.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
+/** Extract available year-month options from events */
+function getMonthOptions(events: CalendarEvent[]): Array<{ value: string; label: string; count: number }> {
+  const map = new Map<string, number>();
+  for (const ev of events) {
+    const d = new Date(ev.startDate + 'T12:00:00Z');
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, count]) => {
+      const [y, m] = key.split('-');
+      const d = new Date(Number(y), Number(m) - 1, 15);
+      const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      return { value: key, label: label.charAt(0).toUpperCase() + label.slice(1), count };
+    });
+}
+
 /** Build the public URL with brand query param */
 function buildBrandUrl(publicUrl: string, brand: 'SHOOTNBOX' | 'SMAKK'): string {
   const url = new URL(publicUrl);
@@ -104,6 +122,7 @@ export default function GaleriesClientsPage() {
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
   const [search, setSearch] = useState('');
   const [starFilter, setStarFilter] = useState<number | null>(null); // null = all, 0 = no rating, 1-5 = specific
+  const [monthFilter, setMonthFilter] = useState<string | null>(null); // null = all, "2026-03" = specific month
 
   const [sending, setSending] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -246,6 +265,13 @@ export default function GaleriesClientsPage() {
 
   const filterEvents = (list: CalendarEvent[]) => {
     let result = list;
+    if (monthFilter) {
+      result = result.filter(ev => {
+        const d = new Date(ev.startDate + 'T12:00:00Z');
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return key === monthFilter;
+      });
+    }
     if (search.trim()) {
       const q = search.toLowerCase().trim();
       result = result.filter(ev => (ev.booking?.customerName || ev.clientName).toLowerCase().includes(q));
@@ -324,17 +350,42 @@ export default function GaleriesClientsPage() {
         )}
       </div>
 
-      {/* Star filter */}
-      <StarFilter
-        events={[...events.upcoming, ...events.past]}
-        value={starFilter}
-        onChange={setStarFilter}
-      />
+      {/* Filters row */}
+      <div className="flex flex-wrap items-center gap-4">
+        {/* Month filter */}
+        <div className="flex items-center gap-2">
+          <CalendarDaysIcon className="h-4 w-4 text-gray-400" />
+          <select
+            value={monthFilter || ''}
+            onChange={(e) => setMonthFilter(e.target.value || null)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+          >
+            <option value="">Tous les mois</option>
+            {getMonthOptions(tab === 'upcoming' ? events.upcoming : events.past).map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label} ({opt.count})
+              </option>
+            ))}
+          </select>
+          {monthFilter && (
+            <button onClick={() => setMonthFilter(null)} className="text-gray-400 hover:text-gray-600">
+              <XMarkIcon className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Star filter */}
+        <StarFilter
+          events={[...events.upcoming, ...events.past]}
+          value={starFilter}
+          onChange={setStarFilter}
+        />
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-2 border-b">
         <button
-          onClick={() => setTab('upcoming')}
+          onClick={() => { setTab('upcoming'); setMonthFilter(null); }}
           className={clsx(
             'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
             tab === 'upcoming' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -343,7 +394,7 @@ export default function GaleriesClientsPage() {
           A venir ({filteredUpcoming.length})
         </button>
         <button
-          onClick={() => setTab('past')}
+          onClick={() => { setTab('past'); setMonthFilter(null); }}
           className={clsx(
             'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
             tab === 'past' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
