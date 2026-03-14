@@ -106,6 +106,13 @@ export default function GaleriesClientsPage() {
   const [starFilter, setStarFilter] = useState<number | null>(null); // null = all, 0 = no rating, 1-5 = specific
 
   const [sending, setSending] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    type: 'review' | 'gallery';
+    event: CalendarEvent;
+    brand: 'SHOOTNBOX' | 'SMAKK';
+    email?: string;
+    sentAt: string;
+  } | null>(null);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -163,10 +170,21 @@ export default function GaleriesClientsPage() {
       toast.error('Sauvegardez un email d\'abord');
       return;
     }
+    // Check if gallery already sent
+    if (ev.booking.status === 'gallery_sent') {
+      // Find the most recent gallery dispatch sentAt from booking events or use a fallback
+      const sentAt = ev.booking.gallerySentAt || '';
+      setConfirmDialog({ type: 'gallery', event: ev, brand, sentAt });
+      return;
+    }
+    await doSendDrive(ev, brand);
+  };
+
+  const doSendDrive = async (ev: CalendarEvent, brand: 'SHOOTNBOX' | 'SMAKK') => {
     setSending(true);
     try {
-      await bookingsService.sendGallery(ev.booking.id, brand);
-      toast.success(`Photos envoyées via ${brand} à ${ev.booking.customerEmail}`);
+      await bookingsService.sendGallery(ev.booking!.id, brand);
+      toast.success(`Photos envoyées via ${brand} à ${ev.booking!.customerEmail}`);
       fetchEvents();
     } catch (err: any) {
       toast.error(err?.message || "Erreur lors de l'envoi");
@@ -181,6 +199,15 @@ export default function GaleriesClientsPage() {
       toast.error('Email requis');
       return;
     }
+    // Check if review email already sent
+    if (ev.booking?.emailSentAt) {
+      setConfirmDialog({ type: 'review', event: ev, brand, email, sentAt: ev.booking.emailSentAt });
+      return;
+    }
+    await doSendReview(ev, brand, email);
+  };
+
+  const doSendReview = async (ev: CalendarEvent, brand: 'SHOOTNBOX' | 'SMAKK', email: string) => {
     setSending(true);
     try {
       const { id } = await ensureBooking(ev);
@@ -349,6 +376,47 @@ export default function GaleriesClientsPage() {
               sending={sending}
             />
           ))}
+        </div>
+      )}
+
+      {/* Confirmation dialog for re-sending emails */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {confirmDialog.type === 'review' ? 'Email d\'avis déjà envoyé' : 'Email de photos déjà envoyé'}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Un email {confirmDialog.type === 'review' ? 'd\'avis' : 'de photos'} a déjà été envoyé
+              {confirmDialog.sentAt && (
+                <> le <strong>{new Date(confirmDialog.sentAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {new Date(confirmDialog.sentAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</strong></>
+              )}.
+              <br />Souhaitez-vous renvoyer ?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Fermer
+              </button>
+              <button
+                onClick={async () => {
+                  const { type, event, brand, email } = confirmDialog;
+                  setConfirmDialog(null);
+                  if (type === 'review' && email) {
+                    await doSendReview(event, brand, email);
+                  } else if (type === 'gallery') {
+                    await doSendDrive(event, brand);
+                  }
+                }}
+                disabled={sending}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Envoyer
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -667,6 +667,12 @@ export const listCalendarEvents = asyncHandler(async (_req: Request, res: Respon
     where: { googleEventId: { not: null } },
     include: {
       _count: { select: { events: true, reviewMatches: true, galleryDispatches: true } },
+      galleryDispatches: {
+        where: { deliveryStatus: 'sent' },
+        orderBy: { sentAt: 'desc' },
+        take: 1,
+        select: { sentAt: true },
+      },
     },
   });
 
@@ -715,6 +721,7 @@ export const listCalendarEvents = asyncHandler(async (_req: Request, res: Respon
         googleReviewUrl: booking.googleReviewUrl,
         status: booking.status,
         emailSentAt: booking.emailSentAt,
+        gallerySentAt: booking.galleryDispatches?.[0]?.sentAt || null,
         photosNotUnloaded: booking.photosNotUnloaded,
         createdAt: booking.createdAt,
         _count: booking._count,
@@ -792,11 +799,6 @@ export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) =>
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) {
     return apiResponse.notFound(res, 'Réservation introuvable');
-  }
-
-  // Anti-doublon: check if review email already sent
-  if (booking.emailSentAt) {
-    return apiResponse.badRequest(res, `Un email d'avis a déjà été envoyé pour ce client le ${booking.emailSentAt.toLocaleDateString('fr-FR')}`);
   }
 
   const publicUrl = `${config.reviewSystem.publicBaseUrl}/galerie/${booking.publicToken}`;
