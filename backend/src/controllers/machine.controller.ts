@@ -89,7 +89,7 @@ export const uploadMachineImage = async (req: Request, res: Response) => {
     }
 
     // Vérifier que le type est valide
-    if (!['Vegas', 'Smakk', 'Ring'].includes(type)) {
+    if (!['Vegas', 'Smakk', 'Ring', 'Miroir', 'Playbox', 'Aircam', 'Spinner'].includes(type)) {
       return res.status(400).json({ error: 'Type de machine invalide' });
     }
 
