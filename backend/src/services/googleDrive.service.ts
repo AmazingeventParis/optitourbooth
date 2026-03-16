@@ -124,17 +124,32 @@ async function listDriveFolders(): Promise<Array<{ id: string; name: string; web
 }
 
 /**
- * Count files in a Google Drive folder
+ * Count files recursively in a Google Drive folder (includes subfolders)
  */
 export async function countFolderFiles(folderId: string): Promise<number> {
   const drive = getDriveClient();
+
+  // Get all items in this folder
   const response = await drive.files.list({
     q: `'${folderId}' in parents and trashed = false`,
-    fields: 'files(id)',
+    fields: 'files(id, mimeType)',
     pageSize: 1000,
     supportsAllDrives: true,
   });
-  return response.data.files?.length || 0;
+
+  const files = response.data.files || [];
+  let count = 0;
+
+  for (const file of files) {
+    if (file.mimeType === 'application/vnd.google-apps.folder') {
+      // Recurse into subfolder
+      count += await countFolderFiles(file.id!);
+    } else {
+      count++;
+    }
+  }
+
+  return count;
 }
 
 /**
