@@ -5,9 +5,9 @@ import { config } from '../config/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
 import { createDriveFolder, buildFolderName, isDriveConfigured } from './googleDrive.service.js';
 
-// Regex pour matcher tout tag entre parenthèses au début du titre :
-// (LIR), (LIR MIROIR), (R VEGAS newww), (L RING), (SMAKK), etc.
-const EVENT_TAG_REGEX = /^\([^)]+\)/i;
+// Regex pour matcher tout événement dont le titre commence par une parenthèse
+// (LIR), (LIR MIROIR), (R VEGAS newww), (L RING), (SMAKK), () etc.
+const EVENT_TAG_REGEX = /^\([^)]*\)/;
 
 // Ancien format LIR uniquement (pour compatibilité dans l'extraction du contenu)
 const LIR_PREFIX_REGEX = /^\(LIR\s*/i;
