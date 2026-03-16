@@ -436,6 +436,16 @@ export async function syncGoogleCalendarEvents(): Promise<{
         (e) => e.summary && EVENT_TAG_REGEX.test(e.summary.trim())
       );
 
+      // Log les pièces jointes trouvées
+      for (const ev of taggedEvents) {
+        if (ev.attachments && ev.attachments.length > 0) {
+          console.log(`[Google Calendar] 📎 "${ev.summary}" a ${ev.attachments.length} pièce(s) jointe(s):`);
+          for (const att of ev.attachments) {
+            console.log(`  - ${att.title || att.fileId} (${att.mimeType}) → ${att.fileUrl}`);
+          }
+        }
+      }
+
       console.log(`[Google Calendar] ${calId}: ${taggedEvents.length} événements taggés sur ${events.length} total`);
       allTaggedEvents.push(...taggedEvents.map(event => ({ event, calendarId: calId })));
     } catch (e) {
