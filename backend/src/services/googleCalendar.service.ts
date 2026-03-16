@@ -620,7 +620,9 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactTelephone,
           notes,
           calendarId,
-          // Ne pas écraser dispatched sur update : l'utilisateur peut l'avoir remis à false
+          // Non-LIR → forcer dispatched=true pour exclure du dispatch
+          // LIR → ne pas écraser dispatched (l'utilisateur peut l'avoir modifié)
+          ...(!isLivraison && { dispatched: true }),
         },
         create: {
           date: ensureDateUTC(startDate),
@@ -674,7 +676,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactTelephone,
           notes,
           calendarId,
-          // Ne pas écraser dispatched sur update : l'utilisateur peut l'avoir remis à false
+          ...(!isLivraison && { dispatched: true }),
         },
         create: {
           date: ensureDateUTC(endDate),
