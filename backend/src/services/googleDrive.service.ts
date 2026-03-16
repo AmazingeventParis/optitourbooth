@@ -195,14 +195,18 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
   let photoCountsUpdated = 0;
 
   for (const folder of parsedFolders) {
+    console.log(`[Drive Scan] Checking folder: "${folder.name}" → date=${folder.parsed.date.toISOString()}, client="${folder.parsed.clientName}"`);
     // Try to find a matching booking
     const matchedBooking = bookings.find(b => {
       // Skip if already matched to this exact folder
       if (b.driveFolderId === folder.id) return false;
-      // Date must be in range
-      if (!dateInRange(folder.parsed.date, b.eventDate, b.eventEndDate)) return false;
-      // Name must match
-      return namesMatch(folder.parsed.clientName, b.customerName);
+      const dateOk = dateInRange(folder.parsed.date, b.eventDate, b.eventEndDate);
+      const nameOk = namesMatch(folder.parsed.clientName, b.customerName);
+      if (dateOk || nameOk) {
+        console.log(`[Drive Scan]   vs booking "${b.customerName}" (${b.eventDate.toISOString()} - ${b.eventEndDate?.toISOString() || 'null'}): date=${dateOk}, name=${nameOk}`);
+      }
+      if (!dateOk) return false;
+      return nameOk;
     });
 
     if (matchedBooking) {
