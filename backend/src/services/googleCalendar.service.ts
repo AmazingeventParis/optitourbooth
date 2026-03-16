@@ -679,20 +679,95 @@ export async function syncGoogleCalendarEvents(): Promise<{
             },
           });
           console.log(`[Google Calendar] 📁 Dossier Drive + Booking créés pour "${clientName}" → ${folderUrl}`);
-        } else if (!existingBooking.galleryUrl) {
-          // Booking exists but no Drive folder yet - create one
-          const folderName = buildFolderName(clientName, startDate, produitNom);
-          const { folderUrl } = await createDriveFolder(folderName, startDate);
-          await prisma.booking.update({
-            where: { id: existingBooking.id },
-            data: { galleryUrl: folderUrl },
-          });
-          console.log(`[Google Calendar] 📁 Dossier Drive ajouté à booking existant "${clientName}" → ${folderUrl}`);
+        } else {
+          // Booking exists — update missing info (contact, Drive folder)
+          const bookingUpdate: Record<string, any> = {};
+          if (!existingBooking.galleryUrl) {
+            const folderName = buildFolderName(clientName, startDate, produitNom);
+            const { folderUrl } = await createDriveFolder(folderName, startDate);
+            bookingUpdate.galleryUrl = folderUrl;
+            console.log(`[Google Calendar] 📁 Dossier Drive ajouté à booking existant "${clientName}" → ${folderUrl}`);
+          }
+          if (contactTelephone && !existingBooking.customerPhone) {
+            bookingUpdate.customerPhone = contactTelephone;
+          }
+          if (Object.keys(bookingUpdate).length > 0) {
+            await prisma.booking.update({
+              where: { id: existingBooking.id },
+              data: bookingUpdate,
+            });
+          }
         }
       } catch (e) {
         console.error(`[Google Calendar] Erreur création dossier Drive pour ${clientName}:`, e);
       }
     }
+  }
+
+  // === PROPAGATION : mettre à jour les Clients liés aux points déjà dispatchés ===
+  // Quand un PendingPoint est mis à jour avec de nouvelles infos contact,
+  // les Clients déjà liés (via Points de tournée) doivent aussi être mis à jour
+  try {
+    const pendingPointsWithContacts = await prisma.pendingPoint.findMany({
+      where: {
+        source: 'google_calendar',
+        OR: [
+          { contactNom: { not: null } },
+          { contactTelephone: { not: null } },
+        ],
+      },
+      select: {
+        clientName: true,
+        contactNom: true,
+        contactTelephone: true,
+      },
+    });
+
+    let contactsUpdated = 0;
+    for (const pp of pendingPointsWithContacts) {
+      if (!pp.contactNom && !pp.contactTelephone) continue;
+
+      // Find clients by name (case-insensitive) that are missing contact info
+      const matchingClients = await prisma.client.findMany({
+        where: {
+          OR: [
+            { nom: { equals: pp.clientName, mode: 'insensitive' } },
+            { societe: { equals: pp.clientName, mode: 'insensitive' } },
+          ],
+          AND: [
+            {
+              OR: [
+                { contactNom: null },
+                { contactNom: '' },
+                { contactTelephone: null },
+                { contactTelephone: '' },
+              ],
+            },
+          ],
+        },
+      });
+
+      for (const client of matchingClients) {
+        const updateData: Record<string, string> = {};
+        if (pp.contactNom && !client.contactNom) updateData.contactNom = pp.contactNom;
+        if (pp.contactTelephone && !client.contactTelephone) updateData.contactTelephone = pp.contactTelephone;
+
+        if (Object.keys(updateData).length > 0) {
+          await prisma.client.update({
+            where: { id: client.id },
+            data: updateData,
+          });
+          contactsUpdated++;
+          console.log(`[Google Calendar] 📇 Contact mis à jour pour client "${client.nom || client.societe}": ${JSON.stringify(updateData)}`);
+        }
+      }
+    }
+
+    if (contactsUpdated > 0) {
+      console.log(`[Google Calendar] ${contactsUpdated} client(s) mis à jour avec infos contact`);
+    }
+  } catch (e) {
+    console.error('[Google Calendar] Erreur propagation contacts:', e);
   }
 
   console.log(`[Google Calendar] Sync terminée: ${created} créés, ${skipped} déjà en tournée, ${errors} erreurs`);
