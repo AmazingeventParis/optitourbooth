@@ -499,6 +499,10 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Enlever le préfixe LIR/L/R/LR s'il est seul au début pour extraire le nom produit
     const tagContent = tagInner.replace(/^(?:LIR|LR|L|R)\s+/i, '').trim();
 
+    // (LIR...) = livraison → visible dans points à dispatcher
+    // Autres tags = retrait/autre → visible uniquement dans préparations et galeries
+    const isLivraison = /^LIR\b/i.test(tagInner);
+
     // Vérifier si le tag est dans la liste des tags ignorés
     if (TAGS_IGNORED.includes(tagContent) || TAGS_IGNORED.includes(tagInner)) {
       // Supprimer les points déjà créés pour cet événement ignoré
@@ -632,10 +636,14 @@ export async function syncGoogleCalendarEvents(): Promise<{
           source: 'google_calendar',
           calendarId,
           externalId: `${eventId}_livraison`,
-          dispatched: livAlreadyInTournee,
+          // Non-LIR (retraits, etc.) → dispatched=true pour ne pas apparaître dans les points à dispatcher
+          dispatched: !isLivraison || livAlreadyInTournee,
         },
       });
-      if (livAlreadyInTournee) {
+      if (!isLivraison) {
+        console.log(`[Google Calendar] ${clientName} ${startDate} → non-LIR (${tagInner}), visible prépa/galeries uniquement`);
+        created++;
+      } else if (livAlreadyInTournee) {
         skipped++;
         console.log(`[Google Calendar] ${clientName} livraison ${startDate} → déjà dans tournée, skip`);
       } else {
@@ -682,7 +690,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           source: 'google_calendar',
           calendarId,
           externalId: `${eventId}_ramassage`,
-          dispatched: recAlreadyInTournee,
+          dispatched: !isLivraison || recAlreadyInTournee,
         },
       });
       if (recAlreadyInTournee) {
