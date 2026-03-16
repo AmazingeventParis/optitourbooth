@@ -57,8 +57,12 @@ const ADDRESS_REGEX = new RegExp(`\\d+\\s*[,.]?\\s*(?:${STREET_TYPES})\\b`, 'i')
 // Code postal français : 75002 PARIS, 92100 Boulogne-Billancourt
 const POSTAL_CODE_REGEX = /\b\d{5}\s+[A-ZÀ-Ü][a-zA-ZÀ-ü\s-]+/;
 
-// Date française longue : "Vendredi 13 mars 2026", "lundi 5 janvier 2025"
-const DATE_FR_LONG = /(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+\d{1,2}\s+(?:janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[ûu]t|septembre|octobre|novembre|d[ée]cembre)\s+\d{4}/i;
+// Date française longue : "Vendredi 13 mars 2026", "lundi 5 janvier 2025", "Le 20 mars 2026", "Le 21 mars"
+const MONTH_NAMES = 'janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[ûu]t|septembre|octobre|novembre|d[ée]cembre';
+const DATE_FR_LONG = new RegExp(
+  `(?:(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|le)\\s+)?\\d{1,2}\\s+(?:${MONTH_NAMES})(?:\\s+\\d{4})?`,
+  'i'
+);
 
 // Date numérique : "18/03/2026", "18.03.2026", "18-03-2026", "2026-03-18"
 const DATE_NUMERIC = /\b\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}\b|\b\d{4}[/.\-]\d{1,2}[/.\-]\d{1,2}\b/;
@@ -79,23 +83,33 @@ function cleanHtml(text: string): string {
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/?(p|div|span|b|i|u|strong|em|a|ul|li|ol|table|tr|td|th|thead|tbody|h[1-6]|blockquote|pre|hr|img|figure|figcaption)[^>]*>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
+    // HTML entities → characters
+    .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&#?\w+;/g, '')
+    // Numeric HTML entities (&#160; &#x00A0; etc.) → convert to char, not delete
+    .replace(/&#(\d+);/g, (_m, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)))
+    // Remove any remaining named HTML entities
+    .replace(/&\w+;/g, ' ')
+    // Unicode whitespace normalization (NBSP, zero-width spaces, etc.)
+    .replace(/[\u00A0\u200B\u200C\u200D\uFEFF]/g, ' ')
     .trim();
 }
 
-// Normaliser les espaces multiples, tabulations
+// Normaliser les espaces multiples, tabulations, et tout type de whitespace
 function normalizeSpaces(text: string): string {
-  return text.replace(/[\t ]+/g, ' ').trim();
+  return text.replace(/[\s]+/g, ' ').trim();
 }
 
 function containsDate(line: string): boolean {
-  return DATE_FR_LONG.test(line) || DATE_NUMERIC.test(line);
+  if (DATE_FR_LONG.test(line)) return true;
+  if (DATE_NUMERIC.test(line)) return true;
+  // "Le 20 mars", "20 mars" without year (already covered by updated DATE_FR_LONG)
+  return false;
 }
 
 function containsTimeSlot(line: string): boolean {
@@ -103,6 +117,7 @@ function containsTimeSlot(line: string): boolean {
 }
 
 function containsPhone(line: string): boolean {
+  PHONE_REGEX.lastIndex = 0;
   return PHONE_REGEX.test(line);
 }
 
@@ -317,7 +332,7 @@ function parseDescription(rawDescription: string): ParsedDescription {
     }
   }
 
-  return {
+  const result = {
     adresse,
     contactNom: contactNom ? normalizeSpaces(contactNom) : null,
     contactTelephone,
@@ -325,6 +340,11 @@ function parseDescription(rawDescription: string): ParsedDescription {
     creneauRecuperation,
     notes: notesLines.filter(l => l.length > 1 && l !== contactNom).join(' | '),
   };
+
+  console.log(`[ParseDescription] Lines: ${JSON.stringify(lines)}`);
+  console.log(`[ParseDescription] Result: contact=${result.contactNom}, tel=${result.contactTelephone}, addr=${result.adresse}, liv=${result.creneauLivraison}, rec=${result.creneauRecuperation}`);
+
+  return result;
 
   function extractContact(text: string) {
     // Reset le regex (flag g = stateful)
