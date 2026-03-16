@@ -646,17 +646,15 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
           {/* Column SHOOTNBOX */}
           <div className="space-y-1.5">
             <div className="text-[10px] font-bold text-orange-600 uppercase text-center tracking-wider">Shootnbox</div>
-            {booking?.galleryUrl && (
-              <button
-                onClick={() => onSendDrive('SHOOTNBOX')}
-                disabled={sending || !emailValue.trim()}
-                className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50"
-                title={emailValue.trim() ? `Envoyer lien Drive via SHOOTNBOX à ${emailValue}` : "Saisissez un email d'abord"}
-              >
-                <FolderOpenIcon className="h-3.5 w-3.5" />
-                Envoyer Drive
-              </button>
-            )}
+            <button
+              onClick={() => onSendDrive('SHOOTNBOX')}
+              disabled={sending || !emailValue.trim() || !booking?.galleryUrl}
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={!booking?.galleryUrl ? 'Pas de dossier photo' : emailValue.trim() ? `Envoyer lien Drive via SHOOTNBOX à ${emailValue}` : "Saisissez un email d'abord"}
+            >
+              <FolderOpenIcon className="h-3.5 w-3.5" />
+              Envoyer Drive
+            </button>
             <button
               onClick={() => onCopyBrandUrl('SHOOTNBOX')}
               className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors"
@@ -679,17 +677,15 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
           {/* Column SMAKK */}
           <div className="space-y-1.5">
             <div className="text-[10px] font-bold text-purple-600 uppercase text-center tracking-wider">Smakk</div>
-            {booking?.galleryUrl && (
-              <button
-                onClick={() => onSendDrive('SMAKK')}
-                disabled={sending || !emailValue.trim()}
-                className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-colors disabled:opacity-50"
-                title={emailValue.trim() ? `Envoyer lien Drive via SMAKK à ${emailValue}` : "Saisissez un email d'abord"}
-              >
-                <FolderOpenIcon className="h-3.5 w-3.5" />
-                Envoyer Drive
-              </button>
-            )}
+            <button
+              onClick={() => onSendDrive('SMAKK')}
+              disabled={sending || !emailValue.trim() || !booking?.galleryUrl}
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={!booking?.galleryUrl ? 'Pas de dossier photo' : emailValue.trim() ? `Envoyer lien Drive via SMAKK à ${emailValue}` : "Saisissez un email d'abord"}
+            >
+              <FolderOpenIcon className="h-3.5 w-3.5" />
+              Envoyer Drive
+            </button>
             <button
               onClick={() => onCopyBrandUrl('SMAKK')}
               className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors"
