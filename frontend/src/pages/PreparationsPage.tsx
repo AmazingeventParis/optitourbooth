@@ -1066,7 +1066,17 @@ export default function PreparationsPage() {
                     >
                       <option value="">-- Saisie manuelle --</option>
                       {calendarEvents
-                        .filter(ce => !evenements.some((ev, i) => i !== index && ev.pendingPointId === ce.id))
+                        .filter(ce => {
+                          // Exclude events already selected in other slots
+                          if (evenements.some((ev, i) => i !== index && ev.pendingPointId === ce.id)) return false;
+                          // Filter by machine type: show only matching produitNom or unidentified events
+                          if (!ce.produitNom || !selectedMachine) return true;
+                          const mt = selectedMachine.type;
+                          if (mt === 'Vegas') return ['Vegas', 'Playbox', 'Aircam', 'Spinner'].includes(ce.produitNom);
+                          if (mt === 'Ring') return ce.produitNom === 'Ring' || ce.produitNom === 'Miroir';
+                          if (mt === 'Smakk') return ce.produitNom === 'Smakk';
+                          return true;
+                        })
                         .map(ce => {
                           const dateStr = typeof ce.date === 'string'
                             ? ce.date.substring(0, 10)
