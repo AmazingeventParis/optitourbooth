@@ -157,7 +157,7 @@ export async function countFolderFiles(folderId: string): Promise<number> {
  * Folder format: "JJ.MM.AAAA Nom client"
  * Matching: date falls within booking date range + client name fuzzy match
  */
-export async function scanAndMatchDriveFolders(): Promise<{ matched: number; photoCountsUpdated: number; debug?: unknown }> {
+export async function scanAndMatchDriveFolders(): Promise<{ matched: number; photoCountsUpdated: number }> {
   if (!isDriveConfigured()) {
     console.log('[Drive Scan] Drive non configuré, scan ignoré');
     return { matched: 0, photoCountsUpdated: 0 };
@@ -195,18 +195,27 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
   let photoCountsUpdated = 0;
 
   for (const folder of parsedFolders) {
-    console.log(`[Drive Scan] Checking folder: "${folder.name}" → date=${folder.parsed.date.toISOString()}, client="${folder.parsed.clientName}"`);
     // Try to find a matching booking
+    // Check if a booking already has this driveFolderId but missing galleryUrl (e.g. after reset)
+    const alreadyMatched = bookings.find(b => b.driveFolderId === folder.id && !b.galleryUrl);
+    if (alreadyMatched) {
+      const photoCount = await countFolderFiles(folder.id);
+      await prisma.booking.update({
+        where: { id: alreadyMatched.id },
+        data: { galleryUrl: folder.webViewLink, photoCount },
+      });
+      alreadyMatched.galleryUrl = folder.webViewLink;
+      matched++;
+      console.log(`[Drive Scan] ✅ Re-linked: "${folder.name}" → booking "${alreadyMatched.customerName}"`);
+      continue;
+    }
+
     const matchedBooking = bookings.find(b => {
       // Skip if already matched to this exact folder
       if (b.driveFolderId === folder.id) return false;
       const dateOk = dateInRange(folder.parsed.date, b.eventDate, b.eventEndDate);
-      const nameOk = namesMatch(folder.parsed.clientName, b.customerName);
-      if (dateOk || nameOk) {
-        console.log(`[Drive Scan]   vs booking "${b.customerName}" (${b.eventDate.toISOString()} - ${b.eventEndDate?.toISOString() || 'null'}): date=${dateOk}, name=${nameOk}`);
-      }
       if (!dateOk) return false;
-      return nameOk;
+      return namesMatch(folder.parsed.clientName, b.customerName);
     });
 
     if (matchedBooking) {
@@ -252,15 +261,8 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
     }
   }
 
-  const debugInfo = {
-    totalDriveFolders: driveFolders.length,
-    parsedFolders: parsedFolders.map(f => ({ name: f.name, date: f.parsed.date.toISOString(), client: f.parsed.clientName })),
-    bookingsCount: bookings.length,
-    bookingSample: bookings.slice(0, 5).map(b => ({ id: b.id, name: b.customerName, start: b.eventDate.toISOString(), end: b.eventEndDate?.toISOString() || null, driveFolderId: b.driveFolderId, galleryUrl: b.galleryUrl ? 'set' : null })),
-  };
-
   console.log(`[Drive Scan] Terminé: ${matched} nouveaux matchs, ${photoCountsUpdated} compteurs mis à jour`);
-  return { matched, photoCountsUpdated, debug: debugInfo };
+  return { matched, photoCountsUpdated };
 }
 
 /**
