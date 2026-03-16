@@ -19,6 +19,7 @@ import {
   manualSendGallery,
   sendLinkEmail,
   resetGalleryUrls,
+  resetAllRatings,
   updateReviewMatchStatus,
   getBookingStats,
 } from '../controllers/booking.controller.js';
@@ -84,6 +85,9 @@ router.post('/bookings/:id/send-link-email', authenticate, requireAdmin, sendLin
 
 // Reset all gallery URLs (to force Drive folder recreation in monthly subfolders)
 router.post('/bookings/reset-gallery-urls', authenticate, requireAdmin, resetGalleryUrls);
+
+// Reset all ratings and revert associated statuses
+router.post('/bookings/reset-ratings', authenticate, requireAdmin, resetAllRatings);
 
 // Update review match status
 router.patch('/bookings/review-matches/:matchId/status', authenticate, requireAdmin, updateReviewMatchStatus);

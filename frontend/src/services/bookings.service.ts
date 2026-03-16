@@ -182,4 +182,9 @@ export const bookingsService = {
     const response = await api.post<ApiResponse<{ message: string; publicUrl: string }>>(`/bookings/${id}/send-link-email`, { email, senderBrand });
     return response.data.data;
   },
+
+  async resetAllRatings() {
+    const response = await api.post<ApiResponse<{ message: string; ratingsReset: number; statusesReverted: number }>>('/bookings/reset-ratings');
+    return response.data.data;
+  },
 };

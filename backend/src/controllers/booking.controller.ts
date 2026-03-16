@@ -445,7 +445,7 @@ export const getBookingDetail = asyncHandler(async (req: Request, res: Response)
  */
 export const updateBooking = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { customerName, customerEmail, customerPhone, eventDate, galleryUrl, googleReviewUrl, status, senderBrand } = req.body;
+  const { customerName, customerEmail, customerPhone, eventDate, galleryUrl, googleReviewUrl, status, senderBrand, rating } = req.body;
 
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) {
@@ -463,6 +463,7 @@ export const updateBooking = asyncHandler(async (req: Request, res: Response) =>
       ...(googleReviewUrl !== undefined && { googleReviewUrl }),
       ...(status && { status }),
       ...(senderBrand !== undefined && { senderBrand }),
+      ...(rating !== undefined && { rating }),
     },
   });
 
@@ -848,6 +849,30 @@ export const resetGalleryUrls = asyncHandler(async (_req: Request, res: Response
   return apiResponse.success(res, {
     message: `${result.count} galleryUrl réinitialisées`,
     count: result.count,
+  });
+});
+
+/**
+ * POST /api/bookings/reset-ratings
+ * Reset all booking ratings to null and revert statuses from rated_high/rated_low
+ */
+export const resetAllRatings = asyncHandler(async (_req: Request, res: Response) => {
+  // Reset ratings
+  const ratingResult = await prisma.booking.updateMany({
+    where: { rating: { not: null } },
+    data: { rating: null },
+  });
+
+  // Revert statuses that were set by the rating system
+  const statusResult = await prisma.booking.updateMany({
+    where: { status: { in: ['rated_high', 'rated_low'] } },
+    data: { status: 'page_viewed' },
+  });
+
+  return apiResponse.success(res, {
+    message: `${ratingResult.count} ratings réinitialisés, ${statusResult.count} statuts révertés`,
+    ratingsReset: ratingResult.count,
+    statusesReverted: statusResult.count,
   });
 });
 
