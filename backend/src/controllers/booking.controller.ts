@@ -7,7 +7,7 @@ import { config } from '../config/index.js';
 import { scheduleGalleryDispatch, cancelPendingDispatches } from '../services/galleryDispatch.service.js';
 import { processNewReview } from '../services/reviewMatching.service.js';
 import { fetchReview, parsePubSubMessage, isGoogleBusinessConfigured } from '../services/googleBusiness.service.js';
-import { renameDriveFolder, buildFolderName, isDriveConfigured, listFolderThumbnails } from '../services/googleDrive.service.js';
+import { isDriveConfigured, listFolderThumbnails, scanAndMatchDriveFolders } from '../services/googleDrive.service.js';
 import { sendReviewLinkEmail, sendGalleryDirectEmail } from '../services/email.service.js';
 
 // ===========================
@@ -467,17 +467,6 @@ export const updateBooking = asyncHandler(async (req: Request, res: Response) =>
     },
   });
 
-  // Rename Drive folder if customerName changed and a galleryUrl exists
-  if (customerName && customerName !== booking.customerName && booking.galleryUrl && isDriveConfigured()) {
-    try {
-      const dateStr = booking.eventDate.toISOString().substring(0, 10);
-      const newFolderName = buildFolderName(customerName, dateStr);
-      await renameDriveFolder(booking.galleryUrl, newFolderName);
-    } catch (e) {
-      console.error(`[Booking] Erreur renommage dossier Drive:`, e);
-    }
-  }
-
   return apiResponse.success(res, updated);
 });
 
@@ -724,6 +713,7 @@ export const listCalendarEvents = asyncHandler(async (_req: Request, res: Respon
         emailSentAt: booking.emailSentAt,
         gallerySentAt: booking.galleryDispatches?.[0]?.sentAt || null,
         photosNotUnloaded: booking.photosNotUnloaded,
+        photoCount: booking.photoCount ?? null,
         createdAt: booking.createdAt,
         _count: booking._count,
       } : null,
@@ -874,6 +864,15 @@ export const resetAllRatings = asyncHandler(async (_req: Request, res: Response)
     ratingsReset: ratingResult.count,
     statusesReverted: statusResult.count,
   });
+});
+
+/**
+ * POST /api/bookings/scan-drive-folders
+ * Manually trigger a Drive folder scan and match
+ */
+export const triggerDriveScan = asyncHandler(async (_req: Request, res: Response) => {
+  const result = await scanAndMatchDriveFolders();
+  return apiResponse.success(res, result);
 });
 
 /**

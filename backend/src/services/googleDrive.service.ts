@@ -1,5 +1,8 @@
 import { google } from 'googleapis';
 import { config } from '../config/index.js';
+import { prisma } from '../config/database.js';
+
+let scanInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Get authenticated Google Drive client using the same service account as Calendar
@@ -24,150 +27,257 @@ function getDriveClient() {
 }
 
 /**
- * Find or create a subfolder by name inside a given parent folder.
- * Returns the subfolder ID.
+ * Check if Google Drive integration is configured and enabled
  */
-async function getOrCreateSubfolder(drive: ReturnType<typeof getDriveClient>, parentId: string, name: string): Promise<string> {
-  const existing = await drive.files.list({
-    q: `name = '${name.replace(/'/g, "\\'")}' and '${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-    fields: 'files(id)',
-    supportsAllDrives: true,
-  });
-
-  if (existing.data.files && existing.data.files.length > 0) {
-    return existing.data.files[0]!.id!;
-  }
-
-  const response = await drive.files.create({
-    requestBody: {
-      name,
-      mimeType: 'application/vnd.google-apps.folder',
-      parents: [parentId],
-    },
-    fields: 'id',
-    supportsAllDrives: true,
-  });
-
-  const folderId = response.data.id!;
-
-  // Monthly subfolder also publicly accessible
-  await drive.permissions.create({
-    fileId: folderId,
-    requestBody: { role: 'reader', type: 'anyone' },
-    supportsAllDrives: true,
-  });
-
-  console.log(`[Google Drive] Sous-dossier mensuel créé: "${name}" (${folderId})`);
-  return folderId;
+export function isDriveConfigured(): boolean {
+  return !!(
+    config.googleDrive.enabled &&
+    config.googleDrive.parentFolderId &&
+    config.googleCalendar.serviceAccountBase64
+  );
 }
 
 /**
- * Build the monthly subfolder name from a date string.
- * Format: "YYYY-MM" (e.g. "2026-03")
+ * Normalize a string for fuzzy matching: strip accents, lowercase, remove special chars
  */
-function getMonthlyFolderName(startDate: string): string {
-  // startDate is "YYYY-MM-DD"
-  return startDate.substring(0, 7);
+function normalizeForMatch(name: string): string {
+  return name
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
- * Create a folder in Google Drive inside a monthly subfolder.
- * Structure: parentFolder / YYYY-MM / eventFolder
- * Returns the folder ID and shareable URL.
+ * Check if two client names match (case-insensitive, accent-insensitive, substring)
  */
-export async function createDriveFolder(folderName: string, startDate?: string): Promise<{
-  folderId: string;
-  folderUrl: string;
-}> {
+function namesMatch(folderName: string, bookingName: string): boolean {
+  const a = normalizeForMatch(folderName);
+  const b = normalizeForMatch(bookingName);
+  if (!a || !b) return false;
+  return a.includes(b) || b.includes(a);
+}
+
+/**
+ * Parse a folder name in format "JJ.MM.AAAA Nom client"
+ * Returns the date and client name, or null if format doesn't match
+ */
+function parseFolderName(name: string): { date: Date; clientName: string } | null {
+  const match = name.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(.+)$/);
+  if (!match) return null;
+
+  const day = parseInt(match[1]!, 10);
+  const month = parseInt(match[2]!, 10);
+  const year = parseInt(match[3]!, 10);
+  const clientName = match[4]!.trim();
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return { date, clientName };
+}
+
+/**
+ * Check if a date falls within a booking's date range (startDate to endDate)
+ */
+function dateInRange(date: Date, startDate: Date, endDate: Date | null): boolean {
+  const d = date.getTime();
+  const start = startDate.getTime();
+  const end = endDate ? endDate.getTime() : start;
+  return d >= start && d <= end;
+}
+
+/**
+ * List all folders in the parent Drive folder (flat, no subfolders)
+ */
+async function listDriveFolders(): Promise<Array<{ id: string; name: string; webViewLink: string }>> {
   const drive = getDriveClient();
-  const rootParentId = config.googleDrive.parentFolderId;
+  const parentId = config.googleDrive.parentFolderId;
+  const folders: Array<{ id: string; name: string; webViewLink: string }> = [];
 
-  // Determine the actual parent: monthly subfolder if startDate provided
-  let parentFolderId = rootParentId;
-  if (startDate) {
-    const monthlyName = getMonthlyFolderName(startDate);
-    parentFolderId = await getOrCreateSubfolder(drive, rootParentId, monthlyName);
-  }
+  let pageToken: string | undefined;
 
-  // Check if folder already exists with same name in parent
-  const existing = await drive.files.list({
-    q: `name = '${folderName.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-    fields: 'files(id, name, webViewLink)',
-    supportsAllDrives: true,
-  });
+  do {
+    const response = await drive.files.list({
+      q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      fields: 'nextPageToken, files(id, name, webViewLink)',
+      pageSize: 1000,
+      supportsAllDrives: true,
+      ...(pageToken && { pageToken }),
+    });
 
-  if (existing.data.files && existing.data.files.length > 0) {
-    const file = existing.data.files[0]!;
-    console.log(`[Google Drive] Dossier existant: "${folderName}" (${file.id})`);
-    return {
-      folderId: file.id!,
-      folderUrl: file.webViewLink || `https://drive.google.com/drive/folders/${file.id}`,
-    };
-  }
+    for (const file of response.data.files || []) {
+      if (file.id && file.name) {
+        folders.push({
+          id: file.id,
+          name: file.name,
+          webViewLink: file.webViewLink || `https://drive.google.com/drive/folders/${file.id}`,
+        });
+      }
+    }
 
-  // Create new folder
-  const response = await drive.files.create({
-    requestBody: {
-      name: folderName,
-      mimeType: 'application/vnd.google-apps.folder',
-      parents: [parentFolderId],
-    },
-    fields: 'id, webViewLink',
-    supportsAllDrives: true,
-  });
+    pageToken = response.data.nextPageToken || undefined;
+  } while (pageToken);
 
-  const folderId = response.data.id!;
-  const folderUrl = response.data.webViewLink || `https://drive.google.com/drive/folders/${folderId}`;
-
-  // Set sharing: anyone with the link can view
-  await drive.permissions.create({
-    fileId: folderId,
-    requestBody: {
-      role: 'reader',
-      type: 'anyone',
-    },
-    supportsAllDrives: true,
-  });
-
-  console.log(`[Google Drive] Dossier créé: "${folderName}" → ${folderUrl}`);
-
-  return { folderId, folderUrl };
+  return folders;
 }
 
 /**
- * Build a folder name from event data
- * Format: "JJ.MM Nom du client"
+ * Count files in a Google Drive folder
  */
-export function buildFolderName(clientName: string, startDate: string, _produitNom?: string | null): string {
-  // startDate is "YYYY-MM-DD"
-  const [, month, day] = startDate.split('-');
-  const name = `${day}.${month} ${clientName}`;
-  // Sanitize: remove chars not allowed in Drive folder names
-  return name.replace(/[/\\:*?"<>|]/g, '_');
+export async function countFolderFiles(folderId: string): Promise<number> {
+  const drive = getDriveClient();
+  const response = await drive.files.list({
+    q: `'${folderId}' in parents and trashed = false`,
+    fields: 'files(id)',
+    pageSize: 1000,
+    supportsAllDrives: true,
+  });
+  return response.data.files?.length || 0;
 }
 
 /**
- * Rename an existing Google Drive folder.
- * Extracts the folder ID from the galleryUrl.
+ * Scan the parent Drive folder and match folders to bookings.
+ * Folder format: "JJ.MM.AAAA Nom client"
+ * Matching: date falls within booking date range + client name fuzzy match
  */
-export async function renameDriveFolder(galleryUrl: string, newName: string): Promise<void> {
-  const match = galleryUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-  if (!match) {
-    console.error(`[Google Drive] Impossible d'extraire l'ID du dossier depuis: ${galleryUrl}`);
+export async function scanAndMatchDriveFolders(): Promise<{ matched: number; photoCountsUpdated: number }> {
+  if (!isDriveConfigured()) {
+    console.log('[Drive Scan] Drive non configuré, scan ignoré');
+    return { matched: 0, photoCountsUpdated: 0 };
+  }
+
+  console.log('[Drive Scan] Début du scan des dossiers Drive...');
+
+  // Get all folders from Drive
+  const driveFolders = await listDriveFolders();
+  console.log(`[Drive Scan] ${driveFolders.length} dossiers trouvés dans le parent folder`);
+
+  // Parse folders into structured data
+  const parsedFolders = driveFolders
+    .map(f => ({ ...f, parsed: parseFolderName(f.name) }))
+    .filter(f => f.parsed !== null) as Array<{
+      id: string; name: string; webViewLink: string;
+      parsed: { date: Date; clientName: string };
+    }>;
+
+  console.log(`[Drive Scan] ${parsedFolders.length} dossiers au format JJ.MM.AAAA reconnus`);
+
+  // Get all bookings (with or without galleryUrl to allow re-matching)
+  const bookings = await prisma.booking.findMany({
+    select: {
+      id: true,
+      customerName: true,
+      eventDate: true,
+      eventEndDate: true,
+      galleryUrl: true,
+      driveFolderId: true,
+    },
+  });
+
+  let matched = 0;
+  let photoCountsUpdated = 0;
+
+  for (const folder of parsedFolders) {
+    // Try to find a matching booking
+    const matchedBooking = bookings.find(b => {
+      // Skip if already matched to this exact folder
+      if (b.driveFolderId === folder.id) return false;
+      // Date must be in range
+      if (!dateInRange(folder.parsed.date, b.eventDate, b.eventEndDate)) return false;
+      // Name must match
+      return namesMatch(folder.parsed.clientName, b.customerName);
+    });
+
+    if (matchedBooking) {
+      // Count photos in this folder
+      const photoCount = await countFolderFiles(folder.id);
+
+      await prisma.booking.update({
+        where: { id: matchedBooking.id },
+        data: {
+          galleryUrl: folder.webViewLink,
+          driveFolderId: folder.id,
+          photoCount,
+        },
+      });
+
+      // Update local ref so we don't re-match
+      matchedBooking.driveFolderId = folder.id;
+      matchedBooking.galleryUrl = folder.webViewLink;
+
+      matched++;
+      console.log(`[Drive Scan] ✅ Match: "${folder.name}" → booking "${matchedBooking.customerName}"`);
+    }
+  }
+
+  // Update photo counts for all already-matched bookings
+  const matchedBookings = await prisma.booking.findMany({
+    where: { driveFolderId: { not: null } },
+    select: { id: true, driveFolderId: true, photoCount: true },
+  });
+
+  for (const b of matchedBookings) {
+    try {
+      const count = await countFolderFiles(b.driveFolderId!);
+      if (count !== b.photoCount) {
+        await prisma.booking.update({
+          where: { id: b.id },
+          data: { photoCount: count },
+        });
+        photoCountsUpdated++;
+      }
+    } catch (e) {
+      console.error(`[Drive Scan] Erreur comptage photos pour booking ${b.id}:`, e);
+    }
+  }
+
+  console.log(`[Drive Scan] Terminé: ${matched} nouveaux matchs, ${photoCountsUpdated} compteurs mis à jour`);
+  return { matched, photoCountsUpdated };
+}
+
+/**
+ * Start periodic Drive folder scanning
+ */
+export function startDriveFolderSync(): void {
+  if (!isDriveConfigured()) {
+    console.log('[Drive Scan] Drive non configuré, sync désactivée');
     return;
   }
 
-  const folderId = match[1];
-  const drive = getDriveClient();
-  const sanitizedName = newName.replace(/[/\\:*?"<>|]/g, '_');
+  const intervalMinutes = config.googleDrive.scanIntervalMinutes || 30;
 
-  await drive.files.update({
-    fileId: folderId,
-    requestBody: { name: sanitizedName },
-    supportsAllDrives: true,
-  });
+  // Initial scan after 20 seconds
+  setTimeout(async () => {
+    try {
+      await scanAndMatchDriveFolders();
+    } catch (e) {
+      console.error('[Drive Scan] Erreur lors du scan initial:', e);
+    }
+  }, 20_000);
 
-  console.log(`[Google Drive] Dossier renommé: "${sanitizedName}" (${folderId})`);
+  // Periodic scan
+  scanInterval = setInterval(async () => {
+    try {
+      await scanAndMatchDriveFolders();
+    } catch (e) {
+      console.error('[Drive Scan] Erreur lors du scan périodique:', e);
+    }
+  }, intervalMinutes * 60_000);
+
+  console.log(`[Drive Scan] Sync démarrée — scan toutes les ${intervalMinutes} minutes`);
+}
+
+/**
+ * Stop periodic Drive folder scanning
+ */
+export function stopDriveFolderSync(): void {
+  if (scanInterval) {
+    clearInterval(scanInterval);
+    scanInterval = null;
+    console.log('[Drive Scan] Sync arrêtée');
+  }
 }
 
 /**
@@ -204,15 +314,4 @@ export async function listFolderThumbnails(galleryUrl: string): Promise<{ thumbn
     .map(f => f.thumbnailLink!.replace(/=s\d+/, '=s400'));
 
   return { thumbnails, totalCount };
-}
-
-/**
- * Check if Google Drive integration is configured and enabled
- */
-export function isDriveConfigured(): boolean {
-  return !!(
-    config.googleDrive.enabled &&
-    config.googleDrive.parentFolderId &&
-    config.googleCalendar.serviceAccountBase64
-  );
 }

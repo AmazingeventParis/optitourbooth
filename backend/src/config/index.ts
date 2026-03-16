@@ -74,6 +74,7 @@ export const config = {
   googleDrive: {
     parentFolderId: process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || '1MEVCdxEGoAFoJz8AJKMLppBdI63yOl0s',
     enabled: process.env.GOOGLE_DRIVE_ENABLED !== 'false', // enabled by default
+    scanIntervalMinutes: parseInt(process.env.GOOGLE_DRIVE_SCAN_INTERVAL_MINUTES || '30', 10),
   },
 
   // Google Business Profile (Review system)

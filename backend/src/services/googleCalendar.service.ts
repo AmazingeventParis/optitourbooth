@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { prisma } from '../config/database.js';
 import { config } from '../config/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
-import { createDriveFolder, buildFolderName, isDriveConfigured } from './googleDrive.service.js';
+import { isDriveConfigured } from './googleDrive.service.js';
 
 // Regex pour matcher tout événement dont le titre commence par une parenthèse
 // (LIR), (LIR MIROIR), (R VEGAS newww), (L RING), (SMAKK), () etc.
@@ -714,9 +714,6 @@ export async function syncGoogleCalendarEvents(): Promise<{
         });
 
         if (!existingBooking) {
-          const folderName = buildFolderName(clientName, startDate, produitNom);
-          const { folderUrl } = await createDriveFolder(folderName, startDate);
-
           const publicToken = crypto.randomBytes(24).toString('base64url');
           await prisma.booking.create({
             data: {
@@ -726,22 +723,15 @@ export async function syncGoogleCalendarEvents(): Promise<{
               eventDate: ensureDateUTC(startDate),
               eventEndDate: ensureDateUTC(endDate),
               produitNom: produitNom || null,
-              galleryUrl: folderUrl,
               googleEventId: eventId,
               googleReviewUrl: config.googleBusiness.defaultReviewUrl || null,
               status: 'link_sent',
             },
           });
-          console.log(`[Google Calendar] 📁 Dossier Drive + Booking créés pour "${clientName}" → ${folderUrl}`);
+          console.log(`[Google Calendar] Booking créé pour "${clientName}" (dossier Drive sera matché par scan)`);
         } else {
-          // Booking exists — update missing info (contact, Drive folder)
+          // Booking exists — update missing info (contact)
           const bookingUpdate: Record<string, any> = {};
-          if (!existingBooking.galleryUrl) {
-            const folderName = buildFolderName(clientName, startDate, produitNom);
-            const { folderUrl } = await createDriveFolder(folderName, startDate);
-            bookingUpdate.galleryUrl = folderUrl;
-            console.log(`[Google Calendar] 📁 Dossier Drive ajouté à booking existant "${clientName}" → ${folderUrl}`);
-          }
           if (contactTelephone && !existingBooking.customerPhone) {
             bookingUpdate.customerPhone = contactTelephone;
           }

@@ -98,6 +98,7 @@ export interface CalendarEvent {
     emailSentAt: string | null;
     gallerySentAt: string | null;
     photosNotUnloaded: boolean;
+    photoCount: number | null;
     createdAt: string;
     _count: { events: number; reviewMatches: number; galleryDispatches: number };
   } | null;
@@ -185,6 +186,11 @@ export const bookingsService = {
 
   async resetAllRatings() {
     const response = await api.post<ApiResponse<{ message: string; ratingsReset: number; statusesReverted: number }>>('/bookings/reset-ratings');
+    return response.data.data;
+  },
+
+  async scanDriveFolders() {
+    const response = await api.post<ApiResponse<{ matched: number; photoCountsUpdated: number }>>('/bookings/scan-drive-folders');
     return response.data.data;
   },
 };

@@ -76,6 +76,17 @@ function getBookingBadges(booking: CalendarEvent['booking']): Array<{ label: str
     badges.push({ label: '⚠️ Photos non déchargées', color: 'bg-amber-100 text-amber-800' });
   }
 
+  // 10. Dossier photos Drive
+  if (!booking.galleryUrl) {
+    badges.push({ label: 'Pas de dossier photo', color: 'bg-gray-100 text-gray-500' });
+  } else {
+    const count = booking.photoCount ?? 0;
+    badges.push({
+      label: count === 0 ? '0 photo' : `${count} photo${count > 1 ? 's' : ''}`,
+      color: count === 0 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-800',
+    });
+  }
+
   return badges;
 }
 
@@ -303,10 +314,24 @@ export default function GaleriesClientsPage() {
             Envoyez les galeries photos et collectez les avis Google
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => { setLoading(true); fetchEvents(); }}>
-          <ArrowPathIcon className="h-4 w-4 mr-2" />
-          Actualiser
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={async () => {
+            try {
+              const result = await bookingsService.scanDriveFolders();
+              toast.success(`Scan Drive : ${result.matched} nouveau(x) match(s), ${result.photoCountsUpdated} compteur(s) mis à jour`);
+              fetchEvents();
+            } catch {
+              toast.error('Erreur lors du scan Drive');
+            }
+          }}>
+            <FolderOpenIcon className="h-4 w-4 mr-2" />
+            Scan Drive
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { setLoading(true); fetchEvents(); }}>
+            <ArrowPathIcon className="h-4 w-4 mr-2" />
+            Actualiser
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

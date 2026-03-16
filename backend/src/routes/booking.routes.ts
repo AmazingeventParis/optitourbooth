@@ -20,6 +20,7 @@ import {
   sendLinkEmail,
   resetGalleryUrls,
   resetAllRatings,
+  triggerDriveScan,
   updateReviewMatchStatus,
   getBookingStats,
 } from '../controllers/booking.controller.js';
@@ -88,6 +89,9 @@ router.post('/bookings/reset-gallery-urls', authenticate, requireAdmin, resetGal
 
 // Reset all ratings and revert associated statuses
 router.post('/bookings/reset-ratings', authenticate, requireAdmin, resetAllRatings);
+
+// Manually trigger Drive folder scan and matching
+router.post('/bookings/scan-drive-folders', authenticate, requireAdmin, triggerDriveScan);
 
 // Update review match status
 router.patch('/bookings/review-matches/:matchId/status', authenticate, requireAdmin, updateReviewMatchStatus);

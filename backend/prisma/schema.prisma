@@ -687,6 +687,8 @@ model Booking {
   status              BookingStatus @default(link_sent)
   emailSentAt         DateTime?     @map("email_sent_at")
   photosNotUnloaded   Boolean       @default(false) @map("photos_not_unloaded")
+  driveFolderId       String?       @map("drive_folder_id")
+  photoCount          Int?          @map("photo_count")
 
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")

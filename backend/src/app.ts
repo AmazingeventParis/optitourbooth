@@ -14,6 +14,7 @@ const __dirname = path.dirname(__filename);
 import { config, connectDatabase, disconnectDatabase } from './config/index.js';
 import { disconnectRedis, redis } from './config/redis.js';
 import { startGoogleCalendarSync, stopGoogleCalendarSync } from './services/googleCalendar.service.js';
+import { startDriveFolderSync, stopDriveFolderSync } from './services/googleDrive.service.js';
 import { initializeSocket } from './config/socket.js';
 import { notFoundHandler, errorHandler } from './middlewares/index.js';
 import routes from './routes/index.js';
@@ -139,6 +140,9 @@ async function startServer(): Promise<void> {
       // Démarrer la sync Google Calendar
       startGoogleCalendarSync();
 
+      // Démarrer le scan Drive (matching dossiers photos)
+      startDriveFolderSync();
+
       // Initialize BullMQ queues and worker for gallery dispatch
       initializeQueues();
       startGalleryWorker();
@@ -209,6 +213,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
 
   // Arrêter les tâches planifiées
   stopGoogleCalendarSync();
+  stopDriveFolderSync();
   stopGalleryWorker();
 
   // Fermer les connexions
