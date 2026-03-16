@@ -157,7 +157,7 @@ export async function countFolderFiles(folderId: string): Promise<number> {
  * Folder format: "JJ.MM.AAAA Nom client"
  * Matching: date falls within booking date range + client name fuzzy match
  */
-export async function scanAndMatchDriveFolders(): Promise<{ matched: number; photoCountsUpdated: number }> {
+export async function scanAndMatchDriveFolders(): Promise<{ matched: number; photoCountsUpdated: number; debug?: unknown }> {
   if (!isDriveConfigured()) {
     console.log('[Drive Scan] Drive non configuré, scan ignoré');
     return { matched: 0, photoCountsUpdated: 0 };
@@ -252,8 +252,15 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
     }
   }
 
+  const debugInfo = {
+    totalDriveFolders: driveFolders.length,
+    parsedFolders: parsedFolders.map(f => ({ name: f.name, date: f.parsed.date.toISOString(), client: f.parsed.clientName })),
+    bookingsCount: bookings.length,
+    bookingSample: bookings.slice(0, 5).map(b => ({ id: b.id, name: b.customerName, start: b.eventDate.toISOString(), end: b.eventEndDate?.toISOString() || null, driveFolderId: b.driveFolderId, galleryUrl: b.galleryUrl ? 'set' : null })),
+  };
+
   console.log(`[Drive Scan] Terminé: ${matched} nouveaux matchs, ${photoCountsUpdated} compteurs mis à jour`);
-  return { matched, photoCountsUpdated };
+  return { matched, photoCountsUpdated, debug: debugInfo };
 }
 
 /**
