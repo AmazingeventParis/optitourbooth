@@ -60,17 +60,20 @@ function namesMatch(folderName: string, bookingName: string): boolean {
 }
 
 /**
- * Parse a folder name in format "JJ.MM.AAAA Nom client"
+ * Parse a folder name in format "JJ.MM.AAAA Nom client" or "JJ.MM.AA Nom client"
  * Returns the date and client name, or null if format doesn't match
  */
 function parseFolderName(name: string): { date: Date; clientName: string } | null {
-  const match = name.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(.+)$/);
+  const match = name.match(/^(\d{2})\.(\d{2})\.(\d{2,4})\s+(.+)$/);
   if (!match) return null;
 
   const day = parseInt(match[1]!, 10);
   const month = parseInt(match[2]!, 10);
-  const year = parseInt(match[3]!, 10);
+  let year = parseInt(match[3]!, 10);
   const clientName = match[4]!.trim();
+
+  // 2-digit year → 20xx
+  if (year < 100) year += 2000;
 
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
 
