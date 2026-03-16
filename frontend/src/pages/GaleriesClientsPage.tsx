@@ -711,16 +711,20 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
         </div>
 
         {/* Copier lien Drive (commun) */}
-        {booking?.galleryUrl && (
-          <button
-            onClick={onCopyDrive}
-            className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors"
-          >
-            <FolderOpenIcon className="h-3.5 w-3.5" />
-            Copier lien Drive
-            <ClipboardDocumentIcon className="h-3 w-3 opacity-50" />
-          </button>
-        )}
+        <button
+          onClick={onCopyDrive}
+          disabled={!booking?.galleryUrl}
+          className={clsx(
+            'w-full mt-2 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs border transition-colors',
+            booking?.galleryUrl
+              ? 'text-green-700 bg-green-50 hover:bg-green-100 border-green-200 cursor-pointer'
+              : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-50'
+          )}
+        >
+          <FolderOpenIcon className="h-3.5 w-3.5" />
+          Copier lien Drive
+          <ClipboardDocumentIcon className="h-3 w-3 opacity-50" />
+        </button>
       </div>
     </Card>
   );
