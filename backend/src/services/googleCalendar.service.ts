@@ -543,12 +543,27 @@ export async function syncGoogleCalendarEvents(): Promise<{
       }
     }
 
-    // 2. Fallback : calendrier Smakk → produit Smakk
+    // 2. Fallback : chercher dans les noms des pièces jointes (contrats clients)
+    if (!produitNom && event.attachments && event.attachments.length > 0) {
+      for (const att of event.attachments) {
+        const fileName = (att.title || '').toUpperCase();
+        for (const [key, value] of Object.entries(LIR_TAG_TO_PRODUIT)) {
+          if (fileName.includes(key)) {
+            produitNom = value;
+            console.log(`[Google Calendar] 📎 Produit "${value}" détecté depuis pièce jointe "${att.title}" pour ${clientName}`);
+            break;
+          }
+        }
+        if (produitNom) break;
+      }
+    }
+
+    // 3. Fallback : calendrier Smakk → produit Smakk
     if (!produitNom && calendarId === SMAKK_CALENDAR_ID) {
       produitNom = 'Smakk';
     }
 
-    console.log(`[Google Calendar] ${clientName} → tag="${fullTag}" produit="${tagContent}" cal="${calendarId === SMAKK_CALENDAR_ID ? 'smakk' : 'main'}" → ${produitNom || 'aucun produit'}`);
+    console.log(`[Google Calendar] ${clientName} → tag="${fullTag}" produit="${tagContent}" cal="${calendarId === SMAKK_CALENDAR_ID ? 'smakk' : 'main'}" attachments=${event.attachments?.length || 0} → ${produitNom || 'aucun produit'}`);
 
 
     // Dates
