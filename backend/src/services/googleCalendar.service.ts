@@ -5,11 +5,15 @@ import { config } from '../config/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
 import { createDriveFolder, buildFolderName, isDriveConfigured } from './googleDrive.service.js';
 
-// Regex pour matcher (LIR), (LIR PREM), (LIR SALON), (LIR MIROIR), etc.
-const LIR_REGEX = /^\(LIR[^)]*\)/i;
+// Regex pour matcher tout tag entre parenthèses au début du titre :
+// (LIR), (LIR MIROIR), (R VEGAS newww), (L RING), (SMAKK), etc.
+const EVENT_TAG_REGEX = /^\([^)]+\)/i;
 
-// Tags LIR à ignorer (pas de points à créer)
-const LIR_TAGS_IGNORED = ['TNT'];
+// Ancien format LIR uniquement (pour compatibilité dans l'extraction du contenu)
+const LIR_PREFIX_REGEX = /^\(LIR\s*/i;
+
+// Tags à ignorer (pas de points à créer)
+const TAGS_IGNORED = ['TNT'];
 
 // Mapping LIR tag → nom du produit OptiTour
 // Note: colorId n'est pas accessible via service account (c'est une préférence utilisateur)
@@ -414,7 +418,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
     now.getTime() + config.googleCalendar.syncDaysAhead * 24 * 60 * 60 * 1000
   ).toISOString();
 
-  const allLirEvents: { event: any; calendarId: string }[] = [];
+  const allTaggedEvents: { event: any; calendarId: string }[] = [];
 
   for (const calId of calendarIds) {
     try {
@@ -428,18 +432,18 @@ export async function syncGoogleCalendarEvents(): Promise<{
       });
 
       const events = response.data.items || [];
-      const lirEvents = events.filter(
-        (e) => e.summary && LIR_REGEX.test(e.summary.trim())
+      const taggedEvents = events.filter(
+        (e) => e.summary && EVENT_TAG_REGEX.test(e.summary.trim())
       );
 
-      console.log(`[Google Calendar] ${calId}: ${lirEvents.length} (LIR) sur ${events.length} total`);
-      allLirEvents.push(...lirEvents.map(event => ({ event, calendarId: calId })));
+      console.log(`[Google Calendar] ${calId}: ${taggedEvents.length} événements taggés sur ${events.length} total`);
+      allTaggedEvents.push(...taggedEvents.map(event => ({ event, calendarId: calId })));
     } catch (e) {
       console.error(`[Google Calendar] Erreur lecture calendrier ${calId}:`, e);
     }
   }
 
-  console.log(`[Google Calendar] Total: ${allLirEvents.length} événements (LIR)`);
+  console.log(`[Google Calendar] Total: ${allTaggedEvents.length} événements taggés`);
 
   // Charger tous les points existants dans des tournées pour la période concernée
   // afin de ne pas créer de pending points pour des événements déjà programmés
@@ -474,15 +478,19 @@ export async function syncGoogleCalendarEvents(): Promise<{
   let skipped = 0;
   let errors = 0;
 
-  for (const { event, calendarId } of allLirEvents) {
+  for (const { event, calendarId } of allTaggedEvents) {
     const rawTitle = (event.summary || '').trim();
-    const lirMatch = rawTitle.match(LIR_REGEX);
-    const lirTag = lirMatch ? lirMatch[0] : '';
-    const clientName = rawTitle.substring(lirTag.length).trim() || 'Client inconnu';
+    const tagMatch = rawTitle.match(EVENT_TAG_REGEX);
+    const fullTag = tagMatch ? tagMatch[0] : '';
+    const clientName = rawTitle.substring(fullTag.length).trim() || 'Client inconnu';
 
-    // Vérifier si le tag LIR est dans la liste des tags ignorés
-    const tagContent = lirTag.replace(/^\(LIR\s*/i, '').replace(/\)$/, '').trim().toUpperCase();
-    if (LIR_TAGS_IGNORED.includes(tagContent)) {
+    // Extraire le contenu du tag : "(LIR MIROIR)" → "MIROIR", "(R VEGAS newww)" → "R VEGAS NEWWW"
+    const tagInner = fullTag.replace(/^\(/, '').replace(/\)$/, '').trim().toUpperCase();
+    // Enlever le préfixe LIR/L/R/LR s'il est seul au début pour extraire le nom produit
+    const tagContent = tagInner.replace(/^(?:LIR|LR|L|R)\s+/i, '').trim();
+
+    // Vérifier si le tag est dans la liste des tags ignorés
+    if (TAGS_IGNORED.includes(tagContent) || TAGS_IGNORED.includes(tagInner)) {
       // Supprimer les points déjà créés pour cet événement ignoré
       const eventId = event.id || '';
       if (eventId) {
@@ -506,12 +514,23 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Adresse : priorité au champ location de l'événement, sinon celle de la description
     const adresse = location || parsed?.adresse || null;
 
-    // Produit : détection par tag LIR (prioritaire) et calendrier source (fallback)
+    // Produit : détection par tag (prioritaire) et calendrier source (fallback)
     let produitNom: string | null = null;
 
-    // 1. Extraire le mot-clé du tag LIR: "(LIR MIROIR)" → "MIROIR"
+    // 1. Chercher le nom de produit dans le tag
+    // Essai exact d'abord: "(LIR MIROIR)" → tagContent="MIROIR" → match
+    // Puis premier mot: "(R VEGAS newww)" → tagContent="VEGAS NEWWW" → premier mot "VEGAS" → match
     if (tagContent && LIR_TAG_TO_PRODUIT[tagContent]) {
       produitNom = LIR_TAG_TO_PRODUIT[tagContent];
+    } else {
+      // Chercher chaque mot du tag dans le mapping
+      const tagWords = tagContent.split(/\s+/);
+      for (const word of tagWords) {
+        if (word && LIR_TAG_TO_PRODUIT[word]) {
+          produitNom = LIR_TAG_TO_PRODUIT[word];
+          break;
+        }
+      }
     }
 
     // 2. Fallback : calendrier Smakk → produit Smakk
@@ -519,7 +538,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
       produitNom = 'Smakk';
     }
 
-    console.log(`[Google Calendar] ${clientName} → tag="${lirTag}" cal="${calendarId === SMAKK_CALENDAR_ID ? 'smakk' : 'main'}" → ${produitNom || 'aucun produit'}`);
+    console.log(`[Google Calendar] ${clientName} → tag="${fullTag}" produit="${tagContent}" cal="${calendarId === SMAKK_CALENDAR_ID ? 'smakk' : 'main'}" → ${produitNom || 'aucun produit'}`);
 
 
     // Dates
@@ -771,7 +790,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
   }
 
   console.log(`[Google Calendar] Sync terminée: ${created} créés, ${skipped} déjà en tournée, ${errors} erreurs`);
-  return { found: allLirEvents.length, created, updated: skipped, errors };
+  return { found: allTaggedEvents.length, created, updated: skipped, errors };
 }
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
