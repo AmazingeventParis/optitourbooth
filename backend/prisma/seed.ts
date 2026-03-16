@@ -116,110 +116,43 @@ async function main() {
   // ===== MACHINES =====
   console.log('\n🎰 Création des machines...');
 
-  // 35 Vegas (V1 à V35)
-  for (let i = 1; i <= 35; i++) {
-    const numero = `V${i}`;
-    await prisma.machine.upsert({
-      where: { type_numero: { type: MachineType.Vegas, numero } },
-      update: {},
-      create: {
-        type: MachineType.Vegas,
-        numero,
-        actif: true,
-      },
-    });
-  }
-  console.log('✅ 35 machines Vegas créées (V1-V35)');
+  // Couleurs par type (alignées sur les produits dans Paramètres)
+  const MACHINE_COLORS: Record<string, string> = {
+    Vegas: '#616161',   // Graphite
+    Smakk: '#F6BF26',   // Banane
+    Ring: '#8E24AA',     // Raisin
+    Miroir: '#F4511E',   // Mandarine
+    Playbox: '#E67C73',  // Flamant
+    Aircam: '#3F51B5',   // Myrtille
+    Spinner: '#0B8043',  // Basilic
+  };
 
-  // 20 Smakk (SK1 à SK20)
-  for (let i = 1; i <= 20; i++) {
-    const numero = `SK${i}`;
-    await prisma.machine.upsert({
-      where: { type_numero: { type: MachineType.Smakk, numero } },
-      update: {},
-      create: {
-        type: MachineType.Smakk,
-        numero,
-        actif: true,
-      },
-    });
-  }
-  console.log('✅ 20 machines Smakk créées (SK1-SK20)');
+  const machineConfigs: Array<{ type: MachineType; prefix: string; count: number }> = [
+    { type: MachineType.Vegas, prefix: 'V', count: 35 },
+    { type: MachineType.Smakk, prefix: 'SK', count: 20 },
+    { type: MachineType.Ring, prefix: 'R', count: 10 },
+    { type: MachineType.Miroir, prefix: 'MI', count: 5 },
+    { type: MachineType.Playbox, prefix: 'PB', count: 3 },
+    { type: MachineType.Aircam, prefix: 'AC', count: 2 },
+    { type: MachineType.Spinner, prefix: 'SP', count: 3 },
+  ];
 
-  // 10 Ring (R1 à R10)
-  for (let i = 1; i <= 10; i++) {
-    const numero = `R${i}`;
-    await prisma.machine.upsert({
-      where: { type_numero: { type: MachineType.Ring, numero } },
-      update: {},
-      create: {
-        type: MachineType.Ring,
-        numero,
-        actif: true,
-      },
-    });
+  for (const mc of machineConfigs) {
+    for (let i = 1; i <= mc.count; i++) {
+      const numero = `${mc.prefix}${i}`;
+      await prisma.machine.upsert({
+        where: { type_numero: { type: mc.type, numero } },
+        update: { couleur: MACHINE_COLORS[mc.type] },
+        create: {
+          type: mc.type,
+          numero,
+          couleur: MACHINE_COLORS[mc.type],
+          actif: true,
+        },
+      });
+    }
+    console.log(`✅ ${mc.count} machines ${mc.type} créées (${mc.prefix}1-${mc.prefix}${mc.count}) — ${MACHINE_COLORS[mc.type]}`);
   }
-  console.log('✅ 10 machines Ring créées (R1-R10)');
-
-  // 5 Miroir (MI1 à MI5)
-  for (let i = 1; i <= 5; i++) {
-    const numero = `MI${i}`;
-    await prisma.machine.upsert({
-      where: { type_numero: { type: MachineType.Miroir, numero } },
-      update: {},
-      create: {
-        type: MachineType.Miroir,
-        numero,
-        actif: true,
-      },
-    });
-  }
-  console.log('✅ 5 machines Miroir créées (MI1-MI5)');
-
-  // 3 Playbox (PB1 à PB3)
-  for (let i = 1; i <= 3; i++) {
-    const numero = `PB${i}`;
-    await prisma.machine.upsert({
-      where: { type_numero: { type: MachineType.Playbox, numero } },
-      update: {},
-      create: {
-        type: MachineType.Playbox,
-        numero,
-        actif: true,
-      },
-    });
-  }
-  console.log('✅ 3 machines Playbox créées (PB1-PB3)');
-
-  // 2 Aircam (AC1 à AC2)
-  for (let i = 1; i <= 2; i++) {
-    const numero = `AC${i}`;
-    await prisma.machine.upsert({
-      where: { type_numero: { type: MachineType.Aircam, numero } },
-      update: {},
-      create: {
-        type: MachineType.Aircam,
-        numero,
-        actif: true,
-      },
-    });
-  }
-  console.log('✅ 2 machines Aircam créées (AC1-AC2)');
-
-  // 3 Spinner (SP1 à SP3)
-  for (let i = 1; i <= 3; i++) {
-    const numero = `SP${i}`;
-    await prisma.machine.upsert({
-      where: { type_numero: { type: MachineType.Spinner, numero } },
-      update: {},
-      create: {
-        type: MachineType.Spinner,
-        numero,
-        actif: true,
-      },
-    });
-  }
-  console.log('✅ 3 machines Spinner créées (SP1-SP3)');
 
   console.log('');
   console.log('🎉 Seeding terminé !');

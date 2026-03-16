@@ -4,13 +4,13 @@ const prisma = new PrismaClient();
 
 // Couleurs par type de machine (synchronisées avec les produits)
 const MACHINE_COLORS: Record<MachineType, string> = {
-  Vegas: '#616161',   // Gris
-  Smakk: '#F6BF26',   // Jaune
-  Ring: '#8E24AA',    // Violet
-  Miroir: '#039BE5',  // Bleu
-  Playbox: '#E67C73', // Rouge/Corail
-  Aircam: '#33B679',  // Vert
-  Spinner: '#D50000', // Rouge vif
+  Vegas: '#616161',   // Graphite
+  Smakk: '#F6BF26',   // Banane
+  Ring: '#8E24AA',    // Raisin
+  Miroir: '#F4511E',  // Mandarine
+  Playbox: '#E67C73', // Flamant
+  Aircam: '#3F51B5',  // Myrtille
+  Spinner: '#0B8043', // Basilic
 };
 
 async function main() {
