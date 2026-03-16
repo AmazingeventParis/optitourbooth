@@ -243,7 +243,7 @@ export interface ClientFilters {
 }
 
 // Types pour les machines et préparations
-export type MachineType = 'Vegas' | 'Smakk' | 'Ring';
+export type MachineType = 'Vegas' | 'Smakk' | 'Ring' | 'Miroir' | 'Playbox' | 'Aircam' | 'Spinner';
 export type PreparationStatut =
   | 'disponible'     // Machine libre
   | 'en_preparation' // Préparation en cours

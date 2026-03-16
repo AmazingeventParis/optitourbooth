@@ -71,6 +71,10 @@ enum MachineType {
   Vegas
   Smakk
   Ring
+  Miroir
+  Playbox
+  Aircam
+  Spinner
 }
 
 enum PreparationStatut {

@@ -161,6 +161,66 @@ async function main() {
   }
   console.log('✅ 10 machines Ring créées (R1-R10)');
 
+  // 5 Miroir (MI1 à MI5)
+  for (let i = 1; i <= 5; i++) {
+    const numero = `MI${i}`;
+    await prisma.machine.upsert({
+      where: { type_numero: { type: MachineType.Miroir, numero } },
+      update: {},
+      create: {
+        type: MachineType.Miroir,
+        numero,
+        actif: true,
+      },
+    });
+  }
+  console.log('✅ 5 machines Miroir créées (MI1-MI5)');
+
+  // 3 Playbox (PB1 à PB3)
+  for (let i = 1; i <= 3; i++) {
+    const numero = `PB${i}`;
+    await prisma.machine.upsert({
+      where: { type_numero: { type: MachineType.Playbox, numero } },
+      update: {},
+      create: {
+        type: MachineType.Playbox,
+        numero,
+        actif: true,
+      },
+    });
+  }
+  console.log('✅ 3 machines Playbox créées (PB1-PB3)');
+
+  // 2 Aircam (AC1 à AC2)
+  for (let i = 1; i <= 2; i++) {
+    const numero = `AC${i}`;
+    await prisma.machine.upsert({
+      where: { type_numero: { type: MachineType.Aircam, numero } },
+      update: {},
+      create: {
+        type: MachineType.Aircam,
+        numero,
+        actif: true,
+      },
+    });
+  }
+  console.log('✅ 2 machines Aircam créées (AC1-AC2)');
+
+  // 3 Spinner (SP1 à SP3)
+  for (let i = 1; i <= 3; i++) {
+    const numero = `SP${i}`;
+    await prisma.machine.upsert({
+      where: { type_numero: { type: MachineType.Spinner, numero } },
+      update: {},
+      create: {
+        type: MachineType.Spinner,
+        numero,
+        actif: true,
+      },
+    });
+  }
+  console.log('✅ 3 machines Spinner créées (SP1-SP3)');
+
   console.log('');
   console.log('🎉 Seeding terminé !');
   console.log('');

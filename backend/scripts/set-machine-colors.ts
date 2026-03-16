@@ -7,6 +7,10 @@ const MACHINE_COLORS: Record<MachineType, string> = {
   Vegas: '#616161',   // Gris
   Smakk: '#F6BF26',   // Jaune
   Ring: '#8E24AA',    // Violet
+  Miroir: '#039BE5',  // Bleu
+  Playbox: '#E67C73', // Rouge/Corail
+  Aircam: '#33B679',  // Vert
+  Spinner: '#D50000', // Rouge vif
 };
 
 async function main() {

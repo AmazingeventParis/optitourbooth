@@ -23,6 +23,10 @@ import {
   MagnifyingGlassIcon,
   BellAlertIcon,
   ExclamationTriangleIcon,
+  SparklesIcon,
+  CubeIcon,
+  FilmIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -45,6 +49,26 @@ const machineTypeBaseConfig: Record<MachineType, {
     label: 'Ring',
     icon: WrenchScrewdriverIcon,
     count: 10,
+  },
+  Miroir: {
+    label: 'Miroir',
+    icon: SparklesIcon,
+    count: 5,
+  },
+  Playbox: {
+    label: 'Playbox',
+    icon: CubeIcon,
+    count: 3,
+  },
+  Aircam: {
+    label: 'Aircam',
+    icon: FilmIcon,
+    count: 2,
+  },
+  Spinner: {
+    label: 'Spinner',
+    icon: ArrowPathIcon,
+    count: 3,
   },
 };
 
@@ -1071,11 +1095,7 @@ export default function PreparationsPage() {
                           if (evenements.some((ev, i) => i !== index && ev.pendingPointId === ce.id)) return false;
                           // Filter by machine type: show only matching produitNom or unidentified events
                           if (!ce.produitNom || !selectedMachine) return true;
-                          const mt = selectedMachine.type;
-                          if (mt === 'Vegas') return ['Vegas', 'Playbox', 'Aircam', 'Spinner'].includes(ce.produitNom);
-                          if (mt === 'Ring') return ce.produitNom === 'Ring' || ce.produitNom === 'Miroir';
-                          if (mt === 'Smakk') return ce.produitNom === 'Smakk';
-                          return true;
+                          return ce.produitNom === selectedMachine.type;
                         })
                         .map(ce => {
                           const dateStr = typeof ce.date === 'string'
