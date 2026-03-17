@@ -114,6 +114,12 @@ function TarifsSection() {
               </button>
             </div>
 
+            {uc.config.isIndependent && (
+              <div className="mb-2 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-xs font-medium text-amber-700 text-center">
+                Chauffeur indépendant
+              </div>
+            )}
+
             <div className="space-y-1.5 text-xs">
               <div className="flex justify-between">
                 <span className="text-gray-500">Point hors forfait</span>
@@ -123,12 +129,14 @@ function TarifsSection() {
                 <span className="text-gray-500">Heure supplémentaire</span>
                 <span className="font-semibold">{uc.config.tarifHeureSupp} &euro;/h</span>
               </div>
+              {!uc.config.isIndependent && (
               <div className="flex justify-between">
                 <span className="text-gray-500">Plage hors forfait</span>
                 <span className="font-medium text-orange-600">
                   {uc.config.horsForfaitDebut || '18:00'} &rarr; {uc.config.horsForfaitFin || '07:00'}
                 </span>
               </div>
+              )}
               {(uc.config.customItems as CustomItem[])?.length > 0 && (
                 <div className="pt-1.5 border-t border-gray-100 mt-1.5">
                   <span className="text-gray-400">Tarifs personnalisés :</span>
@@ -166,6 +174,7 @@ function EditConfigModal({ user, onClose, onSaved }: {
   const [tarifHS, setTarifHS] = useState(user.config.tarifHeureSupp);
   const [debut, setDebut] = useState(user.config.horsForfaitDebut || '18:00');
   const [fin, setFin] = useState(user.config.horsForfaitFin || '07:00');
+  const [isIndependent, setIsIndependent] = useState(user.config.isIndependent || false);
   const [customItems, setCustomItems] = useState<CustomItem[]>((user.config.customItems as CustomItem[]) || []);
   const [saving, setSaving] = useState(false);
 
@@ -177,6 +186,7 @@ function EditConfigModal({ user, onClose, onSaved }: {
         tarifHeureSupp: tarifHS,
         horsForfaitDebut: debut,
         horsForfaitFin: fin,
+        isIndependent,
         customItems,
       });
       toast.success('Configuration sauvegardée');
@@ -199,7 +209,22 @@ function EditConfigModal({ user, onClose, onSaved }: {
   return (
     <Modal isOpen onClose={onClose} title={`Tarifs - ${user.prenom} ${user.nom}`} size="lg">
       <div className="space-y-4">
+        {/* Chauffeur indépendant */}
+        <label className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isIndependent}
+            onChange={(e) => setIsIndependent(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+          />
+          <div>
+            <span className="text-sm font-medium text-amber-800">Chauffeur indépendant</span>
+            <p className="text-xs text-amber-600">Tous les points sont facturés hors forfait (pas de plage horaire)</p>
+          </div>
+        </label>
+
         {/* Plage hors forfait */}
+        {!isIndependent && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Plage horaire hors forfait</label>
           <div className="flex items-center gap-2">
@@ -221,6 +246,7 @@ function EditConfigModal({ user, onClose, onSaved }: {
           </div>
           <p className="text-xs text-gray-400 mt-1">Les points livrés dans cette plage seront facturés en hors forfait</p>
         </div>
+        )}
 
         {/* Tarif point HF */}
         <div>

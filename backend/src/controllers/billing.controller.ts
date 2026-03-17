@@ -49,7 +49,7 @@ export const getConfigs = asyncHandler(async (_req: Request, res: Response) => {
  */
 export const upsertConfig = asyncHandler(async (req: Request, res: Response) => {
   const { userId } = req.params;
-  const { tarifPointHorsForfait, tarifHeureSupp, horsForfaitDebut, horsForfaitFin, customItems } = req.body;
+  const { tarifPointHorsForfait, tarifHeureSupp, horsForfaitDebut, horsForfaitFin, isIndependent, customItems } = req.body;
 
   // Validate user exists
   const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -62,6 +62,7 @@ export const upsertConfig = asyncHandler(async (req: Request, res: Response) => 
       tarifHeureSupp: tarifHeureSupp ?? 0,
       horsForfaitDebut: horsForfaitDebut || '18:00',
       horsForfaitFin: horsForfaitFin || '07:00',
+      isIndependent: isIndependent ?? false,
       customItems: customItems || [],
     },
     create: {
@@ -70,6 +71,7 @@ export const upsertConfig = asyncHandler(async (req: Request, res: Response) => 
       tarifHeureSupp: tarifHeureSupp ?? 0,
       horsForfaitDebut: horsForfaitDebut || '18:00',
       horsForfaitFin: horsForfaitFin || '07:00',
+      isIndependent: isIndependent ?? false,
       customItems: customItems || [],
     },
   });
@@ -253,8 +255,8 @@ export const computeEntries = asyncHandler(async (req: Request, res: Response) =
 
     const dateStr = tournee.date.toISOString().substring(0, 10);
 
-    // Check points for off-hours
-    if (config.tarifPointHorsForfait > 0 && config.horsForfaitDebut && config.horsForfaitFin) {
+    // Check points for off-hours (independent = all points are hors forfait)
+    if (config.tarifPointHorsForfait > 0 && (config.isIndependent || (config.horsForfaitDebut && config.horsForfaitFin))) {
       for (const point of tournee.points) {
         // Use actual arrival time, or scheduled time slot
         const timeToCheck = point.heureArriveeReelle
@@ -263,9 +265,12 @@ export const computeEntries = asyncHandler(async (req: Request, res: Response) =
             ? formatTimeFromDate(point.creneauDebut)
             : null;
 
-        if (!timeToCheck) continue;
+        // Independent chauffeurs: all points are hors forfait regardless of time
+        const isHorsForfait = config.isIndependent
+          || (timeToCheck && config.horsForfaitDebut && config.horsForfaitFin && isTimeInRange(timeToCheck, config.horsForfaitDebut, config.horsForfaitFin));
 
-        if (isTimeInRange(timeToCheck, config.horsForfaitDebut, config.horsForfaitFin)) {
+        if (!isHorsForfait) continue;
+
           // Check if entry already exists
           const existing = await prisma.billingEntry.findFirst({
             where: { pointId: point.id, type: 'point_hors_forfait' },
@@ -279,15 +284,16 @@ export const computeEntries = asyncHandler(async (req: Request, res: Response) =
               pointId: point.id,
               date: tournee.date,
               type: 'point_hors_forfait',
-              label: `Point HF - ${point.client.nom} (${timeToCheck})`,
+              label: config.isIndependent
+                ? `Point indép. - ${point.client.nom}${timeToCheck ? ` (${timeToCheck})` : ''}`
+                : `Point HF - ${point.client.nom} (${timeToCheck})`,
               quantity: 1,
               unitPrice: config.tarifPointHorsForfait,
               totalPrice: config.tarifPointHorsForfait,
-              metadata: { time: timeToCheck, clientName: point.client.nom },
+              metadata: { time: timeToCheck || 'N/A', clientName: point.client.nom, independent: config.isIndependent },
             },
           });
           created++;
-        }
       }
     }
 

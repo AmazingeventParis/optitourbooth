@@ -10,6 +10,7 @@ export interface BillingConfigData {
   tarifHeureSupp: number;
   horsForfaitDebut: string;
   horsForfaitFin: string;
+  isIndependent?: boolean;
   customItems: CustomItem[];
 }
 

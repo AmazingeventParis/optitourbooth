@@ -809,6 +809,7 @@ model BillingConfig {
   tarifHeureSupp        Float    @default(0) @map("tarif_heure_supp")
   horsForfaitDebut      String?  @map("hors_forfait_debut") // "HH:MM" ex: "18:00"
   horsForfaitFin        String?  @map("hors_forfait_fin")   // "HH:MM" ex: "07:00"
+  isIndependent         Boolean  @default(false) @map("is_independent") // Chauffeur indépendant = toujours hors forfait
   customItems           Json     @default("[]")              // [{name: string, price: number}]
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
