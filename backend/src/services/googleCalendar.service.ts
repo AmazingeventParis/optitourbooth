@@ -826,6 +826,62 @@ export async function syncGoogleCalendarEvents(): Promise<{
     console.error('[Google Calendar] Erreur propagation contacts:', e);
   }
 
+  // === PROPAGATION PIÈCES JOINTES : mettre à jour les Points de tournées existants ===
+  try {
+    const pendingWithAttachments = await prisma.pendingPoint.findMany({
+      where: {
+        source: 'google_calendar',
+        dispatched: true,
+        NOT: { attachments: { equals: [] } },
+      },
+      select: {
+        clientName: true,
+        date: true,
+        type: true,
+        attachments: true,
+      },
+    });
+
+    let attachmentsUpdated = 0;
+    for (const pp of pendingWithAttachments) {
+      const atts = pp.attachments as any[];
+      if (!atts || atts.length === 0) continue;
+
+      // Trouver les Points correspondants (même client, même date, même type) sans pièces jointes
+      const matchingPoints = await prisma.point.findMany({
+        where: {
+          client: {
+            OR: [
+              { nom: { equals: pp.clientName, mode: 'insensitive' } },
+              { societe: { equals: pp.clientName, mode: 'insensitive' } },
+            ],
+          },
+          tournee: { date: pp.date },
+          type: pp.type as any,
+          OR: [
+            { attachments: { equals: [] } },
+            { attachments: { equals: null } },
+          ],
+        },
+        select: { id: true },
+      });
+
+      for (const point of matchingPoints) {
+        await prisma.point.update({
+          where: { id: point.id },
+          data: { attachments: atts },
+        });
+        attachmentsUpdated++;
+      }
+    }
+
+    if (attachmentsUpdated > 0) {
+      console.log(`[Google Calendar] 📎 ${attachmentsUpdated} point(s) de tournée mis à jour avec pièces jointes`);
+    }
+  } catch (e) {
+    console.error('[Google Calendar] Erreur propagation pièces jointes:', e);
+  }
+
   console.log(`[Google Calendar] Sync terminée: ${created} créés, ${skipped} déjà en tournée, ${errors} erreurs`);
   return { found: allTaggedEvents.length, created, updated: skipped, errors };
 }
