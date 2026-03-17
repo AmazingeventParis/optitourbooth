@@ -438,13 +438,21 @@ export async function syncGoogleCalendarEvents(): Promise<{
       );
 
       // Log les pièces jointes trouvées
+      let eventsWithAttachments = 0;
       for (const ev of taggedEvents) {
         if (ev.attachments && ev.attachments.length > 0) {
+          eventsWithAttachments++;
           console.log(`[Google Calendar] 📎 "${ev.summary}" a ${ev.attachments.length} pièce(s) jointe(s):`);
           for (const att of ev.attachments) {
             console.log(`  - ${att.title || att.fileId} (${att.mimeType}) → ${att.fileUrl}`);
           }
         }
+      }
+      if (eventsWithAttachments === 0 && taggedEvents.length > 0) {
+        // Debug: log raw event keys to check if attachments field exists
+        const sample = taggedEvents[0];
+        console.log(`[Google Calendar] ⚠ Aucune PJ trouvée. Clés événement sample: ${Object.keys(sample!).join(', ')}`);
+        console.log(`[Google Calendar] ⚠ Sample attachments field: ${JSON.stringify((sample as any)?.attachments)}`);
       }
 
       console.log(`[Google Calendar] ${calId}: ${taggedEvents.length} événements taggés sur ${events.length} total`);
