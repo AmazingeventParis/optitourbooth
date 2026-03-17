@@ -1,5 +1,7 @@
 import { google } from 'googleapis';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database.js';
 import { config } from '../config/index.js';
@@ -397,6 +399,86 @@ function getCalendarClient() {
   return google.calendar({ version: 'v3', auth });
 }
 
+// ===== DRIVE CLIENT (for attachment downloads) =====
+
+function getDriveClient() {
+  if (!config.googleCalendar.serviceAccountBase64) {
+    throw new Error('GOOGLE_SERVICE_ACCOUNT_BASE64 non configuré');
+  }
+  const credentials = JSON.parse(
+    Buffer.from(config.googleCalendar.serviceAccountBase64, 'base64').toString('utf-8')
+  );
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  });
+  return google.drive({ version: 'v3', auth });
+}
+
+// Uploads directory for locally cached attachments
+const ATTACHMENTS_DIR = path.join(process.cwd(), 'uploads', 'attachments');
+
+/**
+ * Download a Google Drive file to local disk if not already cached.
+ * Returns the local path on success, or null on failure.
+ */
+async function downloadAttachmentLocally(fileId: string, title: string): Promise<string | null> {
+  // Determine file extension from title
+  const ext = path.extname(title) || '';
+  const localFileName = `${fileId}${ext}`;
+  const localPath = path.join(ATTACHMENTS_DIR, localFileName);
+
+  // Skip if already exists
+  if (fs.existsSync(localPath)) {
+    return localPath;
+  }
+
+  try {
+    // Ensure directory exists
+    fs.mkdirSync(ATTACHMENTS_DIR, { recursive: true });
+
+    const drive = getDriveClient();
+
+    // Check if it's a Google Doc type (need to export)
+    const meta = await drive.files.get({ fileId, fields: 'mimeType' });
+    const mimeType = meta.data.mimeType || '';
+    const isGoogleDoc = mimeType.startsWith('application/vnd.google-apps.');
+
+    let fileStream: NodeJS.ReadableStream;
+    let finalPath = localPath;
+
+    if (isGoogleDoc) {
+      // Export as PDF
+      const exportRes = await drive.files.export(
+        { fileId, mimeType: 'application/pdf' },
+        { responseType: 'stream' }
+      );
+      fileStream = exportRes.data as any;
+      finalPath = path.join(ATTACHMENTS_DIR, `${fileId}.pdf`);
+    } else {
+      const downloadRes = await drive.files.get(
+        { fileId, alt: 'media' },
+        { responseType: 'stream' }
+      );
+      fileStream = downloadRes.data as any;
+    }
+
+    // Write to disk
+    await new Promise<void>((resolve, reject) => {
+      const ws = fs.createWriteStream(finalPath);
+      fileStream.pipe(ws);
+      ws.on('finish', resolve);
+      ws.on('error', reject);
+    });
+
+    console.log(`[Google Calendar] 📥 Attachment downloaded: ${title} → ${finalPath}`);
+    return finalPath;
+  } catch (e: any) {
+    console.warn(`[Google Calendar] ⚠ Failed to download attachment ${fileId} (${title}): ${e.message || e}`);
+    return null;
+  }
+}
+
 // ===== SYNC =====
 
 export async function syncGoogleCalendarEvents(): Promise<{
@@ -610,14 +692,26 @@ export async function syncGoogleCalendarEvents(): Promise<{
     const contactNom = parsed?.contactNom || null;
     const contactTelephone = parsed?.contactTelephone || null;
 
-    // Pièces jointes Google Calendar
-    const attachments = (event.attachments || []).map((att: any) => ({
-      fileId: att.fileId || null,
-      title: att.title || 'Sans titre',
-      mimeType: att.mimeType || 'application/octet-stream',
-      iconLink: att.iconLink || null,
-      fileUrl: att.fileUrl || null,
-    }));
+    // Pièces jointes Google Calendar — download locally if possible
+    const attachments = [];
+    for (const att of (event.attachments || [])) {
+      const fileId = att.fileId || null;
+      const title = att.title || 'Sans titre';
+      let localPath: string | null = null;
+
+      if (fileId) {
+        localPath = await downloadAttachmentLocally(fileId, title);
+      }
+
+      attachments.push({
+        fileId,
+        title,
+        mimeType: att.mimeType || 'application/octet-stream',
+        iconLink: att.iconLink || null,
+        fileUrl: att.fileUrl || null,
+        ...(localPath ? { localPath } : {}),
+      });
+    }
 
     // Vérifier si ce client a déjà un point livraison à cette date dans une tournée
     const clientNameLower = clientName.toLowerCase().trim();

@@ -1,7 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { google } from 'googleapis';
+import fs from 'fs';
+import path from 'path';
 import { authenticate } from '../middlewares/auth.middleware.js';
 import { config } from '../config/index.js';
+
+const ATTACHMENTS_DIR = path.join(process.cwd(), 'uploads', 'attachments');
 
 const router = Router();
 
@@ -83,11 +87,36 @@ router.get('/debug', authenticate, async (_req: Request, res: Response) => {
 
 /**
  * GET /api/attachments/:fileId/download
- * Proxy Google Drive file download through the backend
+ * Serve locally cached file, or fall back to Google Drive proxy
  */
 router.get('/:fileId/download', async (req: Request, res: Response): Promise<any> => {
   try {
-    const { fileId } = req.params;
+    const fileId = req.params.fileId!;
+
+    // 1. Check if file exists locally (try common extensions)
+    const localFile = findLocalFile(fileId);
+    if (localFile) {
+      const ext = path.extname(localFile).toLowerCase();
+      const mimeMap: Record<string, string> = {
+        '.pdf': 'application/pdf',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.xls': 'application/vnd.ms-excel',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+      const mimeType = mimeMap[ext] || 'application/octet-stream';
+      const fileName = path.basename(localFile);
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+      return fs.createReadStream(localFile).pipe(res);
+    }
+
+    // 2. Fallback: download from Google Drive
     const drive = getDriveClient();
 
     // Get file metadata first
@@ -130,5 +159,20 @@ router.get('/:fileId/download', async (req: Request, res: Response): Promise<any
     return res.status(500).json({ error: 'Erreur lors du téléchargement' });
   }
 });
+
+/**
+ * Find a locally cached file by fileId (checking all extensions)
+ */
+function findLocalFile(fileId: string): string | null {
+  if (!fs.existsSync(ATTACHMENTS_DIR)) return null;
+
+  try {
+    const files = fs.readdirSync(ATTACHMENTS_DIR);
+    const match = files.find(f => f.startsWith(fileId + '.') || f === fileId);
+    return match ? path.join(ATTACHMENTS_DIR, match) : null;
+  } catch {
+    return null;
+  }
+}
 
 export default router;

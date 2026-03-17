@@ -783,7 +783,7 @@ export default function TourneeDetailPage() {
                   {(selectedPointData.attachments as any[]).map((att: any, i: number) => (
                     <a
                       key={i}
-                      href={att.fileUrl || (att.fileId ? `https://drive.google.com/file/d/${att.fileId}/view` : '#')}
+                      href={att.fileId ? `${import.meta.env.VITE_API_URL || '/api'}/attachments/${att.fileId}/download` : (att.fileUrl || '#')}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"

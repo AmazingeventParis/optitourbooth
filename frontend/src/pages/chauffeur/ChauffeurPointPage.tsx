@@ -362,7 +362,7 @@ export default function ChauffeurPointPage() {
             {point.attachments.map((att, i) => {
               const isImage = att.mimeType?.startsWith('image/');
               const isPdf = att.mimeType === 'application/pdf' || att.title?.toLowerCase().endsWith('.pdf');
-              const downloadUrl = att.fileUrl || (att.fileId ? `https://drive.google.com/file/d/${att.fileId}/view` : '#');
+              const downloadUrl = att.fileId ? `${import.meta.env.VITE_API_URL || '/api'}/attachments/${att.fileId}/download` : (att.fileUrl || '#');
 
               return (
                 <a
