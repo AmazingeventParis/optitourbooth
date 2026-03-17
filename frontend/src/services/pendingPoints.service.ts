@@ -14,6 +14,7 @@ export interface BackendPendingPoint {
   contactTelephone?: string;
   source: string;
   externalId?: string;
+  attachments?: Array<{ fileId: string | null; title: string; mimeType: string; iconLink: string | null; fileUrl: string | null }>;
 }
 
 export interface CalendarEvent {
