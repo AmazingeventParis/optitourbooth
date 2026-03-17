@@ -1460,6 +1460,8 @@ export default function DailyPlanningPage() {
   const [selectedTourneeId, setSelectedTourneeId] = useState<string | null>(null);
   const [showOnlyPending, setShowOnlyPending] = useState(false);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
   const [selectedPendingIndex, setSelectedPendingIndex] = useState<number | null>(null);
   const [selectedDepotId, setSelectedDepotId] = useState<string | null>(null);
   const { success: toastSuccess, error: toastError } = useToast();
@@ -3341,18 +3343,39 @@ export default function DailyPlanningPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={async () => {
-              try {
-                const result = await pendingPointsService.syncGoogleCalendar();
-                toastSuccess(`Sync : ${result.created} points, ${result.found} événements`);
-                loadTournees();
-              } catch {
-                toastError('Erreur sync Google Calendar');
-              }
-            }}>
-              <ArrowPathIcon className="h-4 w-4 mr-1" />
-              Sync
-            </Button>
+            <button
+              className="relative overflow-hidden inline-flex items-center px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-md bg-white hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={syncing}
+              onClick={async () => {
+                setSyncing(true);
+                setSyncProgress(0);
+                const interval = setInterval(() => {
+                  setSyncProgress(p => Math.min(p + Math.random() * 15, 90));
+                }, 300);
+                try {
+                  const result = await pendingPointsService.syncGoogleCalendar();
+                  clearInterval(interval);
+                  setSyncProgress(100);
+                  toastSuccess(`Sync : ${result.created} créés, ${result.updated} mis à jour, ${result.found} événements`);
+                  loadTournees();
+                  setTimeout(() => { setSyncing(false); setSyncProgress(0); }, 1000);
+                } catch {
+                  clearInterval(interval);
+                  setSyncProgress(0);
+                  setSyncing(false);
+                  toastError('Erreur sync Google Calendar');
+                }
+              }}
+            >
+              <span
+                className="absolute inset-0 bg-green-400/30 transition-all duration-300 ease-out"
+                style={{ width: `${syncProgress}%` }}
+              />
+              <span className="relative flex items-center">
+                <ArrowPathIcon className={`h-4 w-4 mr-1 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? `${Math.round(syncProgress)}%` : 'Sync'}
+              </span>
+            </button>
             <div className="flex items-center gap-1">
               <Button variant="outline" size="sm" onClick={goToPreviousDay}>
                 <ChevronLeftIcon className="h-4 w-4" />
