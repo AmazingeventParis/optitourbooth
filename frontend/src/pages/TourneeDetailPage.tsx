@@ -46,6 +46,7 @@ import {
   PencilSquareIcon,
   ExclamationTriangleIcon,
   UserIcon,
+  PaperClipIcon,
 } from '@heroicons/react/24/outline';
 
 const getStatutConfig = (statut: TourneeStatut) => {
@@ -770,6 +771,30 @@ export default function TourneeDetailPage() {
                 </p>
               </div>
             </div>
+
+            {/* Pièces jointes */}
+            {selectedPointData.attachments && (selectedPointData.attachments as any[]).length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <PaperClipIcon className="h-5 w-5" />
+                  Documents ({(selectedPointData.attachments as any[]).length})
+                </h3>
+                <div className="space-y-2">
+                  {(selectedPointData.attachments as any[]).map((att: any, i: number) => (
+                    <a
+                      key={i}
+                      href={att.fileId ? `/api/attachments/${att.fileId}/download` : att.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      {att.iconLink && <img src={att.iconLink} alt="" className="h-5 w-5" />}
+                      <span className="text-sm font-medium text-blue-700 truncate">{att.title}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {!hasDriverData && (
               <div className="text-center py-8 text-gray-500">
