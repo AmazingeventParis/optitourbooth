@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database.js';
 import { config } from '../config/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
@@ -868,7 +869,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           type: pp.type as any,
           OR: [
             { attachments: { equals: [] } },
-            { attachments: { equals: null } },
+            { attachments: { equals: Prisma.JsonNull } },
           ],
         },
         select: { id: true },
