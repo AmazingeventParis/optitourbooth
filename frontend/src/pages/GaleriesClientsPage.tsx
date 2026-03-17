@@ -304,13 +304,13 @@ export default function GaleriesClientsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">Galeries Clients</h1>
             <AverageRating events={[...events.upcoming, ...events.past]} />
           </div>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 mt-1 hidden sm:block">
             Envoyez les galeries photos et collectez les avis Google
           </p>
         </div>
