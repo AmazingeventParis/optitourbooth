@@ -13,7 +13,7 @@ const EVENT_TAG_REGEX = /^\([^)]*\)/;
 const LIR_PREFIX_REGEX = /^\(LIR\s*/i;
 
 // Tags à ignorer (pas de points à créer)
-const TAGS_IGNORED = ['TNT'];
+const TAGS_IGNORED = ['TNT', 'SLIM'];
 
 // Mapping LIR tag → nom du produit OptiTour
 // Note: colorId n'est pas accessible via service account (c'est une préférence utilisateur)
