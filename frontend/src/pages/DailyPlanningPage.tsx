@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, memo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format, addDays, subDays } from 'date-fns';
+import { format, addDays, subDays, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   DndContext,

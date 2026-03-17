@@ -88,6 +88,7 @@ export interface ImportParsedPoint {
   clientName: string;
   societe?: string;
   adresse?: string;
+  date?: string;
   produitName?: string;
   produitCouleur?: string;
   type: string;
