@@ -503,8 +503,9 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Autres tags = retrait/autre → visible uniquement dans préparations et galeries
     const isLivraison = /^LIR\b/i.test(tagInner);
 
-    // Vérifier si le tag est dans la liste des tags ignorés
-    if (TAGS_IGNORED.includes(tagContent) || TAGS_IGNORED.includes(tagInner)) {
+    // Vérifier si le tag est dans la liste des tags ignorés (ex: TNT, LIR TNT, LIV TNT)
+    const tagWords = tagInner.split(/\s+/);
+    if (TAGS_IGNORED.some(ignored => tagWords.includes(ignored)) || TAGS_IGNORED.includes(tagContent)) {
       // Supprimer les points déjà créés pour cet événement ignoré
       const eventId = event.id || '';
       if (eventId) {
