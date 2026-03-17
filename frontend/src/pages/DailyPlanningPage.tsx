@@ -1399,6 +1399,7 @@ const DepotDetailPanel = memo(function DepotDetailPanel({ tournee, onClose, onUp
 // Interface pour le formulaire d'édition de point
 interface EditPointFormData {
   type: PointType;
+  newDate: string;
   creneauDebut: string;
   creneauFin: string;
   dureePrevue: number;
@@ -1419,6 +1420,7 @@ interface EditPointFormData {
 
 const initialEditPointFormData: EditPointFormData = {
   type: 'livraison',
+  newDate: '',
   creneauDebut: '',
   creneauFin: '',
   dureePrevue: 30,
@@ -2670,8 +2672,11 @@ export default function DailyPlanningPage() {
     setEditingPoint(point);
     setEditingTourneeId(tourneeId);
     const client = point.client as Client | undefined;
+    const tournee = tournees.find(t => t.id === tourneeId);
+    const currentDate = tournee?.date ? format(parseISO(tournee.date), 'yyyy-MM-dd') : format(selectedDate, 'yyyy-MM-dd');
     setEditPointFormData({
       type: point.type,
+      newDate: currentDate,
       creneauDebut: point.creneauDebut ? formatTime(point.creneauDebut) : '',
       creneauFin: point.creneauFin ? formatTime(point.creneauFin) : '',
       dureePrevue: point.dureePrevue,
@@ -2736,39 +2741,80 @@ export default function DailyPlanningPage() {
         contactTelephone: editPointFormData.editClientContactTelephone || undefined,
       });
 
-      // Construire les produits groupés par quantité pour le backend
-      const produitsGrouped = groupProductsWithQuantity(editPointSelectedProduits).map(p => ({
-        produitId: p.id,
-        quantite: p.quantite,
-      }));
+      // Vérifier si la date a changé
+      const tournee = tournees.find(t => t.id === tourneeIdToReload);
+      const currentDate = tournee?.date ? format(parseISO(tournee.date), 'yyyy-MM-dd') : format(selectedDate, 'yyyy-MM-dd');
+      const dateChanged = editPointFormData.newDate && editPointFormData.newDate !== currentDate;
 
-      // Mettre à jour le point
-      await tourneesService.updatePoint(tourneeIdToReload, editingPoint.id, {
-        type: editPointFormData.type,
-        creneauDebut: editPointFormData.creneauDebut || undefined,
-        creneauFin: editPointFormData.creneauFin || undefined,
-        dureePrevue: editPointFormData.dureePrevue,
-        notesInternes: editPointFormData.notesInternes || undefined,
-        notesClient: editPointFormData.notesClient || undefined,
-        produits: produitsGrouped,
-      });
+      if (dateChanged) {
+        // Date changée : créer un pending point à la nouvelle date et supprimer l'ancien point
+        await pendingPointsService.createManual({
+          date: editPointFormData.newDate,
+          clientName: editPointFormData.editClientNom,
+          type: editPointFormData.type,
+          adresse: `${editPointFormData.editClientAdresse}, ${editPointFormData.editClientCodePostal} ${editPointFormData.editClientVille}`,
+          produitNom: editPointSelectedProduits.map(p => p.nom).join(', ') || undefined,
+          creneauDebut: editPointFormData.creneauDebut || undefined,
+          creneauFin: editPointFormData.creneauFin || undefined,
+          notes: editPointFormData.notesInternes || undefined,
+          contactNom: editPointFormData.editClientContactNom || undefined,
+          contactTelephone: editPointFormData.editClientContactTelephone || undefined,
+        });
 
-      // Fermer le modal immédiatement
-      setIsEditPointModalOpen(false);
-      setEditingPoint(null);
-      setEditingTourneeId(null);
-      setIsEditingSaving(false);
+        // Supprimer le point de sa tournée actuelle
+        await tourneesService.deletePoint(tourneeIdToReload, editingPoint.id);
 
-      toastSuccess('Point modifié');
+        // Fermer le modal
+        setIsEditPointModalOpen(false);
+        setEditingPoint(null);
+        setEditingTourneeId(null);
+        setIsEditingSaving(false);
 
-      // Recharger la tournée en arrière-plan
-      try {
-        const updatedTournee = await tourneesService.getById(tourneeIdToReload);
-        const newTournees = tournees.map(t => t.id === tourneeIdToReload ? updatedTournee : t);
-        setTournees(newTournees);
-        notifyMapPopup(newTournees);
-      } catch (reloadError) {
-        console.error('Erreur rechargement tournée:', reloadError);
+        toastSuccess(`Point déplacé au ${format(parseISO(editPointFormData.newDate), 'dd/MM/yyyy')}`);
+
+        // Recharger la tournée
+        try {
+          const updatedTournee = await tourneesService.getById(tourneeIdToReload);
+          const newTournees = tournees.map(t => t.id === tourneeIdToReload ? updatedTournee : t);
+          setTournees(newTournees);
+          notifyMapPopup(newTournees);
+        } catch (reloadError) {
+          console.error('Erreur rechargement tournée:', reloadError);
+        }
+      } else {
+        // Même date : mise à jour normale
+        const produitsGrouped = groupProductsWithQuantity(editPointSelectedProduits).map(p => ({
+          produitId: p.id,
+          quantite: p.quantite,
+        }));
+
+        await tourneesService.updatePoint(tourneeIdToReload, editingPoint.id, {
+          type: editPointFormData.type,
+          creneauDebut: editPointFormData.creneauDebut || undefined,
+          creneauFin: editPointFormData.creneauFin || undefined,
+          dureePrevue: editPointFormData.dureePrevue,
+          notesInternes: editPointFormData.notesInternes || undefined,
+          notesClient: editPointFormData.notesClient || undefined,
+          produits: produitsGrouped,
+        });
+
+        // Fermer le modal
+        setIsEditPointModalOpen(false);
+        setEditingPoint(null);
+        setEditingTourneeId(null);
+        setIsEditingSaving(false);
+
+        toastSuccess('Point modifié');
+
+        // Recharger la tournée
+        try {
+          const updatedTournee = await tourneesService.getById(tourneeIdToReload);
+          const newTournees = tournees.map(t => t.id === tourneeIdToReload ? updatedTournee : t);
+          setTournees(newTournees);
+          notifyMapPopup(newTournees);
+        } catch (reloadError) {
+          console.error('Erreur rechargement tournée:', reloadError);
+        }
       }
     } catch (error) {
       setIsEditingSaving(false);
@@ -2785,6 +2831,7 @@ export default function DailyPlanningPage() {
       clientName: point.clientName,
       societe: point.societe || '',
       adresse: point.adresse || '',
+      date: point.date ? format(parseISO(point.date), 'yyyy-MM-dd') : format(selectedDate, 'yyyy-MM-dd'),
       type: point.type,
       creneauDebut: point.creneauDebut || '',
       creneauFin: point.creneauFin || '',
@@ -2861,6 +2908,7 @@ export default function DailyPlanningPage() {
           await pendingPointsService.update(existingPoint._backendId, {
             clientName: editPendingFormData.clientName,
             adresse: editPendingFormData.adresse,
+            date: editPendingFormData.date || undefined,
             type: editPendingFormData.type,
             creneauDebut: editPendingFormData.creneauDebut || undefined,
             creneauFin: editPendingFormData.creneauFin || undefined,
@@ -2874,11 +2922,20 @@ export default function DailyPlanningPage() {
         }
       }
 
+      // Si la date a changé, retirer le point de la vue courante
+      const currentDateStr = format(selectedDate, 'yyyy-MM-dd');
+      const newDateStr = editPendingFormData.date || currentDateStr;
+      if (newDateStr !== currentDateStr) {
+        updatedPoints.splice(editingPendingIndex, 1);
+        toastSuccess(`Point déplacé au ${format(parseISO(newDateStr), 'dd/MM/yyyy')}`);
+      } else {
+        toastSuccess('Point modifié');
+      }
+
       setPendingPoints(updatedPoints);
       setIsEditPendingModalOpen(false);
       setEditingPendingIndex(null);
       setEditPendingSelectedProduits([]);
-      toastSuccess('Point modifié');
     } finally {
       setIsSavingEditPending(false);
     }
@@ -4198,6 +4255,13 @@ export default function DailyPlanningPage() {
             </div>
           </div>
 
+          <Input
+            label="Date"
+            type="date"
+            value={editPointFormData.newDate}
+            onChange={(e) => setEditPointFormData({ ...editPointFormData, newDate: e.target.value })}
+          />
+
           <Select
             label="Type"
             value={editPointFormData.type}
@@ -4370,6 +4434,13 @@ export default function DailyPlanningPage() {
               <p className="mt-1 text-xs text-amber-500">Adresse recommandée pour le géocodage</p>
             )}
           </div>
+
+          <Input
+            label="Date"
+            type="date"
+            value={editPendingFormData.date || ''}
+            onChange={(e) => setEditPendingFormData({ ...editPendingFormData, date: e.target.value })}
+          />
 
           <Select
             label="Type"

@@ -166,7 +166,7 @@ export async function deletePendingPoint(req: Request, res: Response): Promise<v
  */
 export async function updatePendingPoint(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
-  const { clientName, adresse, type, creneauDebut, creneauFin, contactNom, contactTelephone, notes, produitNom, dispatched } = req.body;
+  const { clientName, adresse, type, date, creneauDebut, creneauFin, contactNom, contactTelephone, notes, produitNom, dispatched } = req.body;
 
   try {
     const updated = await prisma.pendingPoint.update({
@@ -175,6 +175,7 @@ export async function updatePendingPoint(req: Request, res: Response): Promise<v
         ...(clientName !== undefined && { clientName }),
         ...(adresse !== undefined && { adresse }),
         ...(type !== undefined && { type }),
+        ...(date !== undefined && { date: new Date(date) }),
         ...(creneauDebut !== undefined && { creneauDebut }),
         ...(creneauFin !== undefined && { creneauFin }),
         ...(contactNom !== undefined && { contactNom }),
