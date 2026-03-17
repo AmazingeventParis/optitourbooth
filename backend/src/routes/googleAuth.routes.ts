@@ -5,7 +5,8 @@ import { config } from '../config/index.js';
 
 const router = Router();
 
-// Temporarily public for initial setup (no auth required)
+// Require admin or superadmin authentication
+router.use(authenticate, requireRole('admin', 'superadmin'));
 
 /**
  * GET /api/google-auth/authorize
