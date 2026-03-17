@@ -72,4 +72,9 @@ export const pendingPointsService = {
   async delete(id: string): Promise<void> {
     await api.delete(`/pending-points/${id}`);
   },
+
+  async syncGoogleCalendar(): Promise<{ found: number; created: number; updated: number; errors: number }> {
+    const response = await api.post<ApiResponse<{ found: number; created: number; updated: number; errors: number }>>('/pending-points/sync-google-calendar');
+    return response.data.data;
+  },
 };

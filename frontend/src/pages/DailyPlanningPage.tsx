@@ -64,6 +64,7 @@ import {
   DocumentDuplicateIcon,
   ExclamationTriangleIcon,
   PaperClipIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 
 // Couleurs hex pour la légende de la carte
@@ -3340,6 +3341,18 @@ export default function DailyPlanningPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={async () => {
+              try {
+                const result = await pendingPointsService.syncGoogleCalendar();
+                toastSuccess(`Sync : ${result.created} points, ${result.found} événements`);
+                loadTournees();
+              } catch {
+                toastError('Erreur sync Google Calendar');
+              }
+            }}>
+              <ArrowPathIcon className="h-4 w-4 mr-1" />
+              Sync
+            </Button>
             <div className="flex items-center gap-1">
               <Button variant="outline" size="sm" onClick={goToPreviousDay}>
                 <ChevronLeftIcon className="h-4 w-4" />
