@@ -69,4 +69,51 @@ router.get('/:fileId/download', authenticate, async (req: Request, res: Response
   }
 });
 
+/**
+ * GET /api/attachments/debug
+ * Debug: check if Google Calendar returns attachments
+ */
+router.get('/debug', authenticate, async (_req: Request, res: Response) => {
+  try {
+    const credentials = JSON.parse(
+      Buffer.from(config.googleCalendar.serviceAccountBase64!, 'base64').toString('utf-8')
+    );
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+    });
+    const calendar = google.calendar({ version: 'v3', auth });
+    const calendarIds = config.googleCalendar.calendarIds;
+    const now = new Date();
+    const timeMin = now.toISOString();
+    const future = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const timeMax = future.toISOString();
+
+    const results: any[] = [];
+    for (const calId of calendarIds) {
+      const response = await calendar.events.list({
+        calendarId: calId,
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 10,
+        supportsAttachments: true,
+      });
+      for (const ev of response.data.items || []) {
+        results.push({
+          summary: ev.summary,
+          hasAttachments: !!ev.attachments,
+          attachmentsCount: ev.attachments?.length || 0,
+          attachments: ev.attachments || [],
+          keys: Object.keys(ev),
+        });
+      }
+    }
+    return res.json({ events: results });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
