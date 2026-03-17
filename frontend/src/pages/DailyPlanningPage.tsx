@@ -699,6 +699,7 @@ interface TourneeTimelineProps {
   onEdit: () => void;
   onDelete?: () => void;
   onValidate?: () => void;
+  onReassignChauffeur?: (tourneeId: string) => void;
   selectedPointId?: string | null;
   onSelectPoint?: (pointId: string | null) => void;
   selectedDepotId?: string | null;
@@ -708,7 +709,7 @@ interface TourneeTimelineProps {
   readOnly?: boolean;
 }
 
-const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onEdit, onDelete, onValidate, selectedPointId, onSelectPoint, selectedDepotId, onSelectDepot, isDragging, isTargeted, readOnly }: TourneeTimelineProps) {
+const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onEdit, onDelete, onValidate, onReassignChauffeur, selectedPointId, onSelectPoint, selectedDepotId, onSelectDepot, isDragging, isTargeted, readOnly }: TourneeTimelineProps) {
   const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
   const chauffeurColor = tournee.chauffeur?.couleur || TOURNEE_HEX_COLORS[colorIndex % TOURNEE_HEX_COLORS.length];
   const points = (tournee.points || []).sort((a, b) => a.ordre - b.ordre);
@@ -825,9 +826,15 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
               <ChevronDownIcon className="h-4 w-4" />
             )}
           </button>
-          <span className="font-semibold text-sm">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onReassignChauffeur?.(tournee.id); }}
+            className="font-semibold text-sm flex items-center gap-1 hover:opacity-80 transition-opacity"
+            title="Changer le chauffeur"
+          >
             {tournee.chauffeur?.prenom} {tournee.chauffeur?.nom}
-          </span>
+            <PencilIcon className="h-3 w-3 opacity-60" />
+          </button>
           <span className="text-xs opacity-80">
             ({points.length} pt{points.length > 1 ? 's' : ''})
           </span>
@@ -1166,6 +1173,7 @@ interface DepotDetailPanelProps {
   tournee: Tournee;
   onClose: () => void;
   onUpdate: (data: { heureDepart?: string; depotAdresse?: string }) => Promise<void>;
+  onReassignChauffeur?: (tourneeId: string) => void;
 }
 
 // Helper pour convertir l'heure au format HH:MM pour les inputs
@@ -1183,7 +1191,7 @@ const formatTimeForInput = (time: string | Date | null | undefined): string => {
   return time as string;
 };
 
-const DepotDetailPanel = memo(function DepotDetailPanel({ tournee, onClose, onUpdate }: DepotDetailPanelProps) {
+const DepotDetailPanel = memo(function DepotDetailPanel({ tournee, onClose, onUpdate, onReassignChauffeur }: DepotDetailPanelProps) {
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [editHeureDepart, setEditHeureDepart] = useState(formatTimeForInput(tournee.heureDepart));
@@ -1240,7 +1248,16 @@ const DepotDetailPanel = memo(function DepotDetailPanel({ tournee, onClose, onUp
       </div>
       <div className="p-3 space-y-3 text-sm">
         <div>
-          <div className="text-[10px] text-gray-400">Livreur</div>
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] text-gray-400">Livreur</div>
+            <button
+              onClick={() => onReassignChauffeur?.(tournee.id)}
+              className="text-gray-400 hover:text-primary-600 p-0.5 rounded transition-colors"
+              title="Changer le chauffeur"
+            >
+              <PencilIcon className="h-3 w-3" />
+            </button>
+          </div>
           <div className="font-medium">{tournee.chauffeur?.prenom} {tournee.chauffeur?.nom}</div>
         </div>
 
@@ -1475,6 +1492,44 @@ export default function DailyPlanningPage() {
   const [editPointFormData, setEditPointFormData] = useState<EditPointFormData>(initialEditPointFormData);
   const [editPointFormErrors, setEditPointFormErrors] = useState<Partial<EditPointFormData>>({});
   const [isEditingSaving, setIsEditingSaving] = useState(false);
+
+  // Modal réattribution chauffeur
+  const [isChauffeurModalOpen, setIsChauffeurModalOpen] = useState(false);
+  const [reassignTourneeId, setReassignTourneeId] = useState<string | null>(null);
+  const [newChauffeurId, setNewChauffeurId] = useState('');
+  const [isReassigning, setIsReassigning] = useState(false);
+
+  const reassignTournee = tournees.find(t => t.id === reassignTourneeId);
+  const chauffeurSelectOptions = useMemo(() => [
+    { value: '', label: 'Sélectionner un chauffeur' },
+    ...chauffeurs
+      .filter(c => !reassignTournee || c.id !== reassignTournee.chauffeurId)
+      .map(c => ({ value: c.id, label: `${c.prenom} ${c.nom}` })),
+  ], [chauffeurs, reassignTournee]);
+
+  const handleReassignChauffeur = async () => {
+    if (!reassignTourneeId || !newChauffeurId) return;
+    setIsReassigning(true);
+    try {
+      await tourneesService.update(reassignTourneeId, { chauffeurId: newChauffeurId });
+      const updatedTournee = await tourneesService.getById(reassignTourneeId);
+      setTournees(prev => prev.map(t => t.id === reassignTourneeId ? updatedTournee : t));
+      toastSuccess('Chauffeur modifié');
+      setIsChauffeurModalOpen(false);
+      setNewChauffeurId('');
+      setReassignTourneeId(null);
+    } catch (err: any) {
+      toastError(err?.response?.data?.error || 'Impossible de changer le chauffeur');
+    } finally {
+      setIsReassigning(false);
+    }
+  };
+
+  const openChauffeurModal = useCallback((tourneeId: string) => {
+    setReassignTourneeId(tourneeId);
+    setNewChauffeurId('');
+    setIsChauffeurModalOpen(true);
+  }, []);
 
   // Modal édition point pending
   const [isEditPendingModalOpen, setIsEditPendingModalOpen] = useState(false);
@@ -3740,6 +3795,7 @@ export default function DailyPlanningPage() {
                         <DepotDetailPanel
                           tournee={tournee}
                           onClose={() => setSelectedDepotId(null)}
+                          onReassignChauffeur={openChauffeurModal}
                           onUpdate={async (data) => {
                             try {
                               await tourneesService.update(tournee.id, data);
@@ -3862,6 +3918,7 @@ export default function DailyPlanningPage() {
                       onEdit={() => navigate(`/tournees/${tournee.id}`)}
                       onDelete={isWarehouseOnly ? undefined : () => openDeleteTourneeDialog(tournee.id)}
                       onValidate={isWarehouseOnly ? undefined : () => openValidateDialog(tournee.id)}
+                      onReassignChauffeur={openChauffeurModal}
                       readOnly={isWarehouseOnly}
                       selectedPointId={selectedPointId}
                       onSelectPoint={(id) => {
@@ -4712,6 +4769,37 @@ export default function DailyPlanningPage() {
         variant="danger"
         isLoading={isDeleting}
       />
+
+      {/* Modal réattribution chauffeur */}
+      <Modal
+        isOpen={isChauffeurModalOpen}
+        onClose={() => setIsChauffeurModalOpen(false)}
+        title="Changer le chauffeur"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Chauffeur actuel : <strong>{reassignTournee?.chauffeur ? `${reassignTournee.chauffeur.prenom} ${reassignTournee.chauffeur.nom}` : 'Non assigné'}</strong>
+          </p>
+          <Select
+            label="Nouveau chauffeur"
+            value={newChauffeurId}
+            onChange={(e) => setNewChauffeurId(e.target.value)}
+            options={chauffeurSelectOptions}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setIsChauffeurModalOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              onClick={handleReassignChauffeur}
+              disabled={!newChauffeurId || isReassigning}
+              isLoading={isReassigning}
+            >
+              Confirmer
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
     </div>
   );
