@@ -3698,6 +3698,25 @@ export default function DailyPlanningPage() {
                                 <div className="text-xs text-gray-600">{point.notesInternes}</div>
                               </div>
                             )}
+                            {point.attachments && (point.attachments as any[]).length > 0 && (
+                              <div className="col-span-2">
+                                <div className="text-[10px] text-gray-400 mb-1">Documents ({(point.attachments as any[]).length})</div>
+                                <div className="space-y-1">
+                                  {(point.attachments as any[]).map((att: any, i: number) => (
+                                    <a
+                                      key={i}
+                                      href={att.fileId ? `/api/attachments/${att.fileId}/download` : att.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 p-1.5 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+                                    >
+                                      <PaperClipIcon className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                                      <span className="text-xs font-medium text-blue-700 truncate">{att.title}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
