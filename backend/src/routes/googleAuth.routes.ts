@@ -5,8 +5,7 @@ import { config } from '../config/index.js';
 
 const router = Router();
 
-// Both endpoints require admin or superadmin authentication
-router.use(authenticate, requireRole('admin', 'superadmin'));
+// Temporarily public for initial setup (no auth required)
 
 /**
  * GET /api/google-auth/authorize
@@ -22,7 +21,7 @@ router.get('/authorize', (req: Request, res: Response) => {
     });
   }
 
-  const redirectUri = `${req.protocol}://${req.get('host')}/api/google-auth/callback`;
+  const redirectUri = `https://${req.get('host')}/api/google-auth/callback`;
 
   const oauth2Client = new google.auth.OAuth2(
     oauthClientId,
@@ -59,7 +58,7 @@ router.get('/callback', async (req: Request, res: Response) => {
     });
   }
 
-  const redirectUri = `${req.protocol}://${req.get('host')}/api/google-auth/callback`;
+  const redirectUri = `https://${req.get('host')}/api/google-auth/callback`;
 
   const oauth2Client = new google.auth.OAuth2(
     oauthClientId,
