@@ -70,7 +70,7 @@ router.get('/debug', authenticate, async (_req: Request, res: Response) => {
  * GET /api/attachments/:fileId/download
  * Proxy Google Drive file download through the backend
  */
-router.get('/:fileId/download', authenticate, async (req: Request, res: Response): Promise<any> => {
+router.get('/:fileId/download', async (req: Request, res: Response): Promise<any> => {
   try {
     const { fileId } = req.params;
     const drive = getDriveClient();

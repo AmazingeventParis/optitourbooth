@@ -363,7 +363,7 @@ export default function ChauffeurPointPage() {
               const isImage = att.mimeType?.startsWith('image/');
               const isPdf = att.mimeType === 'application/pdf' || att.title?.toLowerCase().endsWith('.pdf');
               const downloadUrl = att.fileId
-                ? `/api/attachments/${att.fileId}/download`
+                ? `${import.meta.env.VITE_API_URL || '/api'}/attachments/${att.fileId}/download`
                 : att.fileUrl;
 
               return (

@@ -3705,7 +3705,7 @@ export default function DailyPlanningPage() {
                                   {(point.attachments as any[]).map((att: any, i: number) => (
                                     <a
                                       key={i}
-                                      href={att.fileId ? `/api/attachments/${att.fileId}/download` : att.fileUrl}
+                                      href={att.fileId ? `${import.meta.env.VITE_API_URL || '/api'}/attachments/${att.fileId}/download` : att.fileUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="flex items-center gap-2 p-1.5 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
