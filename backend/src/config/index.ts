@@ -68,6 +68,9 @@ export const config = {
     syncEnabled: process.env.GOOGLE_CALENDAR_SYNC_ENABLED === 'true',
     syncIntervalMinutes: parseInt(process.env.GOOGLE_CALENDAR_SYNC_INTERVAL || '15', 10),
     syncDaysAhead: parseInt(process.env.GOOGLE_CALENDAR_SYNC_DAYS_AHEAD || '30', 10),
+    oauthClientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+    oauthClientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+    oauthRefreshToken: process.env.GOOGLE_OAUTH_REFRESH_TOKEN || '',
   },
 
   // Google Drive (gallery folders)

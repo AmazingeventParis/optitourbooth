@@ -18,6 +18,7 @@ import pendingPointRoutes from './pendingPoint.routes.js';
 import bookingRoutes from './booking.routes.js';
 import billingRoutes from './billing.routes.js';
 import attachmentRoutes from './attachment.routes.js';
+import googleAuthRoutes from './googleAuth.routes.js';
 
 const router = Router();
 
@@ -175,6 +176,7 @@ router.use('/pending-points', pendingPointRoutes);
 
 router.use('/billing', billingRoutes);
 router.use('/attachments', attachmentRoutes);
+router.use('/google-auth', googleAuthRoutes);
 
 // Booking / Review system routes (public + internal + admin)
 router.use('/', bookingRoutes);

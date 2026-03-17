@@ -402,8 +402,17 @@ function getCalendarClient() {
 // ===== DRIVE CLIENT (for attachment downloads) =====
 
 function getDriveClient() {
+  // Prefer OAuth2 user credentials if configured (access to personal Drive files)
+  const { oauthClientId, oauthClientSecret, oauthRefreshToken } = config.googleCalendar;
+  if (oauthClientId && oauthClientSecret && oauthRefreshToken) {
+    const oauth2Client = new google.auth.OAuth2(oauthClientId, oauthClientSecret);
+    oauth2Client.setCredentials({ refresh_token: oauthRefreshToken });
+    return google.drive({ version: 'v3', auth: oauth2Client });
+  }
+
+  // Fallback to service account
   if (!config.googleCalendar.serviceAccountBase64) {
-    throw new Error('GOOGLE_SERVICE_ACCOUNT_BASE64 non configuré');
+    throw new Error('GOOGLE_SERVICE_ACCOUNT_BASE64 non configuré et pas de OAuth2 refresh token');
   }
   const credentials = JSON.parse(
     Buffer.from(config.googleCalendar.serviceAccountBase64, 'base64').toString('utf-8')
