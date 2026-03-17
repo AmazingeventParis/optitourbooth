@@ -20,6 +20,21 @@ function getDriveClient() {
 }
 
 /**
+ * GET /api/attachments/service-account-email
+ * Returns the service account email (for Drive sharing setup)
+ */
+router.get('/service-account-email', async (_req: Request, res: Response) => {
+  try {
+    const credentials = JSON.parse(
+      Buffer.from(config.googleCalendar.serviceAccountBase64!, 'base64').toString('utf-8')
+    );
+    return res.json({ email: credentials.client_email });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /api/attachments/debug
  * Debug: check if Google Calendar returns attachments (public for testing)
  */
