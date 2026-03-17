@@ -45,6 +45,7 @@ interface CreatePointData {
   notesInternes?: string;
   notesClient?: string;
   produits?: Array<{ produitId: string; quantite: number }>;
+  attachments?: any;
 }
 
 interface UpdatePointData {
@@ -102,6 +103,7 @@ export interface ImportParsedPoint {
   produitFound: boolean;
   errors: string[];
   _backendId?: string; // ID du PendingPoint backend (Google Calendar, etc.)
+  attachments?: Array<{ fileId: string | null; title: string; mimeType: string; iconLink: string | null; fileUrl: string | null }>;
 }
 
 export interface ImportResult {

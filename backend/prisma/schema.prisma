@@ -337,6 +337,9 @@ model Point {
   notesInternes       String?     @map("notes_internes") @db.Text
   notesClient         String?     @map("notes_client") @db.Text
 
+  // Pièces jointes Google Calendar
+  attachments         Json?       @default("[]")
+
   // Métadonnées
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
@@ -787,6 +790,7 @@ model PendingPoint {
   externalId        String?  @unique @map("external_id")
   dispatched        Boolean  @default(false)
   usedInPreparation Boolean  @default(false) @map("used_in_preparation")
+  attachments       Json?    @default("[]")
 
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")

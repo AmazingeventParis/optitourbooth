@@ -25,6 +25,7 @@ import {
   PlusIcon,
   XMarkIcon,
   ArrowPathIcon,
+  PaperClipIcon,
 } from '@heroicons/react/24/outline';
 import { PointDetailSkeleton } from '@/components/ui/PageLoader';
 import PhotoLightbox from '@/components/ui/PhotoLightbox';
@@ -347,6 +348,46 @@ export default function ChauffeurPointPage() {
             <p className="text-gray-600 mb-2">{point.client.instructionsAcces}</p>
           )}
           {point.notesClient && <p className="text-gray-600">{point.notesClient}</p>}
+        </Card>
+      )}
+
+      {/* Pièces jointes */}
+      {point.attachments && point.attachments.length > 0 && (
+        <Card className="p-4">
+          <h3 className="font-semibold mb-3 flex items-center">
+            <PaperClipIcon className="h-5 w-5 mr-2" />
+            Documents ({point.attachments.length})
+          </h3>
+          <div className="space-y-2">
+            {point.attachments.map((att, i) => {
+              const isImage = att.mimeType?.startsWith('image/');
+              const isPdf = att.mimeType === 'application/pdf' || att.title?.toLowerCase().endsWith('.pdf');
+              const downloadUrl = att.fileId
+                ? `/api/attachments/${att.fileId}/download`
+                : att.fileUrl;
+
+              return (
+                <a
+                  key={i}
+                  href={downloadUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  {att.iconLink ? (
+                    <img src={att.iconLink} alt="" className="h-5 w-5 flex-shrink-0" />
+                  ) : (
+                    <DocumentTextIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                  )}
+                  <span className="flex-1 text-sm truncate">{att.title}</span>
+                  <span className="text-xs text-gray-400 flex-shrink-0">
+                    {isPdf ? 'PDF' : isImage ? 'Image' : 'Fichier'}
+                  </span>
+                  <ArrowTopRightOnSquareIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                </a>
+              );
+            })}
+          </div>
         </Card>
       )}
 

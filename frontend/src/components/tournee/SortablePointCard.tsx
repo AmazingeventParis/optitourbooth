@@ -10,6 +10,7 @@ import {
   ClockIcon,
   MapPinIcon,
   PhoneIcon,
+  PaperClipIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { formatTime, formatTimeRange } from '@/utils/format';
@@ -283,6 +284,12 @@ const SortablePointCard = memo(function SortablePointCard({
                 </span>
               )}
               <span>{point.dureePrevue} min</span>
+              {point.attachments && (point.attachments as any[]).length > 0 && (
+                <span className="flex items-center text-gray-400" title={`${(point.attachments as any[]).length} pièce(s) jointe(s)`}>
+                  <PaperClipIcon className="h-3.5 w-3.5 mr-0.5" />
+                  {(point.attachments as any[]).length}
+                </span>
+              )}
             </div>
           </div>
 

@@ -429,6 +429,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
         singleEvents: true,
         orderBy: 'startTime',
         maxResults: 500,
+        supportsAttachments: true,
       });
 
       const events = response.data.items || [];
@@ -600,6 +601,15 @@ export async function syncGoogleCalendarEvents(): Promise<{
     const contactNom = parsed?.contactNom || null;
     const contactTelephone = parsed?.contactTelephone || null;
 
+    // Pièces jointes Google Calendar
+    const attachments = (event.attachments || []).map((att: any) => ({
+      fileId: att.fileId || null,
+      title: att.title || 'Sans titre',
+      mimeType: att.mimeType || 'application/octet-stream',
+      iconLink: att.iconLink || null,
+      fileUrl: att.fileUrl || null,
+    }));
+
     // Vérifier si ce client a déjà un point livraison à cette date dans une tournée
     const clientNameLower = clientName.toLowerCase().trim();
     const livAlreadyInTournee = existingPointsSet.has(`${startDate}|${clientNameLower}|livraison`)
@@ -621,8 +631,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactTelephone,
           notes,
           calendarId,
-          // Non-LIR → forcer dispatched=true pour exclure du dispatch
-          // LIR → ne pas écraser dispatched (l'utilisateur peut l'avoir modifié)
+          attachments,
           ...(!isLivraison && { dispatched: true }),
         },
         create: {
@@ -639,7 +648,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           source: 'google_calendar',
           calendarId,
           externalId: `${eventId}_livraison`,
-          // Non-LIR (retraits, etc.) → dispatched=true pour ne pas apparaître dans les points à dispatcher
+          attachments,
           dispatched: !isLivraison || livAlreadyInTournee,
         },
       });
@@ -677,6 +686,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           contactTelephone,
           notes,
           calendarId,
+          attachments,
           ...(!isLivraison && { dispatched: true }),
         },
         create: {
@@ -693,6 +703,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           source: 'google_calendar',
           calendarId,
           externalId: `${eventId}_ramassage`,
+          attachments,
           dispatched: !isLivraison || recAlreadyInTournee,
         },
       });

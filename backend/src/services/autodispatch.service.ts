@@ -14,6 +14,7 @@ interface PendingPoint {
   notes?: string;
   contactNom?: string;
   contactTelephone?: string;
+  attachments?: any;
 }
 
 interface TourneeCandidate {
@@ -223,12 +224,13 @@ export const autoDispatchService = {
             tourneeId: bestTournee.tourneeId,
             clientId: point.clientId,
             type: point.type,
-            ordre: bestTournee.currentPoints, // Ajouter à la fin
+            ordre: bestTournee.currentPoints,
             statut: 'a_faire',
             creneauDebut: point.creneauDebut ? this.parseTime(point.creneauDebut) : null,
             creneauFin: point.creneauFin ? this.parseTime(point.creneauFin) : null,
             dureePrevue,
             notesInternes: point.notes,
+            attachments: point.attachments || [],
           },
         });
 

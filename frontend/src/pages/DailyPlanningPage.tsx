@@ -63,6 +63,7 @@ import {
   ShareIcon,
   DocumentDuplicateIcon,
   ExclamationTriangleIcon,
+  PaperClipIcon,
 } from '@heroicons/react/24/outline';
 
 // Couleurs hex pour la légende de la carte
@@ -294,6 +295,9 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
         )}>
           <typeConfig.icon className="h-3.5 w-3.5" />
         </div>
+        {point.attachments && point.attachments.length > 0 && (
+          <PaperClipIcon className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" title={`${point.attachments.length} pièce(s) jointe(s)`} />
+        )}
         {!point.clientId && (
           <ExclamationTriangleIcon className="h-4 w-4 text-red-500 flex-shrink-0" title="Client non résolu — glissez pour créer automatiquement" />
         )}
@@ -1716,6 +1720,7 @@ export default function DailyPlanningPage() {
           produitFound: !!matchedProduit,
           errors: !matchedProduit && bp.produitNom ? [`Produit "${bp.produitNom}" non trouvé`] : [],
           _backendId: bp.id,
+          attachments: Array.isArray(bp.attachments) ? bp.attachments : [],
         };
       });
 
@@ -2337,6 +2342,7 @@ export default function DailyPlanningPage() {
         produits: pendingPoint.produitsIds && pendingPoint.produitsIds.length > 0
           ? pendingPoint.produitsIds.map(p => ({ produitId: p.id, quantite: 1 }))
           : pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : [],
+        attachments: pendingPoint.attachments || undefined,
       }).then((updatedTournee: Tournee) => {
         // L'API retourne directement la tournée complète avec ETAs OSRM
         setTournees(current => {

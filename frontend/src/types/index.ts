@@ -139,6 +139,14 @@ export interface Tournee {
   updatedAt: string;
 }
 
+export interface Attachment {
+  fileId: string | null;
+  title: string;
+  mimeType: string;
+  iconLink: string | null;
+  fileUrl: string | null;
+}
+
 export interface Point {
   id: string;
   tourneeId: string;
@@ -159,6 +167,7 @@ export interface Point {
   signatureDate?: string;
   notesInternes?: string;
   notesClient?: string;
+  attachments?: Attachment[];
   produits?: PointProduit[];
   photos?: Photo[];
   incidents?: Incident[];

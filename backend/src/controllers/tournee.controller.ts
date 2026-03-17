@@ -341,6 +341,7 @@ export const tourneeController = {
               creneauDebut: true,
               creneauFin: true,
               notesInternes: true,
+              attachments: true,
               client: {
                 select: {
                   id: true,
@@ -1404,12 +1405,14 @@ export const tourneeController = {
       notesInternes?: string;
       notesClient?: string;
       dureePrevue: number;
+      attachments?: any;
     } = {
       tourneeId: id,
       clientId: data.clientId,
       type: data.type,
       ordre,
       dureePrevue: 30, // Sera recalculé
+      ...(data.attachments && { attachments: data.attachments }),
     };
 
     if (data.creneauDebut) {

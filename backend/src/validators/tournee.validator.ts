@@ -66,6 +66,7 @@ export const createPointSchema = z.object({
   notesClient: z.string().optional(),
   produits: z.array(pointProduitSchema).optional().default([]),
   options: z.array(pointOptionSchema).optional(),
+  attachments: z.any().optional(),
 });
 
 export const updatePointSchema = z.object({

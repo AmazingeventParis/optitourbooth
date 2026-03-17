@@ -111,6 +111,7 @@ export interface CreatePointInput {
   notesClient?: string;
   produits?: { produitId: string; quantite: number }[];
   options?: string[];
+  attachments?: any;
 }
 
 // Types pour le routing OSRM
