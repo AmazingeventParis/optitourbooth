@@ -23,7 +23,7 @@ function getDriveClient() {
  * GET /api/attachments/debug
  * Debug: check if Google Calendar returns attachments (public for testing)
  */
-router.get('/debug', async (_req: Request, res: Response) => {
+router.get('/debug', authenticate, async (_req: Request, res: Response) => {
   try {
     const credentials = JSON.parse(
       Buffer.from(config.googleCalendar.serviceAccountBase64!, 'base64').toString('utf-8')
