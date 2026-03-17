@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -24,6 +24,7 @@ import ImportExcelModal from '@/components/tournee/ImportExcelModal';
 import { tourneesService } from '@/services/tournees.service';
 import { clientsService } from '@/services/clients.service';
 import { produitsService } from '@/services/produits.service';
+import { useChauffeurs } from '@/hooks/queries/useUsers';
 import { useToast } from '@/hooks/useToast';
 import { Tournee, Point, Client, Produit, TourneeStatut, PointType } from '@/types';
 import { format, parseISO } from 'date-fns';
@@ -158,6 +159,9 @@ export default function TourneeDetailPage() {
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isDeleteTourneeDialogOpen, setIsDeleteTourneeDialogOpen] = useState(false);
+  const [isChauffeurModalOpen, setIsChauffeurModalOpen] = useState(false);
+  const [newChauffeurId, setNewChauffeurId] = useState('');
+  const [isReassigning, setIsReassigning] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState<Point | null>(null);
   const [statusAction, setStatusAction] = useState<'validate' | 'start' | 'finish' | 'cancel' | null>(null);
   const [pointFormData, setPointFormData] = useState<PointFormData>(initialPointFormData);
@@ -205,6 +209,31 @@ export default function TourneeDetailPage() {
       setProduits(result.data.filter((p) => p.actif));
     } catch (err) {
       console.error('Erreur chargement produits:', err);
+    }
+  };
+
+  const { data: chauffeurs = [] } = useChauffeurs();
+
+  const chauffeurOptions = useMemo(() => [
+    { value: '', label: 'Sélectionner un chauffeur' },
+    ...chauffeurs
+      .filter((c) => tournee ? c.id !== tournee.chauffeurId : true)
+      .map((c) => ({ value: c.id, label: `${c.prenom} ${c.nom}` })),
+  ], [chauffeurs, tournee]);
+
+  const handleReassignChauffeur = async () => {
+    if (!tournee || !newChauffeurId) return;
+    setIsReassigning(true);
+    try {
+      await tourneesService.update(tournee.id, { chauffeurId: newChauffeurId });
+      success('Chauffeur modifié', 'La tournée a été réattribuée');
+      setIsChauffeurModalOpen(false);
+      setNewChauffeurId('');
+      fetchTournee();
+    } catch (err: any) {
+      showError('Erreur', err?.response?.data?.error || err.message || 'Impossible de changer le chauffeur');
+    } finally {
+      setIsReassigning(false);
     }
   };
 
@@ -506,12 +535,18 @@ export default function TourneeDetailPage() {
               <Badge variant={statutConfig.variant}>{statutConfig.label}</Badge>
             </div>
             <div className="flex items-center gap-4 mt-1 text-gray-500">
-              <span className="flex items-center">
-                <TruckIcon className="h-4 w-4 mr-1" />
+              <button
+                type="button"
+                onClick={() => { setNewChauffeurId(''); setIsChauffeurModalOpen(true); }}
+                className="flex items-center gap-1 hover:text-primary-600 transition-colors cursor-pointer"
+                title="Changer le chauffeur"
+              >
+                <TruckIcon className="h-4 w-4" />
                 {tournee.chauffeur
                   ? `${tournee.chauffeur.prenom} ${tournee.chauffeur.nom}`
                   : 'Non assigné'}
-              </span>
+                <PencilSquareIcon className="h-3.5 w-3.5 text-gray-400" />
+              </button>
               {tournee.heureDepart && (
                 <span className="flex items-center">
                   <ClockIcon className="h-4 w-4 mr-1" />
@@ -1252,6 +1287,37 @@ export default function TourneeDetailPage() {
           onSuccess={fetchTournee}
         />
       )}
+
+      {/* Chauffeur Reassignment Modal */}
+      <Modal
+        isOpen={isChauffeurModalOpen}
+        onClose={() => setIsChauffeurModalOpen(false)}
+        title="Changer le chauffeur"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Chauffeur actuel : <strong>{tournee?.chauffeur ? `${tournee.chauffeur.prenom} ${tournee.chauffeur.nom}` : 'Non assigné'}</strong>
+          </p>
+          <Select
+            label="Nouveau chauffeur"
+            value={newChauffeurId}
+            onChange={(e) => setNewChauffeurId(e.target.value)}
+            options={chauffeurOptions}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setIsChauffeurModalOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              onClick={handleReassignChauffeur}
+              disabled={!newChauffeurId || isReassigning}
+              isLoading={isReassigning}
+            >
+              Confirmer
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
