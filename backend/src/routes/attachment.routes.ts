@@ -49,8 +49,8 @@ router.get('/debug', async (_req: Request, res: Response) => {
         orderBy: 'startTime',
         maxResults: 10,
         supportsAttachments: true,
-      });
-      for (const ev of response.data.items || []) {
+      } as any);
+      for (const ev of (response.data.items || []) as any[]) {
         results.push({
           summary: ev.summary,
           hasAttachments: !!ev.attachments,
@@ -70,7 +70,7 @@ router.get('/debug', async (_req: Request, res: Response) => {
  * GET /api/attachments/:fileId/download
  * Proxy Google Drive file download through the backend
  */
-router.get('/:fileId/download', authenticate, async (req: Request, res: Response) => {
+router.get('/:fileId/download', authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const { fileId } = req.params;
     const drive = getDriveClient();

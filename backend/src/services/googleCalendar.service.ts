@@ -430,7 +430,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
         orderBy: 'startTime',
         maxResults: 500,
         supportsAttachments: true,
-      });
+      } as any);
 
       const events = response.data.items || [];
       const taggedEvents = events.filter(
