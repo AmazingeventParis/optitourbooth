@@ -352,7 +352,7 @@ export default function GaleriesClientsPage() {
         </Card>
         <Card className="p-4 text-center">
           <div className="text-2xl font-bold text-amber-600">
-            {[...events.upcoming, ...events.past].filter(e => e.booking?.status === 'review_matched' || e.booking?.status === 'review_detected').length}
+            {[...events.upcoming, ...events.past].filter(e => e.booking?.rating != null).length}
           </div>
           <div className="text-xs text-gray-500">Avis collectés</div>
         </Card>
