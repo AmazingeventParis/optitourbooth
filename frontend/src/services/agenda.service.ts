@@ -3,18 +3,25 @@ import api, { ApiResponse } from './api';
 export interface AllocationBlock {
   id: string;
   client: string;
+  clientAdresse: string | null;
+  clientVille: string | null;
+  clientTelephone: string | null;
+  clientContactNom: string | null;
   produit: string;
   produitCouleur: string;
   dateStart: string;
   timeStart: string;
   dateEnd: string;
   timeEnd: string;
-  deliveryPointId: string;
-  pickupPointId: string | null;
   machineNumero: string | null;
   machineType: string | null;
   status: 'planifie' | 'immobilisee' | 'livree';
   source: 'tournee' | 'pending' | 'preparation';
+  tourneeId: string | null;
+  deliveryPointId: string | null;
+  pickupPointId: string | null;
+  notesInternes: string | null;
+  preparateurNom: string | null;
 }
 
 export interface StockDay {

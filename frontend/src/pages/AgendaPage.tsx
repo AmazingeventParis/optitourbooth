@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { format, addDays, subDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
 import { agendaService, AllocationBlock, StockData } from '@/services/agenda.service';
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { Modal } from '@/components/ui';
+import { ChevronLeftIcon, ChevronRightIcon, MapPinIcon, PhoneIcon, UserIcon, TruckIcon, CalendarDaysIcon, ClockIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 
@@ -30,6 +32,8 @@ export default function AgendaPage() {
   const [stock, setStock] = useState<StockData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedStockDate, setSelectedStockDate] = useState<string | null>(null);
+  const [selectedBlock, setSelectedBlock] = useState<AllocationBlock | null>(null);
+  const navigate = useNavigate();
 
   const dateRange = useMemo(() => {
     const d = parseISO(currentDate);
@@ -71,7 +75,7 @@ export default function AgendaPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const navigate = (dir: 'prev' | 'next' | 'today') => {
+  const navDate = (dir: 'prev' | 'next' | 'today') => {
     const d = parseISO(currentDate);
     if (dir === 'today') { setCurrentDate(format(new Date(), 'yyyy-MM-dd')); return; }
     const fn = dir === 'next'
@@ -129,13 +133,13 @@ export default function AgendaPage() {
 
       {/* Nav */}
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate('prev')} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
+        <button onClick={() => navDate('prev')} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
           <ChevronLeftIcon className="h-4 w-4" />
         </button>
-        <button onClick={() => navigate('today')} className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-xs font-medium">
+        <button onClick={() => navDate('today')} className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-xs font-medium">
           Aujourd'hui
         </button>
-        <button onClick={() => navigate('next')} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
+        <button onClick={() => navDate('next')} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
           <ChevronRightIcon className="h-4 w-4" />
         </button>
         <span className="text-sm font-semibold text-gray-700 capitalize ml-2">{title}</span>
@@ -179,7 +183,7 @@ export default function AgendaPage() {
       {loading ? (
         <div className="text-center py-12 text-gray-400">Chargement...</div>
       ) : viewMode === 'day' ? (
-        <DayView day={days[0]!} blocks={blocksForDay(days[0]!)} />
+        <DayView day={days[0]!} blocks={blocksForDay(days[0]!)} onBlockClick={setSelectedBlock} />
       ) : (
         <div className={clsx(
           'grid gap-px bg-gray-200 rounded-lg overflow-hidden border border-gray-200',
@@ -258,7 +262,7 @@ export default function AgendaPage() {
                       <div
                         key={block.id}
                         className={clsx(
-                          'px-1.5 py-1 text-[11px] font-medium cursor-default border-l-[3px] rounded',
+                          'px-1.5 py-1 text-[11px] font-medium cursor-pointer border-l-[3px] rounded hover:opacity-80 transition-opacity',
                           block.status === 'planifie' && 'border-dashed'
                         )}
                         style={{
@@ -266,12 +270,7 @@ export default function AgendaPage() {
                           borderLeftColor: color,
                           color: color,
                         }}
-                        title={[
-                          block.client,
-                          `${block.produit}${block.machineNumero ? ' ' + block.machineNumero : ''}`,
-                          `${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}`,
-                          block.source === 'pending' ? '(non dispatché)' : block.source === 'preparation' ? '(préparation)' : '',
-                        ].filter(Boolean).join('\n')}
+                        onClick={(e) => { e.stopPropagation(); setSelectedBlock(block); }}
                       >
                         <div className="flex items-center gap-1">
                           <strong className="flex-shrink-0">{block.produit}</strong>
@@ -288,12 +287,155 @@ export default function AgendaPage() {
           })}
         </div>
       )}
+
+      {/* Modal détail événement */}
+      {selectedBlock && (
+        <EventDetailModal
+          block={selectedBlock}
+          onClose={() => setSelectedBlock(null)}
+          onNavigateTournee={(id) => { setSelectedBlock(null); navigate(`/tournees/${id}`); }}
+        />
+      )}
     </div>
   );
 }
 
+/** Modal de détail d'un événement/contrat */
+function EventDetailModal({ block, onClose, onNavigateTournee }: {
+  block: AllocationBlock;
+  onClose: () => void;
+  onNavigateTournee: (tourneeId: string) => void;
+}) {
+  const color = block.produitCouleur || TYPE_COLORS[block.produit] || '#6B7280';
+
+  const statusLabels: Record<string, { label: string; color: string }> = {
+    planifie: { label: 'Planifié (non dispatché)', color: 'bg-gray-100 text-gray-700' },
+    immobilisee: { label: 'Machine immobilisée', color: 'bg-orange-100 text-orange-800' },
+    livree: { label: 'Livrée (en attente récupération)', color: 'bg-blue-100 text-blue-800' },
+  };
+  const statusInfo = statusLabels[block.status] || statusLabels.immobilisee;
+
+  return (
+    <Modal isOpen onClose={onClose} title="Détail de l'événement" size="lg">
+      <div className="space-y-4">
+        {/* Header avec couleur produit */}
+        <div
+          className="flex items-center gap-3 p-3 rounded-lg border-l-4"
+          style={{ backgroundColor: lighten(color, 0.9), borderLeftColor: color }}
+        >
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: color }}>
+            {block.produit.substring(0, 2)}
+          </div>
+          <div className="flex-1">
+            <div className="font-bold text-gray-900">{block.produit}{block.machineNumero && ` — ${block.machineNumero}`}</div>
+            <span className={clsx('inline-block px-2 py-0.5 rounded-full text-xs font-medium mt-0.5', statusInfo.color)}>
+              {statusInfo.label}
+            </span>
+          </div>
+        </div>
+
+        {/* Client */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+            <UserIcon className="h-4 w-4" /> Client
+          </h3>
+          <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+            <div className="font-semibold text-gray-900">{block.client}</div>
+            {block.clientAdresse && (
+              <div className="flex items-start gap-1.5 text-sm text-gray-600">
+                <MapPinIcon className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                {block.clientAdresse}
+              </div>
+            )}
+            {block.clientTelephone && (
+              <div className="flex items-center gap-1.5 text-sm">
+                <PhoneIcon className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                <a href={`tel:${block.clientTelephone.replace(/\s/g, '')}`} className="text-primary-600 hover:underline">
+                  {block.clientTelephone}
+                </a>
+                {block.clientContactNom && <span className="text-gray-400">({block.clientContactNom})</span>}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Dates & Horaires */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+            <CalendarDaysIcon className="h-4 w-4" /> Période d'immobilisation
+          </h3>
+          <div className="bg-gray-50 rounded-lg p-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Livraison</div>
+                <div className="text-sm font-medium text-gray-900">
+                  {(() => { try { return format(parseISO(block.dateStart), 'EEE d MMM yyyy', { locale: fr }); } catch { return block.dateStart; } })()}
+                </div>
+                <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <ClockIcon className="h-3.5 w-3.5" /> {block.timeStart}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Récupération</div>
+                <div className="text-sm font-medium text-gray-900">
+                  {(() => { try { return format(parseISO(block.dateEnd), 'EEE d MMM yyyy', { locale: fr }); } catch { return block.dateEnd; } })()}
+                </div>
+                <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <ClockIcon className="h-3.5 w-3.5" /> {block.timeEnd}
+                </div>
+              </div>
+            </div>
+            {block.dateStart !== block.dateEnd && (
+              <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-500">
+                Durée : {Math.round((parseISO(block.dateEnd).getTime() - parseISO(block.dateStart).getTime()) / 86400000) + 1} jour(s) d'immobilisation
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Préparateur */}
+        {block.preparateurNom && (
+          <div className="flex items-center gap-2 text-sm">
+            <WrenchScrewdriverIcon className="h-4 w-4 text-gray-400" />
+            <span className="text-gray-500">Préparateur :</span>
+            <span className="font-medium text-gray-900">{block.preparateurNom}</span>
+          </div>
+        )}
+
+        {/* Notes */}
+        {block.notesInternes && (
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold text-gray-700">Notes</h3>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-gray-700">
+              {block.notesInternes}
+            </div>
+          </div>
+        )}
+
+        {/* Source */}
+        <div className="text-xs text-gray-400 pt-2 border-t border-gray-100">
+          Source : {block.source === 'tournee' ? 'Point de tournée' : block.source === 'pending' ? 'Google Calendar (non dispatché)' : 'Préparation'}
+        </div>
+
+        {/* Actions */}
+        {block.tourneeId && (
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={() => onNavigateTournee(block.tourneeId!)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors"
+            >
+              <TruckIcon className="h-4 w-4" />
+              Voir la tournée
+            </button>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 /** Day view with hourly timeline */
-function DayView({ day, blocks }: { day: Date; blocks: AllocationBlock[] }) {
+function DayView({ day, blocks, onBlockClick }: { day: Date; blocks: AllocationBlock[]; onBlockClick?: (block: AllocationBlock) => void }) {
   const hours = Array.from({ length: 18 }, (_, i) => i + 6); // 6h to 23h
 
   return (
@@ -327,7 +469,8 @@ function DayView({ day, blocks }: { day: Date; blocks: AllocationBlock[] }) {
                 return (
                   <div
                     key={block.id}
-                    className="px-2 py-1 rounded text-xs font-medium border-l-[3px] flex-shrink-0"
+                    onClick={() => onBlockClick?.(block)}
+                    className="px-2 py-1 rounded text-xs font-medium border-l-[3px] flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
                     style={{
                       backgroundColor: lighten(color, 0.82),
                       borderLeftColor: color,

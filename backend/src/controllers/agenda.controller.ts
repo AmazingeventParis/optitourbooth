@@ -6,6 +6,10 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 interface AllocationBlock {
   id: string;
   client: string;
+  clientAdresse: string | null;
+  clientVille: string | null;
+  clientTelephone: string | null;
+  clientContactNom: string | null;
   produit: string;
   produitCouleur: string;
   dateStart: string;
@@ -16,6 +20,11 @@ interface AllocationBlock {
   machineType: string | null;
   status: 'planifie' | 'immobilisee' | 'livree';
   source: 'tournee' | 'pending' | 'preparation';
+  tourneeId: string | null;
+  deliveryPointId: string | null;
+  pickupPointId: string | null;
+  notesInternes: string | null;
+  preparateurNom: string | null;
 }
 
 function fmtTime(t: Date | string | null): string | null {
@@ -48,8 +57,8 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
   const allPoints = await prisma.point.findMany({
     where: { tournee: { date: { gte: extFrom, lte: extTo } } },
     include: {
-      tournee: { select: { date: true } },
-      client: { select: { id: true, nom: true } },
+      tournee: { select: { id: true, date: true } },
+      client: { select: { id: true, nom: true, adresse: true, codePostal: true, ville: true, telephone: true, contactNom: true, contactTelephone: true } },
       produits: { include: { produit: { select: { id: true, nom: true, couleur: true } } } },
     },
     orderBy: [{ tournee: { date: 'asc' } }, { creneauDebut: 'asc' }],
@@ -129,9 +138,18 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     const machine = findMachine(clientName, dDate, produit.nom);
     usedDeliveryClients.add(fw + '|' + dDate);
 
+    // Find preparateur name if prep exists
+    const prepKey = `${fw}|${dDate}`;
+    const linkedPreps = prepsByClient.get(prepKey);
+    const preparateur = linkedPreps?.[0]?.preparateur || null;
+
     blocks.push({
       id: delivery.id,
       client: clientName,
+      clientAdresse: delivery.client?.adresse ? `${delivery.client.adresse}, ${delivery.client.codePostal || ''} ${delivery.client.ville || ''}`.trim() : null,
+      clientVille: delivery.client?.ville || null,
+      clientTelephone: delivery.client?.telephone || delivery.client?.contactTelephone || null,
+      clientContactNom: delivery.client?.contactNom || null,
       produit: produit.nom,
       produitCouleur: produit.couleur || '#6B7280',
       dateStart, timeStart, dateEnd, timeEnd,
@@ -139,6 +157,11 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       machineType: machine?.type || null,
       status,
       source: 'tournee',
+      tourneeId: delivery.tournee.id,
+      deliveryPointId: delivery.id,
+      pickupPointId: pickup?.id || null,
+      notesInternes: delivery.notesInternes || null,
+      preparateurNom: preparateur,
     });
   }
 
@@ -179,6 +202,10 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     blocks.push({
       id: `pp-${pp.id}`,
       client: pp.clientName,
+      clientAdresse: (pp as any).adresse || null,
+      clientVille: null,
+      clientTelephone: (pp as any).contactTelephone || null,
+      clientContactNom: (pp as any).contactNom || null,
       produit: pp.produitNom,
       produitCouleur: produit?.couleur || '#6B7280',
       dateStart: ppDate,
@@ -189,6 +216,11 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       machineType: machine?.type || null,
       status: 'planifie',
       source: 'pending',
+      tourneeId: null,
+      deliveryPointId: null,
+      pickupPointId: null,
+      notesInternes: (pp as any).notes || null,
+      preparateurNom: null,
     });
   }
 
@@ -209,6 +241,10 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     blocks.push({
       id: `prep-${prep.id}`,
       client: prep.client,
+      clientAdresse: null,
+      clientVille: null,
+      clientTelephone: null,
+      clientContactNom: null,
       produit: prep.machine.type,
       produitCouleur: prep.machine.couleur || '#6B7280',
       dateStart: prepDate,
@@ -219,6 +255,11 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       machineType: prep.machine.type,
       status: 'immobilisee',
       source: 'preparation',
+      tourneeId: null,
+      deliveryPointId: null,
+      pickupPointId: null,
+      notesInternes: prep.notes || null,
+      preparateurNom: prep.preparateur || null,
     });
   }
 
