@@ -46,6 +46,28 @@ curl -s -X GET "https://coolify.swipego.app/api/v1/deploy?uuid=hooooowo888gwocok
 - **Tests** : exclus du build prod via tsconfig.json exclude
 - **Deploy** : push vers `fork` (pas `origin`), puis trigger Coolify pour les deux apps
 
+## Base de donnees
+- **Provider** : Neon (PostgreSQL serverless)
+- **Host** : `ep-divine-tree-abtk5ljg-pooler.eu-west-2.aws.neon.tech`
+- **DB** : `neondb` / **User** : `neondb_owner`
+- **28 tables** dont : users, tenants, tournees, points, clients, produits, vehicules, billing_configs, billing_entries, preparations, machines, pending_points, etc.
+
+## Systeme de facturation (billing)
+- **Grille tarifaire** : `/parametres` > Compta chauffeurs > Grille tarifaire
+  - Par chauffeur : tarif point HF, tarif heure supp, plage horaire HF (debut/fin), tarifs custom
+  - Option "Chauffeur independant" : tous les points = hors forfait (pas de plage horaire)
+- **Detection HF sur planning** : `/planning` detecte automatiquement les points hors forfait selon la config du chauffeur
+  - Badge HF sur les cartes point (contour = detecte, plein = facture)
+  - Section HF dans le modal d'edition point avec intitule, quantite, prix
+- **Historique compta** : `/parametres` > Compta chauffeurs > Historique compta
+  - Types : point_hors_forfait, heure_supp, custom, payment
+  - Paiements (type=payment) : credit deduit du solde
+  - Toggle "marquer paye" (paidAt) sur chaque ligne de charge
+  - Resume : Du (charges) / Paye (paiements) / Solde (balance)
+  - "Calculer auto" genere les entrees depuis les tournees (points HF + heures supp basees sur horaires des points)
+- **Quantites** : toujours entieres, Math.ceil sur toute unite entamee (1.4 → 2)
+- **Heures supp** : calculees a partir des horaires reels des points (pas heureFinReelle de la tournee)
+
 ## Problemes connus resolus
 - Timezone UTC: `new Date("YYYY-MM-DD")` en France donne jour precedent → `ensureDateUTC()`
 - Auto-dispatch: spread operator copiait objet → retourner reference

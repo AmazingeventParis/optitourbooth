@@ -2,19 +2,18 @@ import api, { ApiResponse } from './api';
 
 export interface AllocationBlock {
   id: string;
-  machineId: string;
-  machineType: string;
-  machineNumero: string;
-  machineCouleur: string;
   client: string;
-  status: string;
+  produit: string;
+  produitCouleur: string;
   dateStart: string;
   timeStart: string;
   dateEnd: string;
   timeEnd: string;
-  preparationId: string;
-  deliveryPointId: string | null;
+  deliveryPointId: string;
   pickupPointId: string | null;
+  machineNumero: string | null;
+  machineType: string | null;
+  status: 'immobilisee' | 'livree' | 'recuperee';
 }
 
 export interface StockDay {
