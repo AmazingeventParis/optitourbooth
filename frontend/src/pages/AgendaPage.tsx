@@ -108,11 +108,31 @@ export default function AgendaPage() {
     }
   }, [currentDate, viewMode]);
 
+  // Compute stock locally from allocations — always accurate
   const activeStockDate = selectedStockDate || format(new Date(), 'yyyy-MM-dd');
   const activeStock = useMemo(() => {
-    if (!stock?.days?.length) return null;
-    return stock.days.find(d => d.date === activeStockDate) || stock.days[0];
-  }, [stock, activeStockDate]);
+    if (!stock?.totalByType) return null;
+
+    // Count occupied machines for the selected date from allocation blocks
+    const occupied: Record<string, number> = {};
+    for (const block of allocations) {
+      if (block.dateStart <= activeStockDate && block.dateEnd >= activeStockDate) {
+        const type = block.produit;
+        if (type && type !== '?') {
+          occupied[type] = (occupied[type] || 0) + 1;
+        }
+      }
+    }
+
+    const availability: Record<string, { total: number; occupied: number; horsService: number; available: number }> = {};
+    for (const [type, total] of Object.entries(stock.totalByType)) {
+      const hs = stock.horsServiceByType[type] || 0;
+      const occ = occupied[type] || 0;
+      availability[type] = { total, occupied: occ + hs, horsService: hs, available: Math.max(0, total - occ - hs) };
+    }
+
+    return { date: activeStockDate, availability };
+  }, [stock, allocations, activeStockDate]);
 
   // Types that always show all machines (even empty rows)
   const ALWAYS_SHOW_ALL = ['Vegas', 'Smakk', 'Ring'];
