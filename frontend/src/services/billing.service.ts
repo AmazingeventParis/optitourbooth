@@ -34,6 +34,7 @@ export interface BillingEntry {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  paidAt: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: string;
   user?: { id: string; nom: string; prenom: string; couleur: string | null } | null;
@@ -56,7 +57,7 @@ export const billingService = {
     dateTo?: string;
     page?: number;
     limit?: number;
-  }): Promise<{ data: BillingEntry[]; meta: { page: number; limit: number; total: number; totalPages: number; totalSum: number } }> {
+  }): Promise<{ data: BillingEntry[]; meta: { page: number; limit: number; total: number; totalPages: number; totalSum: number; totalCharges: number; totalPayments: number } }> {
     const res = await api.get<ApiResponse<BillingEntry[]>>('/billing/entries', { params });
     return { data: res.data.data, meta: res.data.meta as any };
   },
@@ -72,6 +73,11 @@ export const billingService = {
     pointId?: string;
   }): Promise<BillingEntry> {
     const res = await api.post<ApiResponse<BillingEntry>>('/billing/entries', data);
+    return res.data.data;
+  },
+
+  async togglePaid(id: string): Promise<BillingEntry> {
+    const res = await api.patch<ApiResponse<BillingEntry>>(`/billing/entries/${id}/paid`);
     return res.data.data;
   },
 

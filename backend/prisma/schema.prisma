@@ -827,11 +827,12 @@ model BillingEntry {
   tourneeId   String?  @map("tournee_id")
   pointId     String?  @map("point_id")
   date        DateTime @db.Date
-  type        String   // 'point_hors_forfait', 'heure_supp', 'custom'
+  type        String   // 'point_hors_forfait', 'heure_supp', 'custom', 'payment'
   label       String
   quantity    Float    @default(1)
   unitPrice   Float    @map("unit_price")
   totalPrice  Float    @map("total_price")
+  paidAt      DateTime? @map("paid_at")
   metadata    Json?
   createdAt   DateTime @default(now()) @map("created_at")
 

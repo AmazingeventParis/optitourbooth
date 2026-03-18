@@ -9,7 +9,10 @@ import {
   XMarkIcon,
   BanknotesIcon,
   ClockIcon,
+  CheckCircleIcon,
+  CurrencyEuroIcon,
 } from '@heroicons/react/24/outline';
+import { CheckCircleIcon as CheckCircleSolidIcon } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
@@ -17,6 +20,7 @@ const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   point_hors_forfait: { label: 'Point HF', color: 'bg-orange-100 text-orange-800' },
   heure_supp: { label: 'Heure supp', color: 'bg-red-100 text-red-800' },
   custom: { label: 'Manuel', color: 'bg-blue-100 text-blue-800' },
+  payment: { label: 'Paiement', color: 'bg-green-100 text-green-800' },
 };
 
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
@@ -331,7 +335,7 @@ function EditConfigModal({ user, onClose, onSaved }: {
 // =============================================
 function HistoriqueSection() {
   const [entries, setEntries] = useState<BillingEntry[]>([]);
-  const [meta, setMeta] = useState({ page: 1, limit: 50, total: 0, totalPages: 0, totalSum: 0 });
+  const [meta, setMeta] = useState({ page: 1, limit: 50, total: 0, totalPages: 0, totalSum: 0, totalCharges: 0, totalPayments: 0 });
   const [loading, setLoading] = useState(true);
   const [configs, setConfigs] = useState<UserBillingConfig[]>([]);
 
@@ -388,6 +392,15 @@ function HistoriqueSection() {
       toast.error('Erreur lors du calcul');
     } finally {
       setComputing(false);
+    }
+  };
+
+  const handleTogglePaid = async (id: string) => {
+    try {
+      await billingService.togglePaid(id);
+      fetchEntries();
+    } catch {
+      toast.error('Erreur mise à jour');
     }
   };
 
@@ -450,9 +463,18 @@ function HistoriqueSection() {
       </Card>
 
       {/* Summary */}
-      <div className="flex items-center gap-4">
-        <span className="px-4 py-1.5 rounded-full text-base font-semibold bg-primary-100 text-primary-800">
-          Total : {meta.totalSum?.toFixed(2) || '0.00'} &euro;
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="px-4 py-1.5 rounded-full text-base font-semibold bg-orange-100 text-orange-800">
+          Dû : {meta.totalCharges?.toFixed(2) || '0.00'} &euro;
+        </span>
+        <span className="px-4 py-1.5 rounded-full text-base font-semibold bg-green-100 text-green-800">
+          Payé : {meta.totalPayments?.toFixed(2) || '0.00'} &euro;
+        </span>
+        <span className={clsx(
+          'px-4 py-1.5 rounded-full text-base font-bold',
+          (meta.totalSum || 0) > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+        )}>
+          Solde : {meta.totalSum?.toFixed(2) || '0.00'} &euro;
         </span>
         <span className="text-sm text-gray-400">{meta.total} entrée(s)</span>
       </div>
@@ -484,8 +506,14 @@ function HistoriqueSection() {
             <tbody>
               {entries.map((entry) => {
                 const typeInfo = TYPE_LABELS[entry.type] || { label: entry.type, color: 'bg-gray-100 text-gray-600' };
+                const isPayment = entry.type === 'payment';
+                const isPaid = !!entry.paidAt;
                 return (
-                  <tr key={entry.id} className="border-b border-gray-50 hover:bg-gray-50">
+                  <tr key={entry.id} className={clsx(
+                    'border-b border-gray-50 hover:bg-gray-50',
+                    isPaid && !isPayment && 'opacity-60',
+                    isPayment && 'bg-green-50/50'
+                  )}>
                     <td className="py-2 whitespace-nowrap">
                       {new Date(typeof entry.date === 'string' && !entry.date.includes('T') ? entry.date + 'T12:00:00Z' : entry.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
@@ -507,14 +535,43 @@ function HistoriqueSection() {
                         {typeInfo.label}
                       </span>
                     </td>
-                    <td className="py-2 text-gray-600 max-w-xs truncate">{entry.label}</td>
+                    <td className="py-2 text-gray-600 max-w-xs truncate">
+                      {entry.label}
+                      {isPaid && (
+                        <span className="ml-1.5 text-[10px] text-green-600 font-medium">
+                          (payé {new Date(entry.paidAt!).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })})
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2 text-right tabular-nums">{entry.quantity}</td>
                     <td className="py-2 text-right tabular-nums">{entry.unitPrice.toFixed(2)} &euro;</td>
-                    <td className="py-2 text-right font-semibold tabular-nums">{entry.totalPrice.toFixed(2)} &euro;</td>
+                    <td className={clsx(
+                      'py-2 text-right font-semibold tabular-nums',
+                      isPayment ? 'text-green-700' : isPaid ? 'text-gray-400 line-through' : ''
+                    )}>
+                      {isPayment ? '-' : ''}{Math.abs(entry.totalPrice).toFixed(2)} &euro;
+                    </td>
                     <td className="py-2">
-                      <button onClick={() => handleDelete(entry.id)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-0.5">
+                        {!isPayment && (
+                          <button
+                            onClick={() => handleTogglePaid(entry.id)}
+                            className={clsx(
+                              'p-1 transition-colors',
+                              isPaid ? 'text-green-500 hover:text-green-700' : 'text-gray-300 hover:text-green-500'
+                            )}
+                            title={isPaid ? 'Marquer non payé' : 'Marquer payé'}
+                          >
+                            {isPaid
+                              ? <CheckCircleSolidIcon className="h-4 w-4" />
+                              : <CheckCircleIcon className="h-4 w-4" />
+                            }
+                          </button>
+                        )}
+                        <button onClick={() => handleDelete(entry.id)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -554,11 +611,13 @@ function AddEntryModal({ configs, onClose, onCreated }: {
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const [mode, setMode] = useState<'charge' | 'payment'>('charge');
   const [userId, setUserId] = useState(configs[0]?.userId || '');
   const [date, setDate] = useState(new Date().toISOString().substring(0, 10));
   const [label, setLabel] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [unitPrice, setUnitPrice] = useState(0);
+  const [paymentAmount, setPaymentAmount] = useState(0);
   const [saving, setSaving] = useState(false);
 
   // Quick-fill from custom items
@@ -566,28 +625,76 @@ function AddEntryModal({ configs, onClose, onCreated }: {
   const customItems = (selectedConfig?.config.customItems as CustomItem[]) || [];
 
   const handleSave = async () => {
-    if (!userId || !label || unitPrice <= 0) {
-      toast.error('Remplissez tous les champs');
-      return;
-    }
-    setSaving(true);
-    try {
-      await billingService.createEntry({ userId, date, label, quantity, unitPrice });
-      toast.success('Entrée créée');
-      onCreated();
-    } catch {
-      toast.error('Erreur');
-    } finally {
-      setSaving(false);
+    if (mode === 'payment') {
+      if (!userId || paymentAmount <= 0) {
+        toast.error('Remplissez le chauffeur et le montant');
+        return;
+      }
+      setSaving(true);
+      try {
+        await billingService.createEntry({
+          userId,
+          date,
+          type: 'payment',
+          label: label || `Paiement du ${new Date(date).toLocaleDateString('fr-FR')}`,
+          quantity: 1,
+          unitPrice: paymentAmount,
+        });
+        toast.success('Paiement enregistré');
+        onCreated();
+      } catch {
+        toast.error('Erreur');
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      if (!userId || !label || unitPrice <= 0) {
+        toast.error('Remplissez tous les champs');
+        return;
+      }
+      setSaving(true);
+      try {
+        await billingService.createEntry({ userId, date, label, quantity, unitPrice });
+        toast.success('Entrée créée');
+        onCreated();
+      } catch {
+        toast.error('Erreur');
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Nouvelle entrée comptable">
+    <Modal isOpen onClose={onClose} title={mode === 'payment' ? 'Enregistrer un paiement' : 'Nouvelle entrée comptable'}>
       <div className="space-y-4">
+        {/* Mode toggle */}
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => setMode('charge')}
+            className={clsx(
+              'flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium transition-colors',
+              mode === 'charge' ? 'bg-orange-50 text-orange-700 border-r border-orange-200' : 'bg-white text-gray-500 hover:bg-gray-50 border-r border-gray-200'
+            )}
+          >
+            <BanknotesIcon className="h-4 w-4" />
+            Facturation
+          </button>
+          <button
+            onClick={() => setMode('payment')}
+            className={clsx(
+              'flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium transition-colors',
+              mode === 'payment' ? 'bg-green-50 text-green-700' : 'bg-white text-gray-500 hover:bg-gray-50'
+            )}
+          >
+            <CurrencyEuroIcon className="h-4 w-4" />
+            Paiement
+          </button>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Chauffeur *</label>
-          <select value={userId} onChange={(e) => setUserId(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500">
+          <select value={userId} onChange={(e) => setUserId(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500">
             {configs.map((c) => (
               <option key={c.userId} value={c.userId}>{c.prenom} {c.nom}</option>
             ))}
@@ -595,53 +702,73 @@ function AddEntryModal({ configs, onClose, onCreated }: {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{mode === 'payment' ? 'Date de paiement *' : 'Date *'}</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500" />
         </div>
 
-        {/* Quick-fill from custom items */}
-        {customItems.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Pré-remplir depuis tarifs</label>
-            <div className="flex flex-wrap gap-1.5">
-              {customItems.map((item, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setLabel(item.name); setUnitPrice(item.price); }}
-                  className="px-2.5 py-1 rounded-full text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors"
-                >
-                  {item.name} ({item.price}&euro;)
-                </button>
-              ))}
+        {mode === 'payment' ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Montant payé (&euro;) *</label>
+              <Input type="number" min={0} step={0.01} value={paymentAmount} onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)} placeholder="0.00" />
             </div>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex: Virement mars 2026" />
+            </div>
+            <div className="bg-green-50 rounded-lg p-3 text-sm border border-green-200">
+              <span className="text-green-700">Crédit :</span>
+              <span className="font-bold text-green-800 ml-2">-{paymentAmount.toFixed(2)} &euro;</span>
+              <p className="text-xs text-green-600 mt-1">Ce montant sera déduit du solde dû au chauffeur</p>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Quick-fill from custom items */}
+            {customItems.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Pré-remplir depuis tarifs</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {customItems.map((item, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setLabel(item.name); setUnitPrice(item.price); }}
+                      className="px-2.5 py-1 rounded-full text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors"
+                    >
+                      {item.name} ({item.price}&euro;)
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+              <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex: Livraison spéciale week-end" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Quantité</label>
+                <Input type="number" min={1} step={1} value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.ceil(parseFloat(e.target.value) || 1)))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Prix unitaire (&euro;) *</label>
+                <Input type="number" min={0} step={0.5} value={unitPrice} onChange={(e) => setUnitPrice(parseFloat(e.target.value) || 0)} />
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-3 text-sm">
+              <span className="text-gray-500">Total :</span>
+              <span className="font-bold text-gray-900 ml-2">{(quantity * unitPrice).toFixed(2)} &euro;</span>
+            </div>
+          </>
         )}
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-          <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex: Livraison spéciale week-end" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Quantité</label>
-            <Input type="number" min={1} step={1} value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.ceil(parseFloat(e.target.value) || 1)))} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Prix unitaire (&euro;) *</label>
-            <Input type="number" min={0} step={0.5} value={unitPrice} onChange={(e) => setUnitPrice(parseFloat(e.target.value) || 0)} />
-          </div>
-        </div>
-
-        <div className="bg-gray-50 rounded-lg p-3 text-sm">
-          <span className="text-gray-500">Total :</span>
-          <span className="font-bold text-gray-900 ml-2">{(quantity * unitPrice).toFixed(2)} &euro;</span>
-        </div>
 
         <div className="flex justify-end gap-3 pt-2 border-t">
           <Button variant="outline" onClick={onClose}>Annuler</Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? 'Création...' : 'Créer'}
+            {saving ? 'Création...' : mode === 'payment' ? 'Enregistrer le paiement' : 'Créer'}
           </Button>
         </div>
       </div>

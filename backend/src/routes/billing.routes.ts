@@ -13,6 +13,7 @@ router.put('/configs/:userId', requireAdmin, billingController.upsertConfig);
 router.get('/entries', requireAdmin, billingController.getEntries);
 router.get('/entries/by-points', requireAdmin, billingController.getEntriesByPoints);
 router.post('/entries', requireAdmin, billingController.createEntry);
+router.patch('/entries/:id/paid', requireAdmin, billingController.togglePaid);
 router.put('/entries/point-hf/:pointId', requireAdmin, billingController.upsertPointHfEntry);
 router.delete('/entries/point-hf/:pointId', requireAdmin, billingController.deletePointHfEntry);
 router.delete('/entries/:id', requireAdmin, billingController.deleteEntry);

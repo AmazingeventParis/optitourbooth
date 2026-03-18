@@ -120,11 +120,21 @@ export const getEntries = asyncHandler(async (req: Request, res: Response) => {
     user: userMap.get(e.userId) || null,
   }));
 
-  // Compute total sum for current filters
-  const totalSum = await prisma.billingEntry.aggregate({
-    where,
-    _sum: { totalPrice: true },
-  });
+  // Compute sums: charges (positive) vs payments (negative/payment type)
+  const [chargesSum, paymentsSum] = await Promise.all([
+    prisma.billingEntry.aggregate({
+      where: { ...where, type: { not: 'payment' } },
+      _sum: { totalPrice: true },
+    }),
+    prisma.billingEntry.aggregate({
+      where: { ...where, type: 'payment' },
+      _sum: { totalPrice: true },
+    }),
+  ]);
+
+  const totalCharges = chargesSum._sum.totalPrice || 0;
+  const totalPayments = Math.abs(paymentsSum._sum.totalPrice || 0);
+  const balance = totalCharges - totalPayments;
 
   return res.status(200).json({
     success: true,
@@ -134,7 +144,9 @@ export const getEntries = asyncHandler(async (req: Request, res: Response) => {
       limit: limitNum,
       total,
       totalPages: Math.ceil(total / limitNum),
-      totalSum: totalSum._sum.totalPrice || 0,
+      totalSum: balance,
+      totalCharges,
+      totalPayments,
     },
   });
 });
@@ -164,6 +176,22 @@ export const createEntry = asyncHandler(async (req: Request, res: Response) => {
   });
 
   return apiResponse.success(res, entry);
+});
+
+/**
+ * PATCH /api/billing/entries/:id/paid
+ * Toggle paid status on a billing entry
+ */
+export const togglePaid = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const entry = await prisma.billingEntry.findUnique({ where: { id } });
+  if (!entry) return apiResponse.notFound(res, 'Entrée non trouvée');
+
+  const updated = await prisma.billingEntry.update({
+    where: { id },
+    data: { paidAt: entry.paidAt ? null : new Date() },
+  });
+  return apiResponse.success(res, updated);
 });
 
 /**
