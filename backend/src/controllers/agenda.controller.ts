@@ -122,12 +122,25 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     const clientName = delivery.client?.nom || '';
     const fw = clientFirstWord(clientName);
 
-    // Get product from point, or fallback to pending_point produit_nom
-    let produitNom: string | null = delivery.produits?.[0]?.produit?.nom || null;
-    let produitCouleur: string | null = delivery.produits?.[0]?.produit?.couleur || null;
+    // Get product type — preparation (machine assignée) is the source of truth
+    let produitNom: string | null = null;
+    let produitCouleur: string | null = null;
 
+    // 1. Priorité: préparation (machine réellement assignée par l'admin)
+    const machineFromPrep = findMachine(clientName, dDate, '');
+    if (machineFromPrep) {
+      produitNom = machineFromPrep.type;
+      produitCouleur = produitColorMap.get(machineFromPrep.type) || null;
+    }
+
+    // 2. Fallback: produit assigné sur le point de tournée
+    if (!produitNom && delivery.produits?.[0]?.produit?.nom) {
+      produitNom = delivery.produits[0].produit.nom;
+      produitCouleur = delivery.produits[0].produit.couleur || null;
+    }
+
+    // 3. Fallback: pending_point (info Google Calendar)
     if (!produitNom) {
-      // Fallback: check pending_point for this client+date
       const ppKey = `${fw}|${dDate}`;
       const pp = pendingByClientDate.get(ppKey);
       if (pp?.produitNom) {
@@ -136,16 +149,6 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       }
     }
 
-    // If still no product, use machine type from preparation
-    if (!produitNom) {
-      const machine = findMachine(clientName, dDate, '');
-      if (machine) {
-        produitNom = machine.type;
-        produitCouleur = produitColorMap.get(machine.type) || null;
-      }
-    }
-
-    // Last resort: show as unknown type
     if (!produitNom) produitNom = '?';
 
     // Find matching pickup
