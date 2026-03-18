@@ -401,17 +401,40 @@ export const computeEntries = asyncHandler(async (req: Request, res: Response) =
       }
     }
 
-    // Check overtime hours
-    if (config.tarifHeureSupp > 0 && tournee.heureFinReelle && config.horsForfaitDebut) {
-      const finReelle = formatTimeFromDate(tournee.heureFinReelle);
-      const limitEnd = config.horsForfaitDebut; // e.g. "18:00"
+    // Check overtime hours - based on points' actual/scheduled times
+    if (config.tarifHeureSupp > 0 && !config.isIndependent && config.horsForfaitDebut && config.horsForfaitFin) {
+      const limitDebut = config.horsForfaitDebut; // e.g. "19:00"
+      const limitDebutMinutes = timeToMinutes(limitDebut);
 
-      const finMinutes = timeToMinutes(finReelle);
-      const limitMinutes = timeToMinutes(limitEnd);
+      // Find the latest point time in the tournee
+      let latestPointMinutes = 0;
+      let latestPointTime = '';
+      for (const point of tournee.points) {
+        // Use actual departure, actual arrival, or scheduled time
+        const timeStr = point.heureDepartReelle
+          ? formatTimeFromDate(point.heureDepartReelle)
+          : point.heureArriveeReelle
+            ? formatTimeFromDate(point.heureArriveeReelle)
+            : point.creneauFin
+              ? formatTimeFromDate(point.creneauFin)
+              : point.creneauDebut
+                ? formatTimeFromDate(point.creneauDebut)
+                : null;
+        if (!timeStr) continue;
+        const m = timeToMinutes(timeStr);
+        // Add service duration to get actual end time at this point
+        const endMinutes = m + (point.dureePrevue || 30);
+        if (endMinutes > latestPointMinutes) {
+          latestPointMinutes = endMinutes;
+          const endH = Math.floor(endMinutes / 60);
+          const endM = endMinutes % 60;
+          latestPointTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+        }
+      }
 
-      if (finMinutes > limitMinutes) {
-        const overtimeMinutes = finMinutes - limitMinutes;
-        const overtimeHours = Math.ceil(overtimeMinutes / 60); // arrondi à l'heure supérieure entamée
+      if (latestPointMinutes > limitDebutMinutes) {
+        const overtimeMinutes = latestPointMinutes - limitDebutMinutes;
+        const overtimeHours = Math.ceil(overtimeMinutes / 60);
 
         const existing = await prisma.billingEntry.findFirst({
           where: { tourneeId: tournee.id, userId: tournee.chauffeurId, type: 'heure_supp' },
@@ -423,11 +446,11 @@ export const computeEntries = asyncHandler(async (req: Request, res: Response) =
               tourneeId: tournee.id,
               date: tournee.date,
               type: 'heure_supp',
-              label: `Heures supp - ${dateStr} (${limitEnd} → ${finReelle})`,
+              label: `Heures supp - ${dateStr} (${limitDebut} → ${latestPointTime})`,
               quantity: overtimeHours,
               unitPrice: config.tarifHeureSupp,
               totalPrice: overtimeHours * config.tarifHeureSupp,
-              metadata: { scheduledEnd: limitEnd, actualEnd: finReelle, overtimeMinutes },
+              metadata: { scheduledEnd: limitDebut, latestPoint: latestPointTime, overtimeMinutes },
             },
           });
           created++;

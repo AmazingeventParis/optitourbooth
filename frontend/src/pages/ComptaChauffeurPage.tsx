@@ -487,7 +487,7 @@ function HistoriqueSection() {
                 return (
                   <tr key={entry.id} className="border-b border-gray-50 hover:bg-gray-50">
                     <td className="py-2 whitespace-nowrap">
-                      {new Date(entry.date + 'T12:00:00Z').toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {new Date(typeof entry.date === 'string' && !entry.date.includes('T') ? entry.date + 'T12:00:00Z' : entry.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
                     <td className="py-2">
                       <div className="flex items-center gap-1.5">
