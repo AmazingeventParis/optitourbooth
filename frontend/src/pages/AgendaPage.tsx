@@ -207,7 +207,7 @@ export default function AgendaPage() {
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
                 <span className="font-medium text-gray-700">{type}</span>
                 <span className={clsx('font-bold tabular-nums', data.available > 0 ? 'text-green-600' : 'text-red-600')}>
-                  {data.available}/{data.total}
+                  {data.available}/{data.total - data.horsService}
                 </span>
               </button>
             );
