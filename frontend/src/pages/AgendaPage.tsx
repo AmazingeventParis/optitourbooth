@@ -146,11 +146,6 @@ export default function AgendaPage() {
     return rows;
   }, [allocations, filterType]);
 
-  // Get blocks for a machine row on a specific day
-  function getRowDayBlocks(blocks: AllocationBlock[], day: Date): AllocationBlock[] {
-    const ds = format(day, 'yyyy-MM-dd');
-    return blocks.filter(a => a.dateStart <= ds && a.dateEnd >= ds);
-  }
 
   return (
     <div className="space-y-3">
@@ -292,77 +287,77 @@ export default function AgendaPage() {
                           </div>
                         )}
                       </td>
-                      {/* Day cells with time bars */}
-                      {days.map(day => {
-                        const dayStr = format(day, 'yyyy-MM-dd');
-                        const dayBlocks = getRowDayBlocks(row.blocks, day);
-                        const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-                        const isToday = isSameDay(day, new Date());
+                      {/* Single merged cell for all days — blocks are positioned absolutely across the full width */}
+                      <td colSpan={days.length} className="border-b border-gray-100 p-0 h-[36px] relative">
+                        {/* Day grid lines */}
+                        <div className="absolute inset-0 flex">
+                          {days.map((day, di) => {
+                            const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+                            const isToday = isSameDay(day, new Date());
+                            return (
+                              <div
+                                key={di}
+                                className={clsx(
+                                  'flex-1 border-r border-gray-100 last:border-r-0',
+                                  isWeekend && 'bg-gray-50/40',
+                                  isToday && 'bg-primary-50/30',
+                                )}
+                              />
+                            );
+                          })}
+                        </div>
+                        {/* Blocks as continuous bars */}
+                        {row.blocks.map(block => {
+                          // Calculate position as % of the total row width
+                          const totalDays = days.length;
+                          const firstDayStr = format(days[0]!, 'yyyy-MM-dd');
+                          const lastDayStr = format(days[totalDays - 1]!, 'yyyy-MM-dd');
 
-                        // Check if any block continues to next day (no right border)
-                        const hasContinuation = dayBlocks.some(b => b.dateEnd > dayStr);
+                          // Clamp block to visible range
+                          const blockStart = block.dateStart < firstDayStr ? firstDayStr : block.dateStart;
+                          const blockEnd = block.dateEnd > lastDayStr ? lastDayStr : block.dateEnd;
 
-                        return (
-                          <td
-                            key={dayStr}
-                            className={clsx(
-                              'border-b p-0 align-middle h-[36px]',
-                              !hasContinuation && 'border-r border-gray-100',
-                              hasContinuation && 'border-r-0',
-                              isWeekend && 'bg-gray-50/40',
-                              isToday && 'bg-primary-50/20',
-                            )}
-                          >
-                            {dayBlocks.length > 0 ? (
-                              <div className="relative h-full mx-0.5">
-                                {dayBlocks.map(block => {
-                                  const isStart = block.dateStart === dayStr;
-                                  const isEnd = block.dateEnd === dayStr;
-                                  const left = isStart ? timeToPercent(block.timeStart) : 0;
-                                  const right = isEnd ? timeToPercent(block.timeEnd) : 100;
-                                  const width = Math.max(right - left, 8);
-                                  const clientShort = block.client.length > 14 ? block.client.substring(0, 14) + '…' : block.client;
+                          const startDayIndex = days.findIndex(d => format(d, 'yyyy-MM-dd') === blockStart);
+                          const endDayIndex = days.findIndex(d => format(d, 'yyyy-MM-dd') === blockEnd);
+                          if (startDayIndex === -1 || endDayIndex === -1) return null;
 
-                                  // Rounded corners only on true start/end, flat on continuation sides
-                                  const borderRadius = `${isStart ? '4px' : '0'} ${isEnd ? '4px' : '0'} ${isEnd ? '4px' : '0'} ${isStart ? '4px' : '0'}`;
+                          const isClampedStart = block.dateStart < firstDayStr;
+                          const isClampedEnd = block.dateEnd > lastDayStr;
 
-                                  return (
-                                    <div
-                                      key={block.id}
-                                      onClick={() => setSelectedBlock(block)}
-                                      className="absolute top-[2px] bottom-[2px] cursor-pointer overflow-hidden flex items-center px-1 transition-opacity hover:opacity-90"
-                                      style={{
-                                        left: `${left}%`,
-                                        width: `${width}%`,
-                                        backgroundColor: lighten(row.color, 0.65),
-                                        borderRadius,
-                                        // Remove cell gap on continuation sides
-                                        marginLeft: isStart ? 0 : '-2px',
-                                        marginRight: isEnd ? 0 : '-2px',
-                                        paddingLeft: isStart ? '4px' : '2px',
-                                        paddingRight: isEnd ? '4px' : '2px',
-                                      }}
-                                      title={`${block.client}\n${block.produit} ${block.machineNumero || ''}\n${block.timeStart}–${block.timeEnd}`}
-                                    >
-                                      <span className="text-[10px] font-medium truncate" style={{ color: row.color }}>
-                                        {isStart ? (
-                                          <>
-                                            <span className="font-bold">{block.timeStart}</span>
-                                            {' '}{clientShort}
-                                          </>
-                                        ) : (
-                                          <>↔ {clientShort}</>
-                                        )}
-                                        {isEnd && !isStart && <span className="font-bold ml-0.5">→{block.timeEnd}</span>}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : null}
-                          </td>
-                        );
-                      })}
+                          // Position within day: time as fraction of day column (6h-24h)
+                          const startTimeFrac = isClampedStart ? 0 : timeToPercent(block.timeStart) / 100;
+                          const endTimeFrac = isClampedEnd ? 1 : timeToPercent(block.timeEnd) / 100;
+
+                          const leftPct = ((startDayIndex + startTimeFrac) / totalDays) * 100;
+                          const rightPct = ((endDayIndex + endTimeFrac) / totalDays) * 100;
+                          const widthPct = Math.max(rightPct - leftPct, 1.5);
+
+                          const clientShort = block.client.length > (widthPct > 15 ? 30 : 14)
+                            ? block.client.substring(0, widthPct > 15 ? 30 : 14) + '…'
+                            : block.client;
+
+                          return (
+                            <div
+                              key={block.id}
+                              onClick={() => setSelectedBlock(block)}
+                              className="absolute top-[2px] bottom-[2px] cursor-pointer overflow-hidden flex items-center px-1.5 hover:brightness-95 transition-all z-[1]"
+                              style={{
+                                left: `${leftPct}%`,
+                                width: `${widthPct}%`,
+                                backgroundColor: lighten(row.color, 0.6),
+                                borderRadius: `${isClampedStart ? '0' : '4px'} ${isClampedEnd ? '0' : '4px'} ${isClampedEnd ? '0' : '4px'} ${isClampedStart ? '0' : '4px'}`,
+                              }}
+                              title={`${block.client}\n${block.produit} ${block.machineNumero || ''}\n${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}`}
+                            >
+                              <span className="text-[10px] font-medium truncate whitespace-nowrap" style={{ color: row.color }}>
+                                <span className="font-bold">{block.timeStart}</span>
+                                {' '}{clientShort}
+                                <span className="opacity-60 ml-1">→{block.timeEnd}</span>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </td>
                     </tr>
                   );
                 });
