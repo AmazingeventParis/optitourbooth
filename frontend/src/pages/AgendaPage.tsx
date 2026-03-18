@@ -126,7 +126,7 @@ export default function AgendaPage() {
         rowMap.set(key, {
           key,
           type: block.produit,
-          numero: block.machineNumero || '?',
+          numero: block.machineNumero || '—',
           color: block.produitCouleur || TYPE_COLORS[block.produit] || '#6B7280',
           blocks: [],
         });
@@ -350,11 +350,11 @@ export default function AgendaPage() {
                               title={`${block.client}\n${block.produit} ${block.machineNumero || ''}\n${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}`}
                             >
                               <span className="text-[10px] font-bold flex-shrink-0" style={{ color: row.color }}>
-                                {isClampedStart ? '◂' : block.timeStart}
+                                {isClampedStart ? '◂' : block.timeStart !== '00:00' ? block.timeStart : ''}
                               </span>
                               <span className="text-[10px] font-medium truncate mx-1 text-center" style={{ color: row.color }}>{clientShort}</span>
                               <span className="text-[10px] font-bold flex-shrink-0" style={{ color: row.color }}>
-                                {isClampedEnd ? '▸' : block.timeEnd}
+                                {isClampedEnd ? '▸' : block.timeEnd !== '23:59' ? block.timeEnd : ''}
                               </span>
                             </div>
                           );
