@@ -340,7 +340,7 @@ export default function AgendaPage() {
                             <div
                               key={block.id}
                               onClick={() => setSelectedBlock(block)}
-                              className="absolute top-[2px] bottom-[2px] cursor-pointer overflow-hidden flex items-center px-1.5 hover:brightness-95 transition-all z-[1]"
+                              className="absolute top-[2px] bottom-[2px] cursor-pointer overflow-hidden flex items-center justify-between px-1.5 hover:brightness-95 transition-all z-[1]"
                               style={{
                                 left: `${leftPct}%`,
                                 width: `${widthPct}%`,
@@ -349,11 +349,9 @@ export default function AgendaPage() {
                               }}
                               title={`${block.client}\n${block.produit} ${block.machineNumero || ''}\n${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}`}
                             >
-                              <span className="text-[10px] font-medium truncate whitespace-nowrap" style={{ color: row.color }}>
-                                <span className="font-bold">{block.timeStart}</span>
-                                {' '}{clientShort}
-                                <span className="opacity-60 ml-1">→{block.timeEnd}</span>
-                              </span>
+                              <span className="text-[10px] font-bold flex-shrink-0" style={{ color: row.color }}>{block.timeStart}</span>
+                              <span className="text-[10px] font-medium truncate mx-1 text-center" style={{ color: row.color }}>{clientShort}</span>
+                              <span className="text-[10px] font-bold flex-shrink-0" style={{ color: row.color }}>{block.timeEnd}</span>
                             </div>
                           );
                         })}
