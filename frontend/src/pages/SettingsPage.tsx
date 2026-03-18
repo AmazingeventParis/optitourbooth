@@ -5,8 +5,6 @@ import {
   TruckIcon,
   CubeIcon,
   BanknotesIcon,
-  ClockIcon,
-  ChartBarIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -16,13 +14,9 @@ import UsersPage from '@/pages/UsersPage';
 import VehiculesPage from '@/pages/VehiculesPage';
 import ProduitsPage from '@/pages/ProduitsPage';
 import ComptaChauffeurPage from '@/pages/ComptaChauffeurPage';
-import TourneesPage from '@/pages/TourneesPage';
-import RapportsPage from '@/pages/RapportsPage';
 
 const TABS = [
   { key: 'compta', label: 'Compta chauffeurs', icon: BanknotesIcon },
-  { key: 'historique', label: 'Historique', icon: ClockIcon },
-  { key: 'rapports', label: 'Rapports', icon: ChartBarIcon },
   { key: 'clients', label: 'Clients', icon: UserGroupIcon },
   { key: 'utilisateurs', label: 'Utilisateurs', icon: UsersIcon },
   { key: 'vehicules', label: 'Véhicules', icon: TruckIcon },
@@ -62,8 +56,6 @@ export default function SettingsPage() {
       {/* Tab content */}
       <div>
         {activeTab === 'compta' && <ComptaChauffeurPage />}
-        {activeTab === 'historique' && <TourneesPage />}
-        {activeTab === 'rapports' && <RapportsPage />}
         {activeTab === 'clients' && <ClientsPage />}
         {activeTab === 'utilisateurs' && <UsersPage />}
         {activeTab === 'vehicules' && <VehiculesPage />}
