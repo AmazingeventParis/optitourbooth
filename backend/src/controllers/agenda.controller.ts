@@ -67,6 +67,17 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
   const deliveries = allPoints.filter(p => p.type === 'livraison' || p.type === 'livraison_ramassage');
   const pickups = allPoints.filter(p => p.type === 'ramassage' || p.type === 'livraison_ramassage');
 
+  // Build pending_points lookup for fallback produit info
+  const allPendingPoints = await prisma.pendingPoint.findMany({
+    where: { date: { gte: extFrom, lte: extTo } },
+  });
+  const pendingByClientDate = new Map<string, typeof allPendingPoints[0]>();
+  for (const pp of allPendingPoints) {
+    const fw = clientFirstWord(pp.clientName);
+    const key = `${fw}|${fmtDate(pp.date)}`;
+    if (!pendingByClientDate.has(key)) pendingByClientDate.set(key, pp);
+  }
+
   // ========== SOURCE 2: Preparations (for machine numbers) ==========
   const preparations = await prisma.preparation.findMany({
     where: {
@@ -102,13 +113,40 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
   const usedPickups = new Set<string>();
   const usedDeliveryClients = new Set<string>(); // track which clients have point-based blocks
 
+  // Preload all products for fallback color lookup
+  const allProduits = await prisma.produit.findMany({ select: { nom: true, couleur: true } });
+  const produitColorMap = new Map(allProduits.map(p => [p.nom, p.couleur]));
+
   for (const delivery of deliveries) {
     const dDate = fmtDate(delivery.tournee.date);
     const clientName = delivery.client?.nom || '';
-    const produit = delivery.produits?.[0]?.produit;
-    if (!produit) continue;
-
     const fw = clientFirstWord(clientName);
+
+    // Get product from point, or fallback to pending_point produit_nom
+    let produitNom: string | null = delivery.produits?.[0]?.produit?.nom || null;
+    let produitCouleur: string | null = delivery.produits?.[0]?.produit?.couleur || null;
+
+    if (!produitNom) {
+      // Fallback: check pending_point for this client+date
+      const ppKey = `${fw}|${dDate}`;
+      const pp = pendingByClientDate.get(ppKey);
+      if (pp?.produitNom) {
+        produitNom = pp.produitNom;
+        produitCouleur = produitColorMap.get(pp.produitNom) || null;
+      }
+    }
+
+    // If still no product, use machine type from preparation
+    if (!produitNom) {
+      const machine = findMachine(clientName, dDate, '');
+      if (machine) {
+        produitNom = machine.type;
+        produitCouleur = produitColorMap.get(machine.type) || null;
+      }
+    }
+
+    // Last resort: show as unknown type
+    if (!produitNom) produitNom = '?';
 
     // Find matching pickup
     const pickup = pickups.find(p => {
@@ -135,7 +173,7 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     let status: AllocationBlock['status'] = 'immobilisee';
     if (delivery.statut === 'termine') status = 'livree';
 
-    const machine = findMachine(clientName, dDate, produit.nom);
+    const machine = findMachine(clientName, dDate, produitNom);
     usedDeliveryClients.add(fw + '|' + dDate);
 
     // Find preparateur name if prep exists
@@ -150,8 +188,8 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       clientVille: delivery.client?.ville || null,
       clientTelephone: delivery.client?.telephone || delivery.client?.contactTelephone || null,
       clientContactNom: delivery.client?.contactNom || null,
-      produit: produit.nom,
-      produitCouleur: produit.couleur || '#6B7280',
+      produit: produitNom,
+      produitCouleur: produitCouleur || '#6B7280',
       dateStart, timeStart, dateEnd, timeEnd,
       machineNumero: machine?.numero || null,
       machineType: machine?.type || null,
