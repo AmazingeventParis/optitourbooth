@@ -625,7 +625,7 @@ function AddEntryModal({ configs, onClose, onCreated }: {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Quantité</label>
-            <Input type="number" min={0.1} step={0.5} value={quantity} onChange={(e) => setQuantity(parseFloat(e.target.value) || 1)} />
+            <Input type="number" min={1} step={1} value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.ceil(parseFloat(e.target.value) || 1)))} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Prix unitaire (&euro;) *</label>

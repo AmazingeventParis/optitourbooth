@@ -146,7 +146,7 @@ export const getEntries = asyncHandler(async (req: Request, res: Response) => {
 export const createEntry = asyncHandler(async (req: Request, res: Response) => {
   const { userId, date, type, label, quantity, unitPrice, tourneeId, pointId } = req.body;
 
-  const qty = quantity || 1;
+  const qty = Math.ceil(quantity || 1);
   const total = qty * unitPrice;
 
   const entry = await prisma.billingEntry.create({
@@ -256,7 +256,7 @@ export const upsertPointHfEntry = asyncHandler(async (req: Request, res: Respons
     return apiResponse.badRequest(res, 'userId et date requis');
   }
 
-  const qty = quantity || 1;
+  const qty = Math.ceil(quantity || 1);
   const total = qty * unitPrice;
   const entryLabel = label || `Point HF - ${clientName || 'Client'}`;
 
@@ -411,7 +411,7 @@ export const computeEntries = asyncHandler(async (req: Request, res: Response) =
 
       if (finMinutes > limitMinutes) {
         const overtimeMinutes = finMinutes - limitMinutes;
-        const overtimeHours = Math.ceil(overtimeMinutes / 60 * 10) / 10; // round to 0.1
+        const overtimeHours = Math.ceil(overtimeMinutes / 60); // arrondi à l'heure supérieure entamée
 
         const existing = await prisma.billingEntry.findFirst({
           where: { tourneeId: tournee.id, userId: tournee.chauffeurId, type: 'heure_supp' },
