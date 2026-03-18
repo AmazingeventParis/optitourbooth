@@ -20,7 +20,6 @@ const TourneesPage = lazy(() => import('@/pages/TourneesPage'));
 const TourneeDetailPage = lazy(() => import('@/pages/TourneeDetailPage'));
 const DailyPlanningPage = lazy(() => import('@/pages/DailyPlanningPage'));
 const PreparationsPage = lazy(() => import('@/pages/PreparationsPage'));
-const RapportsPage = lazy(() => import('@/pages/RapportsPage'));
 const MapPopupPage = lazy(() => import('@/pages/MapPopupPage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 
@@ -281,8 +280,8 @@ function App() {
         <Route path="tournees" element={<LazyPage><TourneesPage /></LazyPage>} />
         <Route path="tournees/:id" element={<LazyPage><TourneeDetailPage /></LazyPage>} />
         <Route path="planning" element={<LazyPage><DailyPlanningPage /></LazyPage>} />
-        <Route path="historique" element={<LazyPage><TourneesPage /></LazyPage>} />
-        <Route path="rapports" element={<LazyPage><RapportsPage /></LazyPage>} />
+        <Route path="historique" element={<Navigate to="/parametres" replace />} />
+        <Route path="rapports" element={<Navigate to="/parametres" replace />} />
         <Route path="reservations" element={<LazyPage><BookingsPage /></LazyPage>} />
         <Route path="galeries" element={<LazyPage><GaleriesClientsPage /></LazyPage>} />
         <Route path="parametres" element={<LazyPage><SettingsPage /></LazyPage>} />
