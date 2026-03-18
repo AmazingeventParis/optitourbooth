@@ -1523,7 +1523,7 @@ export default function DailyPlanningPage() {
 
   // Billing configs (grille tarifaire) pour détection hors forfait
   const [billingConfigs, setBillingConfigs] = useState<UserBillingConfig[]>([]);
-  const [pointHfEntries, setPointHfEntries] = useState<Record<string, { id: string; quantity: number; unitPrice: number; totalPrice: number }>>({});
+  const [pointHfEntries, setPointHfEntries] = useState<Record<string, { id: string; label: string; quantity: number; unitPrice: number; totalPrice: number }>>({});
 
   // Points en attente de dispatch (persistés dans localStorage par date)
   const [pendingPoints, setPendingPoints] = useState<ImportParsedPoint[]>([]);
@@ -1618,6 +1618,7 @@ export default function DailyPlanningPage() {
   // HF billing dans le modal d'édition
   const [editPointHfEnabled, setEditPointHfEnabled] = useState(false);
   const [editPointHfQuantity, setEditPointHfQuantity] = useState(1);
+  const [editPointHfLabel, setEditPointHfLabel] = useState('');
   const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const clientSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -2784,6 +2785,7 @@ export default function DailyPlanningPage() {
     const hfDetected = isPointHorsForfait(point, tournee?.chauffeurId || '', billingConfigs);
     setEditPointHfEnabled(!!existingHfEntry || hfDetected);
     setEditPointHfQuantity(existingHfEntry?.quantity || 1);
+    setEditPointHfLabel(existingHfEntry?.label || '');
     setIsEditPointModalOpen(true);
   };
 
@@ -2877,27 +2879,6 @@ export default function DailyPlanningPage() {
           produits: produitsGrouped,
         });
 
-        // Gérer l'entrée HF de facturation
-        const config = billingConfigs.find(c => c.userId === tournee?.chauffeurId);
-        const unitPrice = config?.config.tarifPointHorsForfait || 0;
-        const existingHf = pointHfEntries[editingPoint.id];
-
-        if (editPointHfEnabled && unitPrice > 0 && tournee) {
-          await billingService.upsertPointHfEntry(editingPoint.id, {
-            quantity: editPointHfQuantity,
-            unitPrice,
-            tourneeId: tourneeIdToReload,
-            userId: tournee.chauffeurId,
-            date: format(parseISO(tournee.date), 'yyyy-MM-dd'),
-            clientName: editPointFormData.editClientNom,
-          });
-        } else if (!editPointHfEnabled && existingHf) {
-          await billingService.deletePointHfEntry(editingPoint.id);
-        }
-
-        // Recharger les entrées HF
-        loadPointHfEntries();
-
         // Fermer le modal
         setIsEditPointModalOpen(false);
         setEditingPoint(null);
@@ -2905,6 +2886,33 @@ export default function DailyPlanningPage() {
         setIsEditingSaving(false);
 
         toastSuccess('Point modifié');
+
+        // Gérer l'entrée HF de facturation (non-bloquant)
+        try {
+          const config = billingConfigs.find(c => c.userId === tournee?.chauffeurId);
+          const unitPrice = config?.config.tarifPointHorsForfait || 0;
+          const existingHf = pointHfEntries[editingPoint.id];
+
+          if (editPointHfEnabled && unitPrice > 0 && tournee) {
+            const hfLabel = editPointHfLabel || `Point HF - ${editPointFormData.editClientNom}`;
+            await billingService.upsertPointHfEntry(editingPoint.id, {
+              quantity: editPointHfQuantity,
+              unitPrice,
+              tourneeId: tourneeIdToReload,
+              userId: tournee.chauffeurId,
+              date: format(parseISO(tournee.date), 'yyyy-MM-dd'),
+              clientName: editPointFormData.editClientNom,
+              label: hfLabel,
+            });
+          } else if (!editPointHfEnabled && existingHf) {
+            await billingService.deletePointHfEntry(editingPoint.id);
+          }
+          // Recharger les entrées HF
+          loadPointHfEntries();
+        } catch (hfError) {
+          console.error('Erreur facturation HF:', hfError);
+          toastError('Attention', 'Point sauvé mais erreur facturation HF');
+        }
 
         // Recharger la tournée
         try {
@@ -4500,8 +4508,15 @@ export default function DailyPlanningPage() {
             const hfDetected = editingPoint && tournee ? isPointHorsForfait(editingPoint, tournee.chauffeurId, billingConfigs) : false;
             const existingHfEntry = editingPoint ? pointHfEntries[editingPoint.id] : null;
             const unitPrice = config?.config.tarifPointHorsForfait || 0;
+            const customItems = (config?.config.customItems || []) as { name: string; price: number }[];
 
             if (!config || unitPrice <= 0) return null;
+
+            // Options de type/intitulé disponibles
+            const labelOptions = [
+              { value: '', label: `Point HF - ${editPointFormData.editClientNom}` },
+              ...customItems.map(item => ({ value: item.name, label: `${item.name} (${item.price.toFixed(2)} €)` })),
+            ];
 
             return (
               <div className={clsx(
@@ -4534,28 +4549,60 @@ export default function DailyPlanningPage() {
                 </div>
 
                 {editPointHfEnabled && (
-                  <div className="flex items-center gap-3 mt-2">
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Quantité</label>
-                      <input
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={editPointHfQuantity}
-                        onChange={(e) => setEditPointHfQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  <div className="space-y-2 mt-2">
+                    {/* Intitulé / type de facturation */}
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Intitulé</label>
+                      <select
+                        value={editPointHfLabel}
+                        onChange={(e) => setEditPointHfLabel(e.target.value)}
                         className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:ring-orange-500"
-                      />
+                      >
+                        {labelOptions.map((opt, i) => (
+                          <option key={i} value={opt.value}>{opt.label}</option>
+                        ))}
+                        <option value="__custom__">Personnalisé...</option>
+                      </select>
+                      {editPointHfLabel === '__custom__' && (
+                        <input
+                          type="text"
+                          placeholder="Saisir un intitulé..."
+                          className="w-full mt-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:ring-orange-500"
+                          onChange={(e) => {
+                            if (e.target.value) setEditPointHfLabel(e.target.value);
+                          }}
+                          onBlur={(e) => {
+                            if (!e.target.value) setEditPointHfLabel('');
+                          }}
+                          autoFocus
+                        />
+                      )}
                     </div>
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Prix unitaire</label>
-                      <div className="px-3 py-1.5 bg-white rounded-lg border border-gray-200 text-sm font-medium">
-                        {unitPrice.toFixed(2)} &euro;
+
+                    {/* Quantité + Prix */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Quantité</label>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={editPointHfQuantity}
+                          onChange={(e) => setEditPointHfQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:ring-orange-500"
+                        />
                       </div>
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 mb-1">Total</label>
-                      <div className="px-3 py-1.5 bg-orange-100 rounded-lg border border-orange-200 text-sm font-bold text-orange-800">
-                        {(editPointHfQuantity * unitPrice).toFixed(2)} &euro;
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Prix unitaire</label>
+                        <div className="px-3 py-1.5 bg-white rounded-lg border border-gray-200 text-sm font-medium">
+                          {unitPrice.toFixed(2)} &euro;
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Total</label>
+                        <div className="px-3 py-1.5 bg-orange-100 rounded-lg border border-orange-200 text-sm font-bold text-orange-800">
+                          {(editPointHfQuantity * unitPrice).toFixed(2)} &euro;
+                        </div>
                       </div>
                     </div>
                   </div>

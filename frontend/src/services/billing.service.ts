@@ -84,9 +84,9 @@ export const billingService = {
     return res.data.data;
   },
 
-  async getEntriesByPoints(pointIds: string[]): Promise<Record<string, { id: string; quantity: number; unitPrice: number; totalPrice: number }>> {
+  async getEntriesByPoints(pointIds: string[]): Promise<Record<string, { id: string; label: string; quantity: number; unitPrice: number; totalPrice: number }>> {
     if (pointIds.length === 0) return {};
-    const res = await api.get<ApiResponse<Record<string, { id: string; quantity: number; unitPrice: number; totalPrice: number }>>>('/billing/entries/by-points', {
+    const res = await api.get<ApiResponse<Record<string, { id: string; label: string; quantity: number; unitPrice: number; totalPrice: number }>>>('/billing/entries/by-points', {
       params: { pointIds: pointIds.join(',') },
     });
     return res.data.data;
@@ -99,6 +99,7 @@ export const billingService = {
     userId: string;
     date: string;
     clientName: string;
+    label?: string;
   }): Promise<BillingEntry> {
     const res = await api.put<ApiResponse<BillingEntry>>(`/billing/entries/point-hf/${pointId}`, data);
     return res.data.data;

@@ -226,6 +226,7 @@ export const getEntriesByPoints = asyncHandler(async (req: Request, res: Respons
     select: {
       id: true,
       pointId: true,
+      label: true,
       quantity: true,
       unitPrice: true,
       totalPrice: true,
@@ -233,10 +234,10 @@ export const getEntriesByPoints = asyncHandler(async (req: Request, res: Respons
   });
 
   // Map by pointId for quick lookup
-  const result: Record<string, { id: string; quantity: number; unitPrice: number; totalPrice: number }> = {};
+  const result: Record<string, { id: string; label: string; quantity: number; unitPrice: number; totalPrice: number }> = {};
   for (const e of entries) {
     if (e.pointId) {
-      result[e.pointId] = { id: e.id, quantity: e.quantity, unitPrice: e.unitPrice, totalPrice: e.totalPrice };
+      result[e.pointId] = { id: e.id, label: e.label, quantity: e.quantity, unitPrice: e.unitPrice, totalPrice: e.totalPrice };
     }
   }
 
@@ -249,7 +250,7 @@ export const getEntriesByPoints = asyncHandler(async (req: Request, res: Respons
  */
 export const upsertPointHfEntry = asyncHandler(async (req: Request, res: Response) => {
   const { pointId } = req.params;
-  const { quantity, unitPrice, tourneeId, userId, date, clientName } = req.body;
+  const { quantity, unitPrice, tourneeId, userId, date, clientName, label } = req.body;
 
   if (!userId || !date) {
     return apiResponse.badRequest(res, 'userId et date requis');
@@ -257,6 +258,7 @@ export const upsertPointHfEntry = asyncHandler(async (req: Request, res: Respons
 
   const qty = quantity || 1;
   const total = qty * unitPrice;
+  const entryLabel = label || `Point HF - ${clientName || 'Client'}`;
 
   // Check if entry already exists for this point
   const existing = await prisma.billingEntry.findFirst({
@@ -271,6 +273,7 @@ export const upsertPointHfEntry = asyncHandler(async (req: Request, res: Respons
         quantity: qty,
         unitPrice,
         totalPrice: total,
+        label: entryLabel,
       },
     });
   } else {
@@ -281,7 +284,7 @@ export const upsertPointHfEntry = asyncHandler(async (req: Request, res: Respons
         pointId,
         date: new Date(date + 'T12:00:00Z'),
         type: 'point_hors_forfait',
-        label: `Point HF - ${clientName || 'Client'}`,
+        label: entryLabel,
         quantity: qty,
         unitPrice,
         totalPrice: total,
