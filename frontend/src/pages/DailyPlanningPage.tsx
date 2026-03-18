@@ -34,6 +34,7 @@ import { useSocketStore, isPositionStale } from '@/store/socketStore';
 import { useAuthStore } from '@/store/authStore';
 import { pendingPointsService } from '@/services/pendingPoints.service';
 import { Button, Badge, Modal, Input, Select, TimeSelect, AddressAutocomplete, PhoneNumbers } from '@/components/ui';
+import { billingService, UserBillingConfig } from '@/services/billing.service';
 import type { AddressResult } from '@/components/ui';
 import WheelTimePicker from '@/components/ui/WheelTimePicker';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -119,10 +120,12 @@ interface TimelinePointProps {
   timeStatus: TimeStatus;
   isOverlay?: boolean;
   isSelected?: boolean;
+  isHorsForfait?: boolean;
+  hasHfEntry?: boolean;
   onSelect?: (pointId: string) => void;
 }
 
-const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus, isOverlay, isSelected, onSelect }: TimelinePointProps) {
+const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus, isOverlay, isSelected, isHorsForfait, hasHfEntry, onSelect }: TimelinePointProps) {
   const {
     attributes,
     listeners,
@@ -199,6 +202,16 @@ const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus
         )}>
           <typeConfig.icon className="h-3.5 w-3.5" />
         </div>
+        {isHorsForfait && (
+          <span className={clsx(
+            'px-1 py-0.5 text-[9px] font-bold rounded flex-shrink-0',
+            hasHfEntry
+              ? 'bg-orange-500 text-white'
+              : 'bg-orange-100 text-orange-700 border border-orange-300'
+          )}>
+            HF
+          </span>
+        )}
       </div>
       {/* Ligne 2: produit + créneau */}
       <div className="flex items-center gap-1.5 mt-1 text-[11px] text-gray-600">
@@ -651,6 +664,41 @@ const getTimeStatusFromETA = (
   return 'ontime';
 };
 
+// Vérifie si un point est dans une plage hors forfait pour un chauffeur donné
+const isPointHorsForfait = (
+  point: Point,
+  chauffeurId: string,
+  billingConfigs: UserBillingConfig[]
+): boolean => {
+  const config = billingConfigs.find(c => c.userId === chauffeurId);
+  if (!config) return false;
+
+  // Chauffeur indépendant = tout est HF
+  if (config.config.isIndependent) return true;
+
+  // Pas de plage configurée ou pas de tarif = pas de détection
+  if (!config.config.horsForfaitDebut || !config.config.horsForfaitFin) return false;
+  if (config.config.tarifPointHorsForfait <= 0) return false;
+
+  // Utiliser le créneau début, l'ETA, ou le créneau fin comme référence
+  const timeStr = point.creneauDebut || point.heureArriveeEstimee || point.creneauFin;
+  if (!timeStr) return false;
+
+  const pointMinutes = timeToMinutes(timeStr);
+  if (pointMinutes === null) return false;
+
+  const debutMinutes = timeToMinutes(config.config.horsForfaitDebut);
+  const finMinutes = timeToMinutes(config.config.horsForfaitFin);
+  if (debutMinutes === null || finMinutes === null) return false;
+
+  // Gestion plage overnight (ex: 18:00 → 07:00)
+  if (debutMinutes <= finMinutes) {
+    return pointMinutes >= debutMinutes && pointMinutes <= finMinutes;
+  } else {
+    return pointMinutes >= debutMinutes || pointMinutes <= finMinutes;
+  }
+};
+
 // Formate l'ETA du backend en "HHhMM"
 const formatETAFromBackend = (heureArriveeEstimee: string | undefined): string | null => {
   if (!heureArriveeEstimee) return null;
@@ -712,9 +760,11 @@ interface TourneeTimelineProps {
   isDragging?: boolean;
   isTargeted?: boolean;
   readOnly?: boolean;
+  billingConfigs?: UserBillingConfig[];
+  pointHfEntries?: Record<string, { id: string; quantity: number; unitPrice: number; totalPrice: number }>;
 }
 
-const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onEdit, onDelete, onValidate, onReassignChauffeur, selectedPointId, onSelectPoint, selectedDepotId, onSelectDepot, isDragging, isTargeted, readOnly }: TourneeTimelineProps) {
+const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onEdit, onDelete, onValidate, onReassignChauffeur, selectedPointId, onSelectPoint, selectedDepotId, onSelectDepot, isDragging, isTargeted, readOnly, billingConfigs, pointHfEntries }: TourneeTimelineProps) {
   const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
   const chauffeurColor = tournee.chauffeur?.couleur || TOURNEE_HEX_COLORS[colorIndex % TOURNEE_HEX_COLORS.length];
   const points = (tournee.points || []).sort((a, b) => a.ordre - b.ordre);
@@ -1057,6 +1107,7 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
                   point.creneauDebut,
                   point.creneauFin
                 );
+                const hf = billingConfigs ? isPointHorsForfait(point, tournee.chauffeurId, billingConfigs) : false;
                 return (
                   <TimelinePoint
                     key={point.id}
@@ -1064,6 +1115,8 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
                     tourneeId={tournee.id}
                     timeStatus={timeStatus}
                     isSelected={selectedPointId === point.id}
+                    isHorsForfait={hf}
+                    hasHfEntry={!!pointHfEntries?.[point.id]}
                     onSelect={(id) => onSelectPoint?.(selectedPointId === id ? null : id)}
                   />
                 );
@@ -1468,6 +1521,10 @@ export default function DailyPlanningPage() {
   const [selectedDepotId, setSelectedDepotId] = useState<string | null>(null);
   const { success: toastSuccess, error: toastError } = useToast();
 
+  // Billing configs (grille tarifaire) pour détection hors forfait
+  const [billingConfigs, setBillingConfigs] = useState<UserBillingConfig[]>([]);
+  const [pointHfEntries, setPointHfEntries] = useState<Record<string, { id: string; quantity: number; unitPrice: number; totalPrice: number }>>({});
+
   // Points en attente de dispatch (persistés dans localStorage par date)
   const [pendingPoints, setPendingPoints] = useState<ImportParsedPoint[]>([]);
   const isDateChanging = useRef(false);
@@ -1558,6 +1615,9 @@ export default function DailyPlanningPage() {
   const [addPendingRamassageCreneauFin, setAddPendingRamassageCreneauFin] = useState('');
   const [editPendingSelectedProduits, setEditPendingSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
   const [editPointSelectedProduits, setEditPointSelectedProduits] = useState<{ id: string; nom: string }[]>([]);
+  // HF billing dans le modal d'édition
+  const [editPointHfEnabled, setEditPointHfEnabled] = useState(false);
+  const [editPointHfQuantity, setEditPointHfQuantity] = useState(1);
   const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const clientSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1833,17 +1893,19 @@ export default function DailyPlanningPage() {
     });
   }, [selectedDate, tournees]);
 
-  // Charger données statiques en parallèle (véhicules, produits - chauffeurs via React Query)
+  // Charger données statiques en parallèle (véhicules, produits, billing configs - chauffeurs via React Query)
   useEffect(() => {
     const loadStaticData = async () => {
       try {
-        const [vehiculesResult, produitsResult] = await Promise.all([
+        const [vehiculesResult, produitsResult, configsResult] = await Promise.all([
           import('@/services/api').then(({ default: api }) => api.get('/vehicules/actifs')),
           produitsService.listActifs(),
+          billingService.getConfigs().catch(() => [] as UserBillingConfig[]),
         ]);
 
         setVehicules(vehiculesResult.data.data || []);
         setProduits(produitsResult);
+        setBillingConfigs(configsResult);
       } catch (error) {
         console.error('Erreur chargement données statiques:', error);
       }
@@ -1873,6 +1935,18 @@ export default function DailyPlanningPage() {
   useEffect(() => {
     loadTournees();
   }, [loadTournees]);
+
+  // Charger les entrées HF existantes pour les points des tournées
+  const loadPointHfEntries = useCallback(async () => {
+    const allPointIds = tournees.flatMap(t => (t.points || []).map(p => p.id));
+    if (allPointIds.length === 0) { setPointHfEntries({}); return; }
+    try {
+      const entries = await billingService.getEntriesByPoints(allPointIds);
+      setPointHfEntries(entries);
+    } catch { /* ignore */ }
+  }, [tournees]);
+
+  useEffect(() => { loadPointHfEntries(); }, [loadPointHfEntries]);
 
   // Initialiser la connexion Socket.io pour le suivi GPS temps réel
   useEffect(() => {
@@ -2705,6 +2779,11 @@ export default function DailyPlanningPage() {
         return items;
       });
     setEditPointSelectedProduits(existingProduits);
+    // Initialiser le state HF
+    const existingHfEntry = pointHfEntries[point.id];
+    const hfDetected = isPointHorsForfait(point, tournee?.chauffeurId || '', billingConfigs);
+    setEditPointHfEnabled(!!existingHfEntry || hfDetected);
+    setEditPointHfQuantity(existingHfEntry?.quantity || 1);
     setIsEditPointModalOpen(true);
   };
 
@@ -2797,6 +2876,27 @@ export default function DailyPlanningPage() {
           notesClient: editPointFormData.notesClient || undefined,
           produits: produitsGrouped,
         });
+
+        // Gérer l'entrée HF de facturation
+        const config = billingConfigs.find(c => c.userId === tournee?.chauffeurId);
+        const unitPrice = config?.config.tarifPointHorsForfait || 0;
+        const existingHf = pointHfEntries[editingPoint.id];
+
+        if (editPointHfEnabled && unitPrice > 0 && tournee) {
+          await billingService.upsertPointHfEntry(editingPoint.id, {
+            quantity: editPointHfQuantity,
+            unitPrice,
+            tourneeId: tourneeIdToReload,
+            userId: tournee.chauffeurId,
+            date: format(parseISO(tournee.date), 'yyyy-MM-dd'),
+            clientName: editPointFormData.editClientNom,
+          });
+        } else if (!editPointHfEnabled && existingHf) {
+          await billingService.deletePointHfEntry(editingPoint.id);
+        }
+
+        // Recharger les entrées HF
+        loadPointHfEntries();
 
         // Fermer le modal
         setIsEditPointModalOpen(false);
@@ -3778,6 +3878,27 @@ export default function DailyPlanningPage() {
                                 <div className="text-xs text-gray-600">{point.notesInternes}</div>
                               </div>
                             )}
+                            {/* Indicateur Hors Forfait */}
+                            {tournee && (() => {
+                              const hf = isPointHorsForfait(point, tournee.chauffeurId, billingConfigs);
+                              const hfEntry = pointHfEntries[point.id];
+                              if (!hf && !hfEntry) return null;
+                              return (
+                                <div className="col-span-2 p-2 rounded-lg bg-orange-50 border border-orange-200">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-orange-500 text-white">HF</span>
+                                      <span className="text-xs font-medium text-orange-800">Hors forfait</span>
+                                    </div>
+                                    {hfEntry ? (
+                                      <span className="text-xs font-bold text-orange-800">{hfEntry.totalPrice.toFixed(2)} &euro;</span>
+                                    ) : (
+                                      <span className="text-[10px] text-orange-500">Non facturé</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                             {point.attachments && (point.attachments as any[]).length > 0 && (
                               <div className="col-span-2">
                                 <div className="text-[10px] text-gray-400 mb-1">Documents ({(point.attachments as any[]).length})</div>
@@ -4052,6 +4173,8 @@ export default function DailyPlanningPage() {
                       }}
                       isDragging={isDraggingAny}
                       isTargeted={dragOverTourneeId === tournee.id}
+                      billingConfigs={billingConfigs}
+                      pointHfEntries={pointHfEntries}
                     />
                   ))}
                 </div>
@@ -4369,6 +4492,89 @@ export default function DailyPlanningPage() {
               placeholder="Instructions pour le client..."
             />
           </div>
+
+          {/* Section Hors Forfait */}
+          {(() => {
+            const tournee = editingTourneeId ? tournees.find(t => t.id === editingTourneeId) : null;
+            const config = tournee ? billingConfigs.find(c => c.userId === tournee.chauffeurId) : null;
+            const hfDetected = editingPoint && tournee ? isPointHorsForfait(editingPoint, tournee.chauffeurId, billingConfigs) : false;
+            const existingHfEntry = editingPoint ? pointHfEntries[editingPoint.id] : null;
+            const unitPrice = config?.config.tarifPointHorsForfait || 0;
+
+            if (!config || unitPrice <= 0) return null;
+
+            return (
+              <div className={clsx(
+                'p-3 rounded-lg border',
+                hfDetected ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'
+              )}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">Hors forfait</span>
+                    {hfDetected && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-orange-500 text-white">
+                        Auto-détecté
+                      </span>
+                    )}
+                    {config.config.isIndependent && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700">
+                        Indépendant
+                      </span>
+                    )}
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editPointHfEnabled}
+                      onChange={(e) => setEditPointHfEnabled(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                    />
+                    <span className="text-xs text-gray-600">Facturer HF</span>
+                  </label>
+                </div>
+
+                {editPointHfEnabled && (
+                  <div className="flex items-center gap-3 mt-2">
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">Quantité</label>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={editPointHfQuantity}
+                        onChange={(e) => setEditPointHfQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:ring-orange-500"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">Prix unitaire</label>
+                      <div className="px-3 py-1.5 bg-white rounded-lg border border-gray-200 text-sm font-medium">
+                        {unitPrice.toFixed(2)} &euro;
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">Total</label>
+                      <div className="px-3 py-1.5 bg-orange-100 rounded-lg border border-orange-200 text-sm font-bold text-orange-800">
+                        {(editPointHfQuantity * unitPrice).toFixed(2)} &euro;
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {existingHfEntry && !editPointHfEnabled && (
+                  <p className="text-xs text-red-500 mt-1">
+                    L'entrée HF existante ({existingHfEntry.totalPrice.toFixed(2)} &euro;) sera supprimée à l'enregistrement.
+                  </p>
+                )}
+
+                {!config.config.isIndependent && config.config.horsForfaitDebut && config.config.horsForfaitFin && (
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    Plage HF : {config.config.horsForfaitDebut} &rarr; {config.config.horsForfaitFin} &bull; Tarif : {unitPrice.toFixed(2)} &euro;/point
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" onClick={() => setIsEditPointModalOpen(false)}>

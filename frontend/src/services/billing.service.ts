@@ -83,4 +83,28 @@ export const billingService = {
     const res = await api.post<ApiResponse<{ created: number; message: string }>>('/billing/compute', { dateFrom, dateTo, userId });
     return res.data.data;
   },
+
+  async getEntriesByPoints(pointIds: string[]): Promise<Record<string, { id: string; quantity: number; unitPrice: number; totalPrice: number }>> {
+    if (pointIds.length === 0) return {};
+    const res = await api.get<ApiResponse<Record<string, { id: string; quantity: number; unitPrice: number; totalPrice: number }>>>('/billing/entries/by-points', {
+      params: { pointIds: pointIds.join(',') },
+    });
+    return res.data.data;
+  },
+
+  async upsertPointHfEntry(pointId: string, data: {
+    quantity: number;
+    unitPrice: number;
+    tourneeId: string;
+    userId: string;
+    date: string;
+    clientName: string;
+  }): Promise<BillingEntry> {
+    const res = await api.put<ApiResponse<BillingEntry>>(`/billing/entries/point-hf/${pointId}`, data);
+    return res.data.data;
+  },
+
+  async deletePointHfEntry(pointId: string): Promise<void> {
+    await api.delete(`/billing/entries/point-hf/${pointId}`);
+  },
 };

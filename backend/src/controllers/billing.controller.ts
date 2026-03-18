@@ -207,6 +207,107 @@ function formatTimeFromDate(d: Date): string {
 }
 
 /**
+ * GET /api/billing/entries/by-points
+ * Check which points already have billing entries (point_hors_forfait)
+ * Query: pointIds (comma-separated)
+ */
+export const getEntriesByPoints = asyncHandler(async (req: Request, res: Response) => {
+  const { pointIds } = req.query as { pointIds?: string };
+  if (!pointIds) return apiResponse.success(res, {});
+
+  const ids = pointIds.split(',').filter(Boolean);
+  if (ids.length === 0) return apiResponse.success(res, {});
+
+  const entries = await prisma.billingEntry.findMany({
+    where: {
+      pointId: { in: ids },
+      type: 'point_hors_forfait',
+    },
+    select: {
+      id: true,
+      pointId: true,
+      quantity: true,
+      unitPrice: true,
+      totalPrice: true,
+    },
+  });
+
+  // Map by pointId for quick lookup
+  const result: Record<string, { id: string; quantity: number; unitPrice: number; totalPrice: number }> = {};
+  for (const e of entries) {
+    if (e.pointId) {
+      result[e.pointId] = { id: e.id, quantity: e.quantity, unitPrice: e.unitPrice, totalPrice: e.totalPrice };
+    }
+  }
+
+  return apiResponse.success(res, result);
+});
+
+/**
+ * PUT /api/billing/entries/point-hf/:pointId
+ * Create or update an HF billing entry for a specific point
+ */
+export const upsertPointHfEntry = asyncHandler(async (req: Request, res: Response) => {
+  const { pointId } = req.params;
+  const { quantity, unitPrice, tourneeId, userId, date, clientName } = req.body;
+
+  if (!userId || !date) {
+    return apiResponse.badRequest(res, 'userId et date requis');
+  }
+
+  const qty = quantity || 1;
+  const total = qty * unitPrice;
+
+  // Check if entry already exists for this point
+  const existing = await prisma.billingEntry.findFirst({
+    where: { pointId, type: 'point_hors_forfait' },
+  });
+
+  let entry;
+  if (existing) {
+    entry = await prisma.billingEntry.update({
+      where: { id: existing.id },
+      data: {
+        quantity: qty,
+        unitPrice,
+        totalPrice: total,
+      },
+    });
+  } else {
+    entry = await prisma.billingEntry.create({
+      data: {
+        userId,
+        tourneeId: tourneeId || null,
+        pointId,
+        date: new Date(date + 'T12:00:00Z'),
+        type: 'point_hors_forfait',
+        label: `Point HF - ${clientName || 'Client'}`,
+        quantity: qty,
+        unitPrice,
+        totalPrice: total,
+        metadata: { source: 'manual_planning' },
+      },
+    });
+  }
+
+  return apiResponse.success(res, entry);
+});
+
+/**
+ * DELETE /api/billing/entries/point-hf/:pointId
+ * Remove the HF billing entry for a specific point
+ */
+export const deletePointHfEntry = asyncHandler(async (req: Request, res: Response) => {
+  const { pointId } = req.params;
+
+  const deleted = await prisma.billingEntry.deleteMany({
+    where: { pointId, type: 'point_hors_forfait' },
+  });
+
+  return apiResponse.success(res, { deleted: deleted.count });
+});
+
+/**
  * POST /api/billing/compute
  * Auto-compute billing entries for a date range
  */

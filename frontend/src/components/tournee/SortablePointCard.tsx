@@ -141,6 +141,8 @@ interface SortablePointCardProps {
   index: number;
   isSelected: boolean;
   canDrag: boolean;
+  isHorsForfait?: boolean;
+  hasHfEntry?: boolean;
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -159,6 +161,8 @@ const SortablePointCard = memo(function SortablePointCard({
   index,
   isSelected,
   canDrag,
+  isHorsForfait,
+  hasHfEntry,
   onClick,
   onEdit,
   onDelete,
@@ -249,6 +253,16 @@ const SortablePointCard = memo(function SortablePointCard({
             <Badge variant={statutConfig.variant} size="sm">
               {statutConfig.label}
             </Badge>
+            {isHorsForfait && (
+              <span className={clsx(
+                'px-1.5 py-0.5 text-[10px] font-bold rounded',
+                hasHfEntry
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-orange-100 text-orange-700 border border-orange-300'
+              )}>
+                HF{hasHfEntry ? ' $' : ''}
+              </span>
+            )}
           </div>
 
           <div className="text-sm text-gray-500 space-y-1">
