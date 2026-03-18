@@ -394,7 +394,7 @@ export default function AgendaPage() {
                         )}
                       </td>
                       {/* Single merged cell for all days — blocks are positioned absolutely across the full width */}
-                      <td colSpan={days.length} className="border-b border-gray-50 p-0 h-[22px] relative">
+                      <td colSpan={days.length} className="border-b border-gray-50 p-0 h-[26px] relative">
                         {/* Day grid lines */}
                         <div className="absolute inset-0 flex">
                           {days.map((day, di) => {
