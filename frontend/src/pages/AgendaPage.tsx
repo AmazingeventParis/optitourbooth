@@ -229,11 +229,11 @@ export default function AgendaPage() {
           Aucune machine immobilisée sur cette période
         </div>
       ) : (
-        <div className="border border-gray-200 rounded-lg overflow-auto bg-white">
+        <div className="border border-gray-100 rounded-lg overflow-auto bg-white">
           <table className="w-full border-collapse" style={{ minWidth: viewMode === 'day' ? 600 : viewMode === 'week' ? 900 : 1200 }}>
             <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50">
-                <th className="sticky left-0 z-20 bg-gray-50 border-b border-r border-gray-200 px-2 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase w-[120px] min-w-[120px]">
+                <th className="sticky left-0 z-20 bg-gray-50 border-b border-r border-gray-100/80 px-2 py-1.5 text-left text-[11px] font-semibold text-gray-500 uppercase w-[120px] min-w-[120px]">
                   Machine
                 </th>
                 {days.map(day => {
@@ -246,7 +246,7 @@ export default function AgendaPage() {
                       key={dayStr}
                       onClick={() => setSelectedStockDate(isSelected ? null : dayStr)}
                       className={clsx(
-                        'border-b border-r border-gray-200 px-1 py-1.5 text-center cursor-pointer transition-colors',
+                        'border-b border-r border-gray-100/80 px-1 py-1 text-center cursor-pointer transition-colors',
                         isSelected && 'bg-primary-100',
                         isToday && !isSelected && 'bg-primary-50',
                         isWeekend && !isToday && !isSelected && 'bg-gray-100',
@@ -273,7 +273,7 @@ export default function AgendaPage() {
                   return (
                     <tr key={row.key} className="group hover:bg-gray-50/50">
                       {/* Machine label */}
-                      <td className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-b border-r border-gray-100 px-2 py-1">
+                      <td className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-b border-r border-gray-50 px-2 py-0.5">
                         {showTypeSeparator ? (
                           <div className="flex items-center gap-1.5">
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: row.color }} />
@@ -288,7 +288,7 @@ export default function AgendaPage() {
                         )}
                       </td>
                       {/* Single merged cell for all days — blocks are positioned absolutely across the full width */}
-                      <td colSpan={days.length} className="border-b border-gray-100 p-0 h-[36px] relative">
+                      <td colSpan={days.length} className="border-b border-gray-50 p-0 h-[32px] relative">
                         {/* Day grid lines */}
                         <div className="absolute inset-0 flex">
                           {days.map((day, di) => {
@@ -298,7 +298,7 @@ export default function AgendaPage() {
                               <div
                                 key={di}
                                 className={clsx(
-                                  'flex-1 border-r border-gray-100 last:border-r-0',
+                                  'flex-1 border-r border-gray-50 last:border-r-0',
                                   isWeekend && 'bg-gray-50/40',
                                   isToday && 'bg-primary-50/30',
                                 )}
