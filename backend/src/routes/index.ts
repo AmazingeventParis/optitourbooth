@@ -19,6 +19,7 @@ import bookingRoutes from './booking.routes.js';
 import billingRoutes from './billing.routes.js';
 import attachmentRoutes from './attachment.routes.js';
 import googleAuthRoutes from './googleAuth.routes.js';
+import agendaRoutes from './agenda.routes.js';
 
 const router = Router();
 
@@ -175,6 +176,7 @@ router.use('/tenants', tenantRoutes);
 router.use('/pending-points', pendingPointRoutes);
 
 router.use('/billing', billingRoutes);
+router.use('/agenda', agendaRoutes);
 router.use('/attachments', attachmentRoutes);
 router.use('/google-auth', googleAuthRoutes);
 
