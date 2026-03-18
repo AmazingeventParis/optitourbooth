@@ -312,15 +312,19 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
 
 /**
  * GET /api/agenda/stock?dateFrom=&dateTo=
+ * Computes stock by calling getAllocations internally and counting
+ * how many machines of each type are occupied on each day (including multi-day spans).
  */
 export const getStock = asyncHandler(async (req: Request, res: Response) => {
   const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
   if (!dateFrom || !dateTo) return apiResponse.badRequest(res, 'dateFrom et dateTo requis');
 
+  // Total machines per type
   const machines = await prisma.machine.findMany({ where: { actif: true }, select: { type: true } });
   const totalByType: Record<string, number> = {};
   for (const m of machines) totalByType[m.type] = (totalByType[m.type] || 0) + 1;
 
+  // HS count
   const hsPreps = await prisma.preparation.findMany({
     where: { statut: 'hors_service' },
     include: { machine: { select: { type: true } } },
@@ -328,21 +332,17 @@ export const getStock = asyncHandler(async (req: Request, res: Response) => {
   const hsByType: Record<string, number> = {};
   for (const hs of hsPreps) hsByType[hs.machine.type] = (hsByType[hs.machine.type] || 0) + 1;
 
-  // Count occupied per day from delivery points
-  const from = new Date(dateFrom + 'T00:00:00Z');
-  const to = new Date(dateTo + 'T23:59:59Z');
+  // Get allocations via the same logic as getAllocations
+  // We call it internally by building a fake req/res
+  const fakeReq = { query: { dateFrom, dateTo }, headers: req.headers } as any;
+  let allocBlocks: AllocationBlock[] = [];
+  const fakeRes = {
+    status: () => fakeRes,
+    json: (body: any) => { allocBlocks = body.data || []; return fakeRes; },
+  } as any;
+  await getAllocations(fakeReq, fakeRes, (() => {}) as any);
 
-  const deliveryPoints = await prisma.point.findMany({
-    where: {
-      tournee: { date: { gte: from, lte: to } },
-      type: { in: ['livraison', 'livraison_ramassage'] },
-    },
-    include: {
-      tournee: { select: { date: true } },
-      produits: { include: { produit: { select: { nom: true } } } },
-    },
-  });
-
+  // Build day grid
   const days: Record<string, Record<string, number>> = {};
   const start = new Date(dateFrom);
   const end = new Date(dateTo);
@@ -352,20 +352,19 @@ export const getStock = asyncHandler(async (req: Request, res: Response) => {
     for (const type of Object.keys(totalByType)) days[ds]![type] = 0;
   }
 
-  for (const pt of deliveryPoints) {
-    const prodName = pt.produits?.[0]?.produit?.nom;
-    if (!prodName || !days[fmtDate(pt.tournee.date)]) continue;
-    days[fmtDate(pt.tournee.date)]![prodName] = (days[fmtDate(pt.tournee.date)]![prodName] || 0) + 1;
-  }
+  // For each allocation block, mark every day it spans as occupied
+  for (const block of allocBlocks) {
+    const prodType = block.produit;
+    if (!prodType || prodType === '?') continue;
 
-  // Also count pending points not dispatched
-  const pendingDeliveries = await prisma.pendingPoint.findMany({
-    where: { date: { gte: from, lte: to }, type: 'livraison', produitNom: { not: null } },
-  });
-  for (const pp of pendingDeliveries) {
-    const ds = fmtDate(pp.date);
-    if (pp.produitNom && days[ds]) {
-      days[ds]![pp.produitNom] = (days[ds]![pp.produitNom] || 0) + 1;
+    // Iterate through each day in the range
+    const bStart = new Date(block.dateStart + 'T00:00:00Z');
+    const bEnd = new Date(block.dateEnd + 'T00:00:00Z');
+    for (let d = new Date(bStart); d <= bEnd; d.setDate(d.getDate() + 1)) {
+      const ds = d.toISOString().substring(0, 10);
+      if (days[ds] && days[ds]![prodType] !== undefined) {
+        days[ds]![prodType]!++;
+      }
     }
   }
 
