@@ -159,21 +159,53 @@ export default function AgendaPage() {
       }
     }
 
-    // Add blocks to existing rows or create new rows for other types
+    // Helper: check if a block overlaps with any existing blocks in a row
+    function hasConflict(existingBlocks: AllocationBlock[], newBlock: AllocationBlock): boolean {
+      return existingBlocks.some(b => b.dateStart <= newBlock.dateEnd && b.dateEnd >= newBlock.dateStart);
+    }
+
+    // Add blocks to rows: assigned blocks go to their machine row,
+    // unassigned blocks go to the first free machine row of the same type
     for (const block of filtered) {
-      const key = block.machineNumero
-        ? `${block.produit}-${block.machineNumero}`
-        : `${block.produit}-${block.client.substring(0, 20)}`;
-      if (!rowMap.has(key)) {
-        rowMap.set(key, {
-          key,
-          type: block.produit,
-          numero: block.machineNumero || '—',
-          color: block.produitCouleur || TYPE_COLORS[block.produit] || '#6B7280',
-          blocks: [],
-        });
+      if (block.machineNumero) {
+        // Assigned: place on its specific machine row
+        const key = `${block.produit}-${block.machineNumero}`;
+        if (!rowMap.has(key)) {
+          rowMap.set(key, {
+            key,
+            type: block.produit,
+            numero: block.machineNumero,
+            color: block.produitCouleur || TYPE_COLORS[block.produit] || '#6B7280',
+            blocks: [],
+          });
+        }
+        rowMap.get(key)!.blocks.push(block);
+      } else {
+        // Unassigned: find the first free machine row of the same type
+        let placed = false;
+        for (const [, row] of rowMap) {
+          if (row.type === block.produit && !hasConflict(row.blocks, block)) {
+            // Mark as unassigned for visual indicator
+            row.blocks.push({ ...block, _unassigned: true } as any);
+            placed = true;
+            break;
+          }
+        }
+        if (!placed) {
+          // No free row — create a new row
+          const key = `${block.produit}-unassigned-${block.client.substring(0, 20)}`;
+          if (!rowMap.has(key)) {
+            rowMap.set(key, {
+              key,
+              type: block.produit,
+              numero: '—',
+              color: block.produitCouleur || TYPE_COLORS[block.produit] || '#6B7280',
+              blocks: [],
+            });
+          }
+          rowMap.get(key)!.blocks.push({ ...block, _unassigned: true } as any);
+        }
       }
-      rowMap.get(key)!.blocks.push(block);
     }
 
     // Sort: by type order, then by numero
@@ -402,6 +434,8 @@ export default function AgendaPage() {
                             ? block.client.substring(0, widthPct > 15 ? 30 : 14) + '…'
                             : block.client;
 
+                          const isUnassigned = (block as any)._unassigned;
+
                           return (
                             <div
                               key={block.id}
@@ -410,10 +444,14 @@ export default function AgendaPage() {
                               style={{
                                 left: `${leftPct}%`,
                                 width: `${widthPct}%`,
-                                backgroundColor: lighten(row.color, 0.6),
+                                backgroundColor: lighten(row.color, isUnassigned ? 0.75 : 0.6),
                                 borderRadius: `${isClampedStart ? '0' : '4px'} ${isClampedEnd ? '0' : '4px'} ${isClampedEnd ? '0' : '4px'} ${isClampedStart ? '0' : '4px'}`,
+                                ...(isUnassigned ? {
+                                  backgroundImage: `repeating-linear-gradient(135deg, transparent, transparent 3px, ${lighten(row.color, 0.55)} 3px, ${lighten(row.color, 0.55)} 5px)`,
+                                } : {}),
+                                border: isUnassigned ? `1px dashed ${row.color}` : 'none',
                               }}
-                              title={`${block.client}\n${block.produit} ${block.machineNumero || ''}\n${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}`}
+                              title={`${block.client}\n${block.produit} ${block.machineNumero || '(non attribué)'}\n${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}${isUnassigned ? '\n⚠ Borne non attribuée' : ''}`}
                             >
                               <span className="text-[9px] font-bold flex-shrink-0" style={{ color: row.color }}>
                                 {isClampedStart ? '◂' : block.timeStart !== '00:00' ? block.timeStart : ''}
