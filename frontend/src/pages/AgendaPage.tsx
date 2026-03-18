@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { format, addDays, subDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { agendaService, AllocationBlock, StockData } from '@/services/agenda.service';
+import { agendaService, AllocationBlock, StockData, AgendaMachine } from '@/services/agenda.service';
 import { Modal } from '@/components/ui';
 import { ChevronLeftIcon, ChevronRightIcon, MapPinIcon, PhoneIcon, UserIcon, TruckIcon, CalendarDaysIcon, ClockIcon, WrenchScrewdriverIcon, FunnelIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
@@ -38,6 +38,7 @@ export default function AgendaPage() {
   const [allocations, setAllocations] = useState<AllocationBlock[]>([]);
   const [stock, setStock] = useState<StockData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [machines, setMachines] = useState<Record<string, AgendaMachine[]>>({});
   const [selectedStockDate, setSelectedStockDate] = useState<string | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<AllocationBlock | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
@@ -68,12 +69,14 @@ export default function AgendaPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [allocs, stockData] = await Promise.all([
+      const [allocs, stockData, machinesData] = await Promise.all([
         agendaService.getAllocations(dateRange.from, dateRange.to),
         agendaService.getStock(dateRange.from, dateRange.to),
+        agendaService.getMachines(),
       ]);
       setAllocations(allocs);
       setStock(stockData);
+      setMachines(machinesData);
     } catch {
       toast.error('Erreur chargement agenda');
     } finally {
@@ -111,13 +114,32 @@ export default function AgendaPage() {
     return stock.days.find(d => d.date === activeStockDate) || stock.days[0];
   }, [stock, activeStockDate]);
 
-  // Build unique machine rows from allocations (only machines that are occupied)
+  // Types that always show all machines (even empty rows)
+  const ALWAYS_SHOW_ALL = ['Vegas', 'Smakk', 'Ring'];
+
+  // Build machine rows: all Vegas/Smakk/Ring machines + occupied others
   const machineRows = useMemo(() => {
     const filtered = filterType ? allocations.filter(a => a.produit === filterType) : allocations;
 
-    // Group by machine key (type + numero or type + client if no numero)
     const rowMap = new Map<string, { key: string; type: string; numero: string; color: string; blocks: AllocationBlock[] }>();
 
+    // Pre-populate rows for Vegas, Smakk, Ring (all machines even if empty)
+    const typesToShow = filterType ? [filterType].filter(t => ALWAYS_SHOW_ALL.includes(t)) : ALWAYS_SHOW_ALL;
+    for (const type of typesToShow) {
+      const typeMachines = machines[type] || [];
+      for (const m of typeMachines) {
+        const key = `${type}-${m.numero}`;
+        rowMap.set(key, {
+          key,
+          type,
+          numero: m.numero,
+          color: m.couleur || TYPE_COLORS[type] || '#6B7280',
+          blocks: [],
+        });
+      }
+    }
+
+    // Add blocks to existing rows or create new rows for other types
     for (const block of filtered) {
       const key = block.machineNumero
         ? `${block.produit}-${block.machineNumero}`
@@ -144,7 +166,7 @@ export default function AgendaPage() {
     });
 
     return rows;
-  }, [allocations, filterType]);
+  }, [allocations, filterType, machines]);
 
 
   return (
@@ -273,22 +295,22 @@ export default function AgendaPage() {
                   return (
                     <tr key={row.key} className="group hover:bg-gray-50/50">
                       {/* Machine label */}
-                      <td className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-b border-r border-gray-50 px-2 py-0.5">
+                      <td className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-b border-r border-gray-50 px-1.5 py-0">
                         {showTypeSeparator ? (
                           <div className="flex items-center gap-1.5">
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: row.color }} />
-                            <span className="text-[11px] font-bold" style={{ color: row.color }}>{row.type}</span>
-                            <span className="text-[11px] font-bold text-gray-800">{row.numero}</span>
+                            <span className="text-[10px] font-bold" style={{ color: row.color }}>{row.type}</span>
+                            <span className="text-[10px] font-bold text-gray-800">{row.numero}</span>
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5 pl-[18px]">
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: row.color }} />
-                            <span className="text-[11px] font-semibold text-gray-700">{row.numero}</span>
+                            <span className="text-[10px] font-semibold text-gray-700">{row.numero}</span>
                           </div>
                         )}
                       </td>
                       {/* Single merged cell for all days — blocks are positioned absolutely across the full width */}
-                      <td colSpan={days.length} className="border-b border-gray-50 p-0 h-[32px] relative">
+                      <td colSpan={days.length} className="border-b border-gray-50 p-0 h-[22px] relative">
                         {/* Day grid lines */}
                         <div className="absolute inset-0 flex">
                           {days.map((day, di) => {
@@ -340,7 +362,7 @@ export default function AgendaPage() {
                             <div
                               key={block.id}
                               onClick={() => setSelectedBlock(block)}
-                              className="absolute top-[2px] bottom-[2px] cursor-pointer overflow-hidden flex items-center justify-between px-1.5 hover:brightness-95 transition-all z-[1]"
+                              className="absolute top-[1px] bottom-[1px] cursor-pointer overflow-hidden flex items-center justify-between px-1 hover:brightness-95 transition-all z-[1]"
                               style={{
                                 left: `${leftPct}%`,
                                 width: `${widthPct}%`,
@@ -349,11 +371,11 @@ export default function AgendaPage() {
                               }}
                               title={`${block.client}\n${block.produit} ${block.machineNumero || ''}\n${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}`}
                             >
-                              <span className="text-[10px] font-bold flex-shrink-0" style={{ color: row.color }}>
+                              <span className="text-[9px] font-bold flex-shrink-0" style={{ color: row.color }}>
                                 {isClampedStart ? '◂' : block.timeStart !== '00:00' ? block.timeStart : ''}
                               </span>
-                              <span className="text-[10px] font-medium truncate mx-1 text-center" style={{ color: row.color }}>{clientShort}</span>
-                              <span className="text-[10px] font-bold flex-shrink-0" style={{ color: row.color }}>
+                              <span className="text-[9px] font-medium truncate mx-0.5 text-center" style={{ color: row.color }}>{clientShort}</span>
+                              <span className="text-[9px] font-bold flex-shrink-0" style={{ color: row.color }}>
                                 {isClampedEnd ? '▸' : block.timeEnd !== '23:59' ? block.timeEnd : ''}
                               </span>
                             </div>
