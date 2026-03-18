@@ -238,18 +238,27 @@ export default function AgendaPage() {
                 <div className="flex-1 space-y-0.5 overflow-y-auto">
                   {dayBlocks.map(block => {
                     const color = block.produitCouleur || TYPE_COLORS[block.produit] || '#6B7280';
-                    const isStart = block.dateStart === format(day, 'yyyy-MM-dd');
-                    const isEnd = block.dateEnd === format(day, 'yyyy-MM-dd');
+                    const isStart = block.dateStart === dayStr;
+                    const isEnd = block.dateEnd === dayStr;
+
+                    // Determine time label for this day
+                    const timeLabel = isStart && isEnd
+                      ? `${block.timeStart}–${block.timeEnd}`
+                      : isStart
+                        ? `${block.timeStart} →`
+                        : isEnd
+                          ? `→ ${block.timeEnd}`
+                          : 'journée';
+
+                    const clientShort = viewMode === 'month'
+                      ? (block.client.length > 12 ? block.client.substring(0, 12) + '…' : block.client)
+                      : (block.client.length > 25 ? block.client.substring(0, 25) + '…' : block.client);
 
                     return (
                       <div
                         key={block.id}
                         className={clsx(
-                          'px-1.5 py-0.5 text-[11px] font-medium truncate cursor-default border-l-[3px]',
-                          isStart && isEnd && 'rounded',
-                          isStart && !isEnd && 'rounded-l',
-                          !isStart && isEnd && 'rounded-r',
-                          block.status === 'recuperee' && 'opacity-40',
+                          'px-1.5 py-1 text-[11px] font-medium cursor-default border-l-[3px] rounded',
                           block.status === 'planifie' && 'border-dashed'
                         )}
                         style={{
@@ -264,18 +273,12 @@ export default function AgendaPage() {
                           block.source === 'pending' ? '(non dispatché)' : block.source === 'preparation' ? '(préparation)' : '',
                         ].filter(Boolean).join('\n')}
                       >
-                        {isStart ? (
-                          <span>
-                            <strong>{block.produit}</strong>
-                            {block.machineNumero && <span className="opacity-70"> {block.machineNumero}</span>}
-                            {' — '}
-                            {block.client.length > 20 ? block.client.substring(0, 20) + '…' : block.client}
-                          </span>
-                        ) : (
-                          <span className="opacity-60">
-                            ↔ {block.produit}{block.machineNumero ? ' ' + block.machineNumero : ''} — {block.client.length > 15 ? block.client.substring(0, 15) + '…' : block.client}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          <strong className="flex-shrink-0">{block.produit}</strong>
+                          {block.machineNumero && <span className="opacity-60 flex-shrink-0">{block.machineNumero}</span>}
+                          <span className="opacity-50 text-[10px] flex-shrink-0">{timeLabel}</span>
+                        </div>
+                        <div className="truncate opacity-80">{clientShort}</div>
                       </div>
                     );
                   })}

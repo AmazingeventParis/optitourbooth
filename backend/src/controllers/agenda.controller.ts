@@ -14,7 +14,7 @@ interface AllocationBlock {
   timeEnd: string;
   machineNumero: string | null;
   machineType: string | null;
-  status: 'planifie' | 'immobilisee' | 'livree' | 'recuperee';
+  status: 'planifie' | 'immobilisee' | 'livree';
   source: 'tournee' | 'pending' | 'preparation';
 }
 
@@ -120,9 +120,11 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     if (dateEnd < dateFrom && dateStart < dateFrom) continue;
     if (dateStart > dateTo) continue;
 
+    // Skip completed events (both delivery and pickup done)
+    if (delivery.statut === 'termine' && pickup?.statut === 'termine') continue;
+
     let status: AllocationBlock['status'] = 'immobilisee';
-    if (delivery.statut === 'termine' && pickup?.statut === 'termine') status = 'recuperee';
-    else if (delivery.statut === 'termine') status = 'livree';
+    if (delivery.statut === 'termine') status = 'livree';
 
     const machine = findMachine(clientName, dDate, produit.nom);
     usedDeliveryClients.add(fw + '|' + dDate);
@@ -194,7 +196,7 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
   for (const prep of preparations) {
     const prepDate = fmtDate(prep.dateEvenement);
     if (prepDate < dateFrom || prepDate > dateTo) continue;
-    if (prep.statut === 'disponible') continue;
+    if (prep.statut === 'disponible' || prep.statut === 'archivee') continue;
 
     const fw = clientFirstWord(prep.client);
     // Skip if already covered
@@ -215,7 +217,7 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       timeEnd: '23:59',
       machineNumero: prep.machine.numero,
       machineType: prep.machine.type,
-      status: prep.statut === 'archivee' ? 'recuperee' : 'immobilisee',
+      status: 'immobilisee',
       source: 'preparation',
     });
   }
