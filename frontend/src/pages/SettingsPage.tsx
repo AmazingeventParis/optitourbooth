@@ -16,17 +16,17 @@ import ProduitsPage from '@/pages/ProduitsPage';
 import ComptaChauffeurPage from '@/pages/ComptaChauffeurPage';
 
 const TABS = [
+  { key: 'compta', label: 'Compta chauffeurs', icon: BanknotesIcon },
   { key: 'clients', label: 'Clients', icon: UserGroupIcon },
   { key: 'utilisateurs', label: 'Utilisateurs', icon: UsersIcon },
   { key: 'vehicules', label: 'Véhicules', icon: TruckIcon },
   { key: 'produits', label: 'Produits', icon: CubeIcon },
-  { key: 'compta', label: 'Compta chauffeurs', icon: BanknotesIcon },
 ] as const;
 
 type TabKey = typeof TABS[number]['key'];
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>('clients');
+  const [activeTab, setActiveTab] = useState<TabKey>('compta');
 
   return (
     <div className="space-y-6">
