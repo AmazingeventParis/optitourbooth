@@ -299,11 +299,16 @@ export default function AgendaPage() {
                         const isWeekend = day.getDay() === 0 || day.getDay() === 6;
                         const isToday = isSameDay(day, new Date());
 
+                        // Check if any block continues to next day (no right border)
+                        const hasContinuation = dayBlocks.some(b => b.dateEnd > dayStr);
+
                         return (
                           <td
                             key={dayStr}
                             className={clsx(
-                              'border-b border-r border-gray-100 p-0 align-middle h-[36px]',
+                              'border-b p-0 align-middle h-[36px]',
+                              !hasContinuation && 'border-r border-gray-100',
+                              hasContinuation && 'border-r-0',
                               isWeekend && 'bg-gray-50/40',
                               isToday && 'bg-primary-50/20',
                             )}
@@ -318,19 +323,24 @@ export default function AgendaPage() {
                                   const width = Math.max(right - left, 8);
                                   const clientShort = block.client.length > 14 ? block.client.substring(0, 14) + '…' : block.client;
 
+                                  // Rounded corners only on true start/end, flat on continuation sides
+                                  const borderRadius = `${isStart ? '4px' : '0'} ${isEnd ? '4px' : '0'} ${isEnd ? '4px' : '0'} ${isStart ? '4px' : '0'}`;
+
                                   return (
                                     <div
                                       key={block.id}
                                       onClick={() => setSelectedBlock(block)}
-                                      className={clsx(
-                                        'absolute top-[2px] bottom-[2px] rounded cursor-pointer overflow-hidden flex items-center px-1 transition-opacity hover:opacity-90',
-                                        block.status === 'planifie' && 'border border-dashed',
-                                      )}
+                                      className="absolute top-[2px] bottom-[2px] cursor-pointer overflow-hidden flex items-center px-1 transition-opacity hover:opacity-90"
                                       style={{
                                         left: `${left}%`,
                                         width: `${width}%`,
-                                        backgroundColor: lighten(row.color, block.status === 'planifie' ? 0.8 : 0.65),
-                                        borderColor: block.status === 'planifie' ? row.color : 'transparent',
+                                        backgroundColor: lighten(row.color, 0.65),
+                                        borderRadius,
+                                        // Remove cell gap on continuation sides
+                                        marginLeft: isStart ? 0 : '-2px',
+                                        marginRight: isEnd ? 0 : '-2px',
+                                        paddingLeft: isStart ? '4px' : '2px',
+                                        paddingRight: isEnd ? '4px' : '2px',
                                       }}
                                       title={`${block.client}\n${block.produit} ${block.machineNumero || ''}\n${block.timeStart}–${block.timeEnd}`}
                                     >
