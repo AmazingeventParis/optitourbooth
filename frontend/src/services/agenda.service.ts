@@ -13,7 +13,8 @@ export interface AllocationBlock {
   pickupPointId: string | null;
   machineNumero: string | null;
   machineType: string | null;
-  status: 'immobilisee' | 'livree' | 'recuperee';
+  status: 'planifie' | 'immobilisee' | 'livree' | 'recuperee';
+  source: 'tournee' | 'pending' | 'preparation';
 }
 
 export interface StockDay {

@@ -228,10 +228,11 @@ export default function AgendaPage() {
                           isStart && isEnd && 'rounded',
                           isStart && !isEnd && 'rounded-l',
                           !isStart && isEnd && 'rounded-r',
-                          block.status === 'recuperee' && 'opacity-50'
+                          block.status === 'recuperee' && 'opacity-40',
+                          block.status === 'planifie' && 'border-dashed'
                         )}
                         style={{
-                          backgroundColor: lighten(color, 0.82),
+                          backgroundColor: lighten(color, block.status === 'planifie' ? 0.9 : 0.82),
                           borderLeftColor: color,
                           color: color,
                         }}
@@ -239,7 +240,8 @@ export default function AgendaPage() {
                           block.client,
                           `${block.produit}${block.machineNumero ? ' ' + block.machineNumero : ''}`,
                           `${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}`,
-                        ].join('\n')}
+                          block.source === 'pending' ? '(non dispatché)' : block.source === 'preparation' ? '(préparation)' : '',
+                        ].filter(Boolean).join('\n')}
                       >
                         {isStart ? (
                           <span>
