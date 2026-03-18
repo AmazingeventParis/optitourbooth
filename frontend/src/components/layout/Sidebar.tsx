@@ -4,7 +4,6 @@ import { Dialog, Transition, Menu } from '@headlessui/react';
 import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import {
   HomeIcon,
-  ChartBarIcon,
   CalendarDaysIcon,
   ClockIcon,
   ArrowRightOnRectangleIcon,
@@ -43,7 +42,6 @@ const navigation: Array<{
   { name: 'Galeries Clients', href: '/galeries', icon: PhotoIcon, roles: ['admin'] },
   { name: 'Paramètres', href: '/parametres', icon: Cog6ToothIcon, roles: ['admin'] },
   { name: 'Historique', href: '/historique', icon: ClockIcon, roles: ['admin'] },
-  { name: 'Rapports', href: '/rapports', icon: ChartBarIcon, roles: ['admin'] },
 ];
 
 function SidebarContent({ collapsed, onToggleCollapse }: { collapsed?: boolean; onToggleCollapse?: () => void }) {
