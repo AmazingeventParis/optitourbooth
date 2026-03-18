@@ -167,8 +167,8 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     const dateEnd = pickup ? fmtDate(pickup.tournee.date) : dDate;
     const timeEnd = pickup ? (fmtTime(pickup.creneauFin) || '23:59') : '23:59';
 
-    if (dateEnd < dateFrom && dateStart < dateFrom) continue;
-    if (dateStart > dateTo) continue;
+    // Skip if block doesn't overlap visible range
+    if (dateEnd < dateFrom || dateStart > dateTo) continue;
 
     // Skip completed events (both delivery and pickup done)
     if (delivery.statut === 'termine' && pickup?.statut === 'termine') continue;
@@ -207,9 +207,10 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
   }
 
   // ========== SOURCE 3: Pending points NOT dispatched ==========
+  // Include livraisons before the range (up to 14 days) whose pickup might be in the range
   const pendingPoints = await prisma.pendingPoint.findMany({
     where: {
-      date: { gte: from, lte: to },
+      date: { gte: extFrom, lte: to },
       type: 'livraison',
     },
   });
@@ -234,6 +235,9 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
 
     const dateEnd = pendingPickup ? fmtDate(pendingPickup.date) : ppDate;
     const timeEnd = pendingPickup?.creneauFin || '23:59';
+
+    // Skip if the block doesn't overlap with the visible range
+    if (dateEnd < dateFrom || ppDate > dateTo) continue;
 
     const machine = findMachine(pp.clientName, ppDate, pp.produitNom);
 
