@@ -225,40 +225,64 @@ export default function AgendaPage() {
 
       {/* Stock bar — clickable to filter */}
       {activeStock && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-gray-500 font-medium mr-1">
-            Stock {selectedStockDate ? format(parseISO(selectedStockDate), 'd MMM', { locale: fr }) : "auj."} :
-          </span>
-          {MACHINE_TYPE_ORDER.map(type => {
-            const data = activeStock.availability[type];
-            if (!data) return null;
-            const color = TYPE_COLORS[type] || '#6B7280';
-            const isFiltered = filterType === type;
-            return (
-              <button
-                key={type}
-                onClick={() => setFilterType(isFiltered ? null : type)}
-                className={clsx(
-                  'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all text-xs',
-                  isFiltered
-                    ? 'ring-2 ring-offset-1 border-transparent'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                )}
-                style={isFiltered ? { backgroundColor: lighten(color, 0.85), borderColor: color, outlineColor: color } : undefined}
-              >
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                <span className="font-medium text-gray-700">{type}</span>
-                <span className={clsx('font-bold tabular-nums', data.available > 0 ? 'text-green-600' : 'text-red-600')}>
-                  {data.available}/{data.total - data.horsService}
-                </span>
+        <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-gray-700">
+              Stock {selectedStockDate ? format(parseISO(selectedStockDate), 'EEEE d MMMM', { locale: fr }) : "aujourd'hui"}
+            </span>
+            {(filterType || selectedStockDate) && (
+              <button onClick={() => { setFilterType(null); setSelectedStockDate(null); }} className="text-xs text-gray-400 hover:text-gray-600">
+                ✕ réinitialiser
               </button>
-            );
-          })}
-          {(filterType || selectedStockDate) && (
-            <button onClick={() => { setFilterType(null); setSelectedStockDate(null); }} className="text-[10px] text-gray-400 hover:text-gray-600 ml-1">
-              ✕ reset
-            </button>
-          )}
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {MACHINE_TYPE_ORDER.map(type => {
+              const data = activeStock.availability[type];
+              if (!data) return null;
+              const color = TYPE_COLORS[type] || '#6B7280';
+              const isFiltered = filterType === type;
+              const effectiveTotal = data.total - data.horsService;
+              const pct = effectiveTotal > 0 ? Math.round((data.available / effectiveTotal) * 100) : 0;
+              return (
+                <button
+                  key={type}
+                  onClick={() => setFilterType(isFiltered ? null : type)}
+                  className={clsx(
+                    'flex items-center gap-2 px-3 py-2 rounded-lg border transition-all',
+                    isFiltered
+                      ? 'ring-2 ring-offset-1 border-transparent shadow-sm'
+                      : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                  )}
+                  style={isFiltered ? { backgroundColor: lighten(color, 0.85), borderColor: color, outlineColor: color } : undefined}
+                >
+                  <div className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                  <div className="text-left">
+                    <div className="text-xs font-semibold text-gray-800">{type}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={clsx('text-lg font-bold tabular-nums leading-none', data.available > 0 ? 'text-green-600' : 'text-red-600')}>
+                        {data.available}
+                      </span>
+                      <span className="text-xs text-gray-400">/ {effectiveTotal}</span>
+                    </div>
+                  </div>
+                  <div className="w-10 h-10 relative flex-shrink-0">
+                    <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                      <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+                      <circle
+                        cx="18" cy="18" r="15" fill="none"
+                        stroke={pct > 30 ? '#22c55e' : pct > 0 ? '#f97316' : '#ef4444'}
+                        strokeWidth="3"
+                        strokeDasharray={`${pct * 0.942} 100`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-gray-500">{pct}%</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
