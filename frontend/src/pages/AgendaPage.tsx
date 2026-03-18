@@ -349,9 +349,13 @@ export default function AgendaPage() {
                               }}
                               title={`${block.client}\n${block.produit} ${block.machineNumero || ''}\n${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}`}
                             >
-                              <span className="text-[10px] font-bold flex-shrink-0" style={{ color: row.color }}>{block.timeStart}</span>
+                              <span className="text-[10px] font-bold flex-shrink-0" style={{ color: row.color }}>
+                                {isClampedStart ? '◂' : block.timeStart}
+                              </span>
                               <span className="text-[10px] font-medium truncate mx-1 text-center" style={{ color: row.color }}>{clientShort}</span>
-                              <span className="text-[10px] font-bold flex-shrink-0" style={{ color: row.color }}>{block.timeEnd}</span>
+                              <span className="text-[10px] font-bold flex-shrink-0" style={{ color: row.color }}>
+                                {isClampedEnd ? '▸' : block.timeEnd}
+                              </span>
                             </div>
                           );
                         })}
