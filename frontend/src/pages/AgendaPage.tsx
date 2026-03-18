@@ -29,6 +29,7 @@ export default function AgendaPage() {
   const [allocations, setAllocations] = useState<AllocationBlock[]>([]);
   const [stock, setStock] = useState<StockData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedStockDate, setSelectedStockDate] = useState<string | null>(null);
 
   const dateRange = useMemo(() => {
     const d = parseISO(currentDate);
@@ -98,12 +99,12 @@ export default function AgendaPage() {
     }
   }, [currentDate, viewMode]);
 
-  // Today stock
-  const todayStock = useMemo(() => {
+  // Stock for selected date (or today by default)
+  const activeStockDate = selectedStockDate || format(new Date(), 'yyyy-MM-dd');
+  const activeStock = useMemo(() => {
     if (!stock?.days?.length) return null;
-    const ts = format(new Date(), 'yyyy-MM-dd');
-    return stock.days.find(d => d.date === ts) || stock.days[0];
-  }, [stock]);
+    return stock.days.find(d => d.date === activeStockDate) || stock.days[0];
+  }, [stock, activeStockDate]);
 
   return (
     <div className="space-y-4">
@@ -141,22 +142,36 @@ export default function AgendaPage() {
       </div>
 
       {/* Stock bar */}
-      {todayStock && (
-        <div className="flex flex-wrap gap-2">
+      {activeStock && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-gray-500 font-medium mr-1">
+            Stock {selectedStockDate
+              ? format(parseISO(selectedStockDate), 'd MMM yyyy', { locale: fr })
+              : "aujourd'hui"
+            } :
+          </span>
           {MACHINE_TYPE_ORDER.map(type => {
-            const data = todayStock.availability[type];
+            const data = activeStock.availability[type];
             if (!data) return null;
             const color = TYPE_COLORS[type] || '#6B7280';
             return (
-              <div key={type} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white">
+              <div key={type} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white transition-all">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
                 <span className="text-xs font-medium text-gray-700">{type}</span>
-                <span className={clsx('text-xs font-bold', data.available > 0 ? 'text-green-600' : 'text-red-600')}>
+                <span className={clsx('text-xs font-bold tabular-nums transition-colors', data.available > 0 ? 'text-green-600' : 'text-red-600')}>
                   {data.available}/{data.total}
                 </span>
               </div>
             );
           })}
+          {selectedStockDate && (
+            <button
+              onClick={() => setSelectedStockDate(null)}
+              className="text-[10px] text-gray-400 hover:text-gray-600 ml-1"
+            >
+              ✕ reset
+            </button>
+          )}
         </div>
       )}
 
@@ -188,14 +203,20 @@ export default function AgendaPage() {
             const isToday = isSameDay(day, new Date());
             const isWeekend = day.getDay() === 0 || day.getDay() === 6;
 
+            const dayStr = format(day, 'yyyy-MM-dd');
+            const isSelected = selectedStockDate === dayStr;
+
             return (
               <div
                 key={day.toISOString()}
+                onClick={() => setSelectedStockDate(isSelected ? null : dayStr)}
                 className={clsx(
-                  'bg-white p-1.5 flex flex-col',
+                  'p-1.5 flex flex-col cursor-pointer transition-colors',
                   viewMode === 'week' ? 'min-h-[400px]' : 'min-h-[100px]',
-                  isToday && 'ring-2 ring-inset ring-primary-400',
-                  isWeekend && 'bg-gray-50/70'
+                  isSelected ? 'bg-primary-50 ring-2 ring-inset ring-primary-500' :
+                  isToday ? 'bg-white ring-2 ring-inset ring-primary-300' :
+                  isWeekend ? 'bg-gray-50/70' : 'bg-white',
+                  !isSelected && 'hover:bg-gray-50'
                 )}
               >
                 {/* Date header */}
