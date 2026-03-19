@@ -535,7 +535,22 @@ export default function AgendaPage() {
                         )}
                       </td>
                       {/* Single merged cell for all days — blocks are positioned absolutely across the full width */}
-                      <td colSpan={days.length} className="border-b border-gray-50 p-0 h-[26px] relative">
+                      <td
+                        colSpan={days.length}
+                        className="border-b border-gray-50 p-0 h-[26px] relative"
+                        onDragOver={(e) => {
+                          if (isHS) return;
+                          if (!dragBlock || (dragBlock.produit !== row.type && dragBlock.produit !== '?')) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          setDropTargetKey(row.key);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setDropTargetKey(null);
+                          if (dragBlock) { handleDrop(dragBlock, row.key); setDragBlock(null); }
+                        }}
+                      >
                         {/* Day grid lines */}
                         <div className="absolute inset-0 flex">
                           {days.map((day, di) => {
@@ -585,17 +600,19 @@ export default function AgendaPage() {
 
                           const isUnassigned = (block as any)._unassigned;
 
+                          let wasDragged = false;
                           return (
                             <div
                               key={block.id}
                               draggable
                               onDragStart={(e) => {
+                                wasDragged = true;
                                 setDragBlock(block);
                                 e.dataTransfer.effectAllowed = 'move';
                                 e.dataTransfer.setData('text/plain', block.id);
                               }}
-                              onDragEnd={() => { setDragBlock(null); setDropTargetKey(null); }}
-                              onClick={() => setSelectedBlock(block)}
+                              onDragEnd={() => { setDragBlock(null); setDropTargetKey(null); setTimeout(() => { wasDragged = false; }, 100); }}
+                              onClick={() => { if (!wasDragged) setSelectedBlock(block); }}
                               className={clsx(
                                 'absolute top-[1px] bottom-[1px] cursor-grab overflow-hidden flex items-center justify-between px-1 hover:brightness-95 transition-all z-[1]',
                                 dragBlock?.id === block.id && 'opacity-50 ring-2 ring-primary-500'
