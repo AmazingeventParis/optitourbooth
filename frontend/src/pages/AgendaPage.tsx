@@ -461,7 +461,7 @@ export default function AgendaPage() {
                 return machineRows.map(row => {
                   const showTypeSeparator = row.type !== lastType;
                   lastType = row.type;
-                  const isDropTarget = dragBlock && dropTargetKey === row.key && dragBlock.produit === row.type;
+                  const isDropTarget = dragBlock && dropTargetKey === row.key && (dragBlock.produit === row.type || dragBlock.produit === '?');
 
                   return (
                     <tr
@@ -471,7 +471,7 @@ export default function AgendaPage() {
                         isDropTarget && 'ring-2 ring-inset ring-primary-400 bg-primary-50/40'
                       )}
                       onDragOver={(e) => {
-                        if (!dragBlock || dragBlock.produit !== row.type) return;
+                        if (!dragBlock || (dragBlock.produit !== row.type && dragBlock.produit !== '?')) return;
                         e.preventDefault();
                         e.dataTransfer.dropEffect = 'move';
                         setDropTargetKey(row.key);
