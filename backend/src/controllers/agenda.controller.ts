@@ -221,7 +221,6 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
 
     // Skip if already covered by a point-based block
     if (usedDeliveryClients.has(fw + '|' + ppDate)) continue;
-    if (!pp.produitNom) continue;
 
     // Find matching pending pickup
     const pendingPickup = await prisma.pendingPoint.findFirst({
@@ -239,10 +238,11 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     // Skip if the block doesn't overlap with the visible range
     if (dateEnd < dateFrom || ppDate > dateTo) continue;
 
-    const machine = findMachine(pp.clientName, ppDate, pp.produitNom);
+    const ppProduit = pp.produitNom || '?';
+    const machine = findMachine(pp.clientName, ppDate, ppProduit);
 
     // Get product color
-    const produit = await prisma.produit.findFirst({ where: { nom: pp.produitNom }, select: { couleur: true } });
+    const produit = pp.produitNom ? await prisma.produit.findFirst({ where: { nom: pp.produitNom }, select: { couleur: true } }) : null;
 
     blocks.push({
       id: `pp-${pp.id}`,
@@ -251,7 +251,7 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       clientVille: null,
       clientTelephone: (pp as any).contactTelephone || null,
       clientContactNom: (pp as any).contactNom || null,
-      produit: pp.produitNom,
+      produit: ppProduit,
       produitCouleur: produit?.couleur || '#6B7280',
       dateStart: ppDate,
       timeStart: pp.creneauDebut || '00:00',

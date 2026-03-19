@@ -633,12 +633,19 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Produit : détection par tag (prioritaire) et calendrier source (fallback)
     let produitNom: string | null = null;
 
+    // 0. Si le tag est juste un préfixe sans nom de produit, déduire le type
+    // "(R)" seul → Ring, "(LIR)" seul → Vegas (défaut)
+    const TAG_PREFIX_TO_PRODUIT: Record<string, string> = { 'R': 'Ring', 'LR': 'Ring', 'LIR': 'Vegas', 'L': 'Vegas' };
+    if (!tagContent && tagInner && TAG_PREFIX_TO_PRODUIT[tagInner]) {
+      produitNom = TAG_PREFIX_TO_PRODUIT[tagInner];
+    }
+
     // 1. Chercher le nom de produit dans le tag
     // Essai exact d'abord: "(LIR MIROIR)" → tagContent="MIROIR" → match
     // Puis premier mot: "(R VEGAS newww)" → tagContent="VEGAS NEWWW" → premier mot "VEGAS" → match
-    if (tagContent && LIR_TAG_TO_PRODUIT[tagContent]) {
+    if (!produitNom && tagContent && LIR_TAG_TO_PRODUIT[tagContent]) {
       produitNom = LIR_TAG_TO_PRODUIT[tagContent];
-    } else {
+    } else if (!produitNom) {
       // Chercher chaque mot du tag dans le mapping
       const tagWords = tagContent.split(/\s+/);
       for (const word of tagWords) {
