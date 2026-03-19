@@ -133,13 +133,7 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       produitCouleur = produitColorMap.get(machineFromPrep.type) || null;
     }
 
-    // 2. Fallback: produit assigné sur le point de tournée
-    if (!produitNom && delivery.produits?.[0]?.produit?.nom) {
-      produitNom = delivery.produits[0].produit.nom;
-      produitCouleur = delivery.produits[0].produit.couleur || null;
-    }
-
-    // 3. Fallback: pending_point (info Google Calendar)
+    // 2. Pending point (Google Calendar, toujours à jour après sync)
     if (!produitNom) {
       const ppKey = `${fw}|${dDate}`;
       const pp = pendingByClientDate.get(ppKey);
@@ -147,6 +141,12 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
         produitNom = pp.produitNom;
         produitCouleur = produitColorMap.get(pp.produitNom) || null;
       }
+    }
+
+    // 3. Fallback: produit assigné sur le point de tournée
+    if (!produitNom && delivery.produits?.[0]?.produit?.nom) {
+      produitNom = delivery.produits[0].produit.nom;
+      produitCouleur = delivery.produits[0].produit.couleur || null;
     }
 
     if (!produitNom) produitNom = '?';
