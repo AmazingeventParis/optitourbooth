@@ -315,6 +315,75 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
 });
 
 /**
+ * POST /api/agenda/assign-machine
+ * Assign or reassign a machine to an event by creating/updating a preparation
+ * Body: { blockId, targetMachineId, client, dateEvenement }
+ */
+export const assignMachine = asyncHandler(async (req: Request, res: Response) => {
+  const { blockId, targetMachineId, client, dateEvenement } = req.body;
+
+  if (!targetMachineId || !client || !dateEvenement) {
+    return apiResponse.badRequest(res, 'targetMachineId, client et dateEvenement requis');
+  }
+
+  // Verify target machine exists
+  const machine = await prisma.machine.findUnique({ where: { id: targetMachineId } });
+  if (!machine) return apiResponse.notFound(res, 'Machine non trouvée');
+
+  const eventDate = new Date(dateEvenement + 'T12:00:00Z');
+  const clientLower = client.toLowerCase().trim();
+  const clientFw = clientLower.split(/[+\s]/)[0]?.trim() || clientLower;
+
+  // Check if there's already a preparation for this client + date on another machine
+  const existingPrep = await prisma.preparation.findFirst({
+    where: {
+      dateEvenement: eventDate,
+      client: { contains: clientFw, mode: 'insensitive' },
+      statut: { notIn: ['archivee', 'disponible'] },
+    },
+  });
+
+  if (existingPrep) {
+    // Reassign: update existing preparation to the new machine
+    const updated = await prisma.preparation.update({
+      where: { id: existingPrep.id },
+      data: { machineId: targetMachineId },
+      include: { machine: true },
+    });
+    return apiResponse.success(res, { action: 'reassigned', preparation: updated });
+  }
+
+  // Create new preparation
+  const newPrep = await prisma.preparation.create({
+    data: {
+      machineId: targetMachineId,
+      dateEvenement: eventDate,
+      client,
+      preparateur: 'Admin',
+      statut: 'en_preparation',
+    },
+    include: { machine: true },
+  });
+
+  // Mark pending point as used if exists
+  const pendingPoint = await prisma.pendingPoint.findFirst({
+    where: {
+      clientName: { contains: clientFw, mode: 'insensitive' },
+      date: eventDate,
+      type: 'livraison',
+    },
+  });
+  if (pendingPoint) {
+    await prisma.pendingPoint.update({
+      where: { id: pendingPoint.id },
+      data: { usedInPreparation: true },
+    });
+  }
+
+  return apiResponse.success(res, { action: 'created', preparation: newPrep });
+});
+
+/**
  * GET /api/agenda/stock?dateFrom=&dateTo=
  * Computes stock by calling getAllocations internally and counting
  * how many machines of each type are occupied on each day (including multi-day spans).

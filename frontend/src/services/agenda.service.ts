@@ -68,4 +68,9 @@ export const agendaService = {
     const res = await api.get<ApiResponse<Record<string, AgendaMachine[]>>>('/agenda/machines');
     return res.data.data;
   },
+
+  async assignMachine(data: { blockId: string; targetMachineId: string; client: string; dateEvenement: string }): Promise<any> {
+    const res = await api.post<ApiResponse<any>>('/agenda/assign-machine', data);
+    return res.data.data;
+  },
 };

@@ -42,7 +42,44 @@ export default function AgendaPage() {
   const [selectedStockDate, setSelectedStockDate] = useState<string | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<AllocationBlock | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [dragBlock, setDragBlock] = useState<AllocationBlock | null>(null);
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Handle drop: assign block to target machine
+  const handleDrop = async (block: AllocationBlock, targetRowKey: string) => {
+    // Find the target machine from the machines list
+    const [, targetNumero] = targetRowKey.split('-', 2);
+    let targetMachine: AgendaMachine | null = null;
+    for (const [, typeMachines] of Object.entries(machines)) {
+      const found = typeMachines.find(m => `${m.type}-${m.numero}` === targetRowKey);
+      if (found) { targetMachine = found; break; }
+    }
+
+    if (!targetMachine) {
+      toast.error(`Machine ${targetNumero} non trouvée`);
+      return;
+    }
+
+    // Check type compatibility
+    if (targetMachine.type !== block.produit && block.produit !== '?') {
+      toast.error(`Impossible : ${block.client} est un ${block.produit}, pas un ${targetMachine.type}`);
+      return;
+    }
+
+    try {
+      await agendaService.assignMachine({
+        blockId: block.id,
+        targetMachineId: targetMachine.id,
+        client: block.client,
+        dateEvenement: block.dateStart,
+      });
+      toast.success(`${block.client} → ${targetMachine.type} ${targetMachine.numero}`);
+      loadData();
+    } catch {
+      toast.error('Erreur lors de l\'assignation');
+    }
+  };
 
   const dateRange = useMemo(() => {
     const d = parseISO(currentDate);
@@ -376,10 +413,36 @@ export default function AgendaPage() {
                 return machineRows.map(row => {
                   const showTypeSeparator = row.type !== lastType;
                   lastType = row.type;
+                  const isDropTarget = dragBlock && dropTargetKey === row.key && dragBlock.produit === row.type;
+
                   return (
-                    <tr key={row.key} className="group hover:bg-gray-50/50">
+                    <tr
+                      key={row.key}
+                      className={clsx(
+                        'group hover:bg-gray-50/50',
+                        isDropTarget && 'ring-2 ring-inset ring-primary-400 bg-primary-50/40'
+                      )}
+                      onDragOver={(e) => {
+                        if (!dragBlock || dragBlock.produit !== row.type) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setDropTargetKey(row.key);
+                      }}
+                      onDragLeave={() => setDropTargetKey(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDropTargetKey(null);
+                        if (dragBlock) {
+                          handleDrop(dragBlock, row.key);
+                          setDragBlock(null);
+                        }
+                      }}
+                    >
                       {/* Machine label */}
-                      <td className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-b border-r border-gray-50 px-1.5 py-0">
+                      <td className={clsx(
+                        'sticky left-0 z-10 border-b border-r border-gray-50 px-1.5 py-0',
+                        isDropTarget ? 'bg-primary-50' : 'bg-white group-hover:bg-gray-50'
+                      )}>
                         {showTypeSeparator ? (
                           <div className="flex items-center gap-1.5">
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: row.color }} />
@@ -447,8 +510,18 @@ export default function AgendaPage() {
                           return (
                             <div
                               key={block.id}
+                              draggable
+                              onDragStart={(e) => {
+                                setDragBlock(block);
+                                e.dataTransfer.effectAllowed = 'move';
+                                e.dataTransfer.setData('text/plain', block.id);
+                              }}
+                              onDragEnd={() => { setDragBlock(null); setDropTargetKey(null); }}
                               onClick={() => setSelectedBlock(block)}
-                              className="absolute top-[1px] bottom-[1px] cursor-pointer overflow-hidden flex items-center justify-between px-1 hover:brightness-95 transition-all z-[1]"
+                              className={clsx(
+                                'absolute top-[1px] bottom-[1px] cursor-grab overflow-hidden flex items-center justify-between px-1 hover:brightness-95 transition-all z-[1]',
+                                dragBlock?.id === block.id && 'opacity-50 ring-2 ring-primary-500'
+                              )}
                               style={{
                                 left: `${leftPct}%`,
                                 width: `${widthPct}%`,
