@@ -3,8 +3,9 @@ import { format, addDays, subDays, addWeeks, subWeeks, addMonths, subMonths, sta
 import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { agendaService, AllocationBlock, StockData, AgendaMachine } from '@/services/agenda.service';
+import { pendingPointsService } from '@/services/pendingPoints.service';
 import { Modal } from '@/components/ui';
-import { ChevronLeftIcon, ChevronRightIcon, MapPinIcon, PhoneIcon, UserIcon, TruckIcon, CalendarDaysIcon, ClockIcon, WrenchScrewdriverIcon, FunnelIcon, BoltIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { ChevronLeftIcon, ChevronRightIcon, MapPinIcon, PhoneIcon, UserIcon, TruckIcon, CalendarDaysIcon, ClockIcon, WrenchScrewdriverIcon, FunnelIcon, BoltIcon, ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 
@@ -45,6 +46,7 @@ export default function AgendaPage() {
   const [dragBlock, setDragBlock] = useState<AllocationBlock | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
   const [optimizing, setOptimizing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [marginWarning, setMarginWarning] = useState<{ block: AllocationBlock; targetKey: string; warnings: string[] } | null>(null);
   const navigate = useNavigate();
 
@@ -116,6 +118,20 @@ export default function AgendaPage() {
       toast.error('Erreur lors de l\'optimisation');
     } finally {
       setOptimizing(false);
+    }
+  };
+
+  // Sync Google Calendar
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await pendingPointsService.syncGoogleCalendar();
+      toast.success(`Sync : ${result.created} créé(s), ${result.updated} mis à jour`);
+      loadData();
+    } catch {
+      toast.error('Erreur sync Google Calendar');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -310,6 +326,14 @@ export default function AgendaPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold text-gray-900">Agenda Machines</h1>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 text-white rounded-lg text-xs font-medium hover:bg-primary-600 transition-colors disabled:opacity-50"
+          >
+            <ArrowPathIcon className={clsx('h-4 w-4', syncing && 'animate-spin')} />
+            {syncing ? 'Sync...' : 'Sync'}
+          </button>
           <button
             onClick={handleOptimize}
             disabled={optimizing}
