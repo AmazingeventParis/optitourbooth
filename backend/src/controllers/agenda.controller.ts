@@ -495,37 +495,52 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
  * Body: { targetMachineId, dateStart, timeStart, dateEnd, timeEnd }
  */
 export const checkMargin = asyncHandler(async (req: Request, res: Response) => {
-  const { targetMachineId, dateStart, timeStart, dateEnd, timeEnd, dateFrom, dateTo } = req.body;
+  const { targetMachineId, dateStart, timeStart, dateEnd, timeEnd, dateFrom, dateTo, blockClient } = req.body;
   const MARGIN_HOURS = 4;
   const MARGIN_MS = MARGIN_HOURS * 60 * 60 * 1000;
 
-  // Get the machine info
   const machine = await prisma.machine.findUnique({ where: { id: targetMachineId } });
   if (!machine) return apiResponse.success(res, { ok: true, warnings: [] });
 
-  // Get all allocations for the machine in the period
-  const fakeReq = { query: { dateFrom: dateFrom || dateStart, dateTo: dateTo || dateEnd }, headers: req.headers } as any;
+  // Get all allocations in a wide range around the dates
+  const rangeFrom = dateFrom || dateStart;
+  const rangeTo = dateTo || dateEnd;
+  const fakeReq = { query: { dateFrom: rangeFrom, dateTo: rangeTo }, headers: req.headers } as any;
   let blocks: AllocationBlock[] = [];
   const fakeRes = { status: () => fakeRes, json: (body: any) => { blocks = body.data || []; return fakeRes; } } as any;
   await getAllocations(fakeReq, fakeRes, (() => {}) as any);
 
-  // Filter blocks for this machine
-  const machineBlocks = blocks.filter(b => b.machineNumero === machine.numero && b.produit === machine.type);
+  // Filter blocks on this machine, excluding the block being moved (same client)
+  const clientFw = (blockClient || '').toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
+  const machineBlocks = blocks.filter(b => {
+    if (b.machineNumero !== machine.numero) return false;
+    // Exclude the block being moved itself
+    const bFw = b.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
+    if (clientFw && bFw === clientFw) return false;
+    return true;
+  });
 
   const newStart = new Date(`${dateStart}T${timeStart || '00:00'}:00Z`).getTime();
-  const newEnd = new Date(`${dateEnd}T${timeEnd || '23:00'}:00Z`).getTime();
+  const newEnd = new Date(`${dateEnd}T${timeEnd || '23:59'}:00Z`).getTime();
 
   const warnings: string[] = [];
   for (const b of machineBlocks) {
-    const bEnd = new Date(`${b.dateEnd}T${b.timeEnd !== '23:59' ? b.timeEnd : '23:00'}:00Z`).getTime();
-    const bStart = new Date(`${b.dateStart}T${b.timeStart !== '00:00' ? b.timeStart : '01:00'}:00Z`).getTime();
+    const bStart = new Date(`${b.dateStart}T${b.timeStart || '00:00'}:00Z`).getTime();
+    const bEnd = new Date(`${b.dateEnd}T${b.timeEnd || '23:59'}:00Z`).getTime();
 
-    // Check gap before
+    // Check overlap
+    if (newStart < bEnd && newEnd > bStart) {
+      const overlapType = newStart >= bStart ? 'chevauche' : 'est chevauchée par';
+      warnings.push(`${overlapType} "${b.client}" (${b.dateStart} ${b.timeStart} → ${b.dateEnd} ${b.timeEnd})`);
+      continue;
+    }
+
+    // Check gap: this block ends before the new one starts
     if (bEnd <= newStart && (newStart - bEnd) < MARGIN_MS) {
       const gapH = Math.round((newStart - bEnd) / 3600000 * 10) / 10;
       warnings.push(`Seulement ${gapH}h après "${b.client}" (fin ${b.timeEnd}) — marge recommandée: ${MARGIN_HOURS}h`);
     }
-    // Check gap after
+    // Check gap: the new one ends before this block starts
     if (newEnd <= bStart && (bStart - newEnd) < MARGIN_MS) {
       const gapH = Math.round((bStart - newEnd) / 3600000 * 10) / 10;
       warnings.push(`Seulement ${gapH}h avant "${b.client}" (début ${b.timeStart}) — marge recommandée: ${MARGIN_HOURS}h`);

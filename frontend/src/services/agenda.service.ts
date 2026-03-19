@@ -80,7 +80,7 @@ export const agendaService = {
     return res.data.data;
   },
 
-  async checkMargin(data: { targetMachineId: string; dateStart: string; timeStart: string; dateEnd: string; timeEnd: string; dateFrom?: string; dateTo?: string }): Promise<{ ok: boolean; warnings: string[] }> {
+  async checkMargin(data: { targetMachineId: string; dateStart: string; timeStart: string; dateEnd: string; timeEnd: string; dateFrom?: string; dateTo?: string; blockClient?: string }): Promise<{ ok: boolean; warnings: string[] }> {
     const res = await api.post<ApiResponse<{ ok: boolean; warnings: string[] }>>('/agenda/check-margin', data);
     return res.data.data;
   },

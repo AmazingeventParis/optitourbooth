@@ -68,7 +68,7 @@ export default function AgendaPage() {
       return;
     }
 
-    // Check 4h margin
+    // Check 4h margin and overlaps
     try {
       const check = await agendaService.checkMargin({
         targetMachineId: targetMachine.id,
@@ -78,10 +78,10 @@ export default function AgendaPage() {
         timeEnd: block.timeEnd,
         dateFrom: dateRange.from,
         dateTo: dateRange.to,
+        blockClient: block.client,
       });
 
       if (!check.ok) {
-        // Show warning — let user bypass
         setMarginWarning({ block, targetKey: targetRowKey, warnings: check.warnings });
         return;
       }
