@@ -73,4 +73,14 @@ export const agendaService = {
     const res = await api.post<ApiResponse<any>>('/agenda/assign-machine', data);
     return res.data.data;
   },
+
+  async optimize(dateFrom: string, dateTo: string): Promise<{ assigned: number; skipped: number; message: string }> {
+    const res = await api.post<ApiResponse<{ assigned: number; skipped: number; message: string }>>('/agenda/optimize', { dateFrom, dateTo });
+    return res.data.data;
+  },
+
+  async checkMargin(data: { targetMachineId: string; dateStart: string; timeStart: string; dateEnd: string; timeEnd: string; dateFrom?: string; dateTo?: string }): Promise<{ ok: boolean; warnings: string[] }> {
+    const res = await api.post<ApiResponse<{ ok: boolean; warnings: string[] }>>('/agenda/check-margin', data);
+    return res.data.data;
+  },
 };

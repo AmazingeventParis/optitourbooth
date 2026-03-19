@@ -4,7 +4,7 @@ import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { agendaService, AllocationBlock, StockData, AgendaMachine } from '@/services/agenda.service';
 import { Modal } from '@/components/ui';
-import { ChevronLeftIcon, ChevronRightIcon, MapPinIcon, PhoneIcon, UserIcon, TruckIcon, CalendarDaysIcon, ClockIcon, WrenchScrewdriverIcon, FunnelIcon } from '@heroicons/react/24/outline';
+import { ChevronLeftIcon, ChevronRightIcon, MapPinIcon, PhoneIcon, UserIcon, TruckIcon, CalendarDaysIcon, ClockIcon, WrenchScrewdriverIcon, FunnelIcon, BoltIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 
@@ -44,29 +44,52 @@ export default function AgendaPage() {
   const [filterType, setFilterType] = useState<string | null>(null);
   const [dragBlock, setDragBlock] = useState<AllocationBlock | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
+  const [marginWarning, setMarginWarning] = useState<{ block: AllocationBlock; targetKey: string; warnings: string[] } | null>(null);
   const navigate = useNavigate();
 
-  // Handle drop: assign block to target machine
-  const handleDrop = async (block: AllocationBlock, targetRowKey: string) => {
-    // Find the target machine from the machines list
-    const [, targetNumero] = targetRowKey.split('-', 2);
-    let targetMachine: AgendaMachine | null = null;
+  // Find machine object from row key
+  const findMachineByKey = (targetRowKey: string): AgendaMachine | null => {
     for (const [, typeMachines] of Object.entries(machines)) {
       const found = typeMachines.find(m => `${m.type}-${m.numero}` === targetRowKey);
-      if (found) { targetMachine = found; break; }
+      if (found) return found;
     }
+    return null;
+  };
 
-    if (!targetMachine) {
-      toast.error(`Machine ${targetNumero} non trouvée`);
-      return;
-    }
-
-    // Check type compatibility
+  // Handle drop: check margin then assign
+  const handleDrop = async (block: AllocationBlock, targetRowKey: string) => {
+    const targetMachine = findMachineByKey(targetRowKey);
+    if (!targetMachine) { toast.error('Machine non trouvée'); return; }
     if (targetMachine.type !== block.produit && block.produit !== '?') {
       toast.error(`Impossible : ${block.client} est un ${block.produit}, pas un ${targetMachine.type}`);
       return;
     }
 
+    // Check 4h margin
+    try {
+      const check = await agendaService.checkMargin({
+        targetMachineId: targetMachine.id,
+        dateStart: block.dateStart,
+        timeStart: block.timeStart,
+        dateEnd: block.dateEnd,
+        timeEnd: block.timeEnd,
+        dateFrom: dateRange.from,
+        dateTo: dateRange.to,
+      });
+
+      if (!check.ok) {
+        // Show warning — let user bypass
+        setMarginWarning({ block, targetKey: targetRowKey, warnings: check.warnings });
+        return;
+      }
+    } catch { /* proceed if check fails */ }
+
+    await doAssign(block, targetMachine);
+  };
+
+  // Actually perform the assignment
+  const doAssign = async (block: AllocationBlock, targetMachine: AgendaMachine) => {
     try {
       await agendaService.assignMachine({
         blockId: block.id,
@@ -78,6 +101,21 @@ export default function AgendaPage() {
       loadData();
     } catch {
       toast.error('Erreur lors de l\'assignation');
+    }
+  };
+
+  // Handle optimize button
+  const handleOptimize = async () => {
+    if (!confirm('Optimiser automatiquement le placement des bornes pour cette semaine ?')) return;
+    setOptimizing(true);
+    try {
+      const result = await agendaService.optimize(dateRange.from, dateRange.to);
+      toast.success(result.message);
+      loadData();
+    } catch {
+      toast.error('Erreur lors de l\'optimisation');
+    } finally {
+      setOptimizing(false);
     }
   };
 
@@ -270,7 +308,17 @@ export default function AgendaPage() {
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold text-gray-900">Agenda Machines</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold text-gray-900">Agenda Machines</h1>
+          <button
+            onClick={handleOptimize}
+            disabled={optimizing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-600 transition-colors disabled:opacity-50"
+          >
+            <BoltIcon className="h-4 w-4" />
+            {optimizing ? 'Optimisation...' : 'Optimiser'}
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-gray-200 overflow-hidden">
             {(['day', 'week', 'month'] as ViewMode[]).map(m => (
@@ -559,6 +607,48 @@ export default function AgendaPage() {
           onClose={() => setSelectedBlock(null)}
           onNavigateTournee={(id) => { setSelectedBlock(null); navigate(`/tournees/${id}`); }}
         />
+      )}
+
+      {/* Warning marge 4h */}
+      {marginWarning && (
+        <Modal isOpen onClose={() => setMarginWarning(null)} title="Marge insuffisante" size="md">
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <ExclamationTriangleIcon className="h-6 w-6 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">
+                  La marge de 4h entre prestations n'est pas respectée :
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {marginWarning.warnings.map((w, i) => (
+                    <li key={i} className="text-sm text-amber-700">• {w}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              Voulez-vous tout de même assigner <strong>{marginWarning.block.client}</strong> à cette borne ?
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setMarginWarning(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={async () => {
+                  const target = findMachineByKey(marginWarning.targetKey);
+                  if (target) await doAssign(marginWarning.block, target);
+                  setMarginWarning(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-amber-500 rounded-lg hover:bg-amber-600"
+              >
+                Assigner quand même
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

@@ -17,4 +17,10 @@ router.get('/machines', agendaController.getMachines);
 // Assign/reassign machine to event (admin only)
 router.post('/assign-machine', requireAdmin, agendaController.assignMachine);
 
+// Auto-optimize assignments for a period (admin only)
+router.post('/optimize', requireAdmin, agendaController.optimizeAssignments);
+
+// Check 4h margin before manual assignment
+router.post('/check-margin', requireAdmin, agendaController.checkMargin);
+
 export default router;

@@ -315,6 +315,227 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
 });
 
 /**
+ * POST /api/agenda/optimize
+ * Auto-assign machines to events in a date range, maximizing machine reuse.
+ * Uses a 4-hour margin between events on the same machine.
+ * Body: { dateFrom, dateTo }
+ */
+export const optimizeAssignments = asyncHandler(async (req: Request, res: Response) => {
+  const { dateFrom, dateTo } = req.body;
+  if (!dateFrom || !dateTo) return apiResponse.badRequest(res, 'dateFrom et dateTo requis');
+
+  const MARGIN_HOURS = 4;
+  const MARGIN_MS = MARGIN_HOURS * 60 * 60 * 1000;
+
+  // Get all allocations for the period
+  const fakeReq = { query: { dateFrom, dateTo }, headers: req.headers } as any;
+  let blocks: AllocationBlock[] = [];
+  const fakeRes = { status: () => fakeRes, json: (body: any) => { blocks = body.data || []; return fakeRes; } } as any;
+  await getAllocations(fakeReq, fakeRes, (() => {}) as any);
+
+  // Get all machines grouped by type
+  const allMachines = await prisma.machine.findMany({
+    where: { actif: true },
+    orderBy: [{ type: 'asc' }, { numero: 'asc' }],
+  });
+
+  // Exclude hors_service machines
+  const hsIds = new Set(
+    (await prisma.preparation.findMany({ where: { statut: 'hors_service' }, select: { machineId: true } }))
+      .map(p => p.machineId)
+  );
+
+  const machinesByType: Record<string, typeof allMachines> = {};
+  for (const m of allMachines) {
+    if (hsIds.has(m.id)) continue;
+    if (!machinesByType[m.type]) machinesByType[m.type] = [];
+    machinesByType[m.type]!.push(m);
+  }
+
+  // Sort machines by numero (numeric sort: V1, V2, ... V10, V11)
+  for (const type of Object.keys(machinesByType)) {
+    machinesByType[type]!.sort((a, b) => a.numero.localeCompare(b.numero, undefined, { numeric: true }));
+  }
+
+  // Group blocks by product type and sort by start datetime
+  const blocksByType: Record<string, AllocationBlock[]> = {};
+  for (const b of blocks) {
+    if (!b.produit || b.produit === '?') continue;
+    if (!blocksByType[b.produit]) blocksByType[b.produit] = [];
+    blocksByType[b.produit]!.push(b);
+  }
+  for (const type of Object.keys(blocksByType)) {
+    blocksByType[type]!.sort((a, b) => {
+      const da = `${a.dateStart}T${a.timeStart}`;
+      const db = `${b.dateStart}T${b.timeStart}`;
+      return da.localeCompare(db);
+    });
+  }
+
+  // Bin-packing: for each type, assign blocks to machines to maximize reuse
+  let assigned = 0;
+  let skipped = 0;
+
+  function blockEndMs(b: AllocationBlock): number {
+    return new Date(`${b.dateEnd}T${b.timeEnd !== '23:59' ? b.timeEnd : '23:00'}:00Z`).getTime();
+  }
+  function blockStartMs(b: AllocationBlock): number {
+    return new Date(`${b.dateStart}T${b.timeStart !== '00:00' ? b.timeStart : '01:00'}:00Z`).getTime();
+  }
+
+  for (const [type, typeBlocks] of Object.entries(blocksByType)) {
+    const typeMachines = machinesByType[type] || [];
+    if (typeMachines.length === 0) continue;
+
+    // Track what's assigned to each machine: list of block end times
+    const machineSchedule: Map<string, { endMs: number }[]> = new Map();
+    for (const m of typeMachines) {
+      machineSchedule.set(m.id, []);
+    }
+
+    for (const block of typeBlocks) {
+      const startMs = blockStartMs(block);
+      let bestMachineId: string | null = null;
+
+      // Find the machine where this block fits (respecting 4h margin)
+      // and whose last event ends closest (maximize packing)
+      let bestGap = Infinity;
+
+      for (const machine of typeMachines) {
+        const schedule = machineSchedule.get(machine.id)!;
+        // Check if block fits: no overlap and >= 4h margin after last event
+        const hasConflict = schedule.some(s => {
+          // The last end + margin must be before this block's start
+          return (s.endMs + MARGIN_MS) > startMs;
+        });
+
+        if (!hasConflict) {
+          // Find gap from last event end to this block start
+          const lastEnd = schedule.length > 0 ? Math.max(...schedule.map(s => s.endMs)) : 0;
+          const gap = startMs - lastEnd;
+          if (gap < bestGap) {
+            bestGap = gap;
+            bestMachineId = machine.id;
+          }
+        }
+      }
+
+      if (!bestMachineId) {
+        // No machine available with 4h margin — assign to first machine with no time overlap
+        for (const machine of typeMachines) {
+          const schedule = machineSchedule.get(machine.id)!;
+          const hasOverlap = schedule.some(s => s.endMs > startMs);
+          if (!hasOverlap) {
+            bestMachineId = machine.id;
+            break;
+          }
+        }
+      }
+
+      if (!bestMachineId) {
+        skipped++;
+        continue;
+      }
+
+      // Record the assignment
+      machineSchedule.get(bestMachineId)!.push({ endMs: blockEndMs(block) });
+
+      // Create/update preparation
+      const machine = typeMachines.find(m => m.id === bestMachineId)!;
+      const eventDate = new Date(block.dateStart + 'T12:00:00Z');
+      const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
+
+      const existingPrep = await prisma.preparation.findFirst({
+        where: {
+          dateEvenement: eventDate,
+          client: { contains: clientFw, mode: 'insensitive' },
+          statut: { notIn: ['archivee', 'disponible'] },
+        },
+      });
+
+      if (existingPrep) {
+        if (existingPrep.machineId !== bestMachineId) {
+          await prisma.preparation.update({
+            where: { id: existingPrep.id },
+            data: { machineId: bestMachineId },
+          });
+          assigned++;
+        }
+      } else {
+        await prisma.preparation.create({
+          data: {
+            machineId: bestMachineId,
+            dateEvenement: eventDate,
+            client: block.client,
+            preparateur: 'Auto',
+            statut: 'en_preparation',
+          },
+        });
+        assigned++;
+
+        // Mark pending point as used
+        const pp = await prisma.pendingPoint.findFirst({
+          where: { clientName: { contains: clientFw, mode: 'insensitive' }, date: eventDate, type: 'livraison' },
+        });
+        if (pp) await prisma.pendingPoint.update({ where: { id: pp.id }, data: { usedInPreparation: true } });
+      }
+    }
+  }
+
+  return apiResponse.success(res, {
+    assigned,
+    skipped,
+    message: `${assigned} assignation(s), ${skipped} non placée(s)`,
+  });
+});
+
+/**
+ * POST /api/agenda/check-margin
+ * Check if assigning a block to a machine respects the 4h margin
+ * Body: { targetMachineId, dateStart, timeStart, dateEnd, timeEnd }
+ */
+export const checkMargin = asyncHandler(async (req: Request, res: Response) => {
+  const { targetMachineId, dateStart, timeStart, dateEnd, timeEnd, dateFrom, dateTo } = req.body;
+  const MARGIN_HOURS = 4;
+  const MARGIN_MS = MARGIN_HOURS * 60 * 60 * 1000;
+
+  // Get the machine info
+  const machine = await prisma.machine.findUnique({ where: { id: targetMachineId } });
+  if (!machine) return apiResponse.success(res, { ok: true, warnings: [] });
+
+  // Get all allocations for the machine in the period
+  const fakeReq = { query: { dateFrom: dateFrom || dateStart, dateTo: dateTo || dateEnd }, headers: req.headers } as any;
+  let blocks: AllocationBlock[] = [];
+  const fakeRes = { status: () => fakeRes, json: (body: any) => { blocks = body.data || []; return fakeRes; } } as any;
+  await getAllocations(fakeReq, fakeRes, (() => {}) as any);
+
+  // Filter blocks for this machine
+  const machineBlocks = blocks.filter(b => b.machineNumero === machine.numero && b.produit === machine.type);
+
+  const newStart = new Date(`${dateStart}T${timeStart || '00:00'}:00Z`).getTime();
+  const newEnd = new Date(`${dateEnd}T${timeEnd || '23:00'}:00Z`).getTime();
+
+  const warnings: string[] = [];
+  for (const b of machineBlocks) {
+    const bEnd = new Date(`${b.dateEnd}T${b.timeEnd !== '23:59' ? b.timeEnd : '23:00'}:00Z`).getTime();
+    const bStart = new Date(`${b.dateStart}T${b.timeStart !== '00:00' ? b.timeStart : '01:00'}:00Z`).getTime();
+
+    // Check gap before
+    if (bEnd <= newStart && (newStart - bEnd) < MARGIN_MS) {
+      const gapH = Math.round((newStart - bEnd) / 3600000 * 10) / 10;
+      warnings.push(`Seulement ${gapH}h après "${b.client}" (fin ${b.timeEnd}) — marge recommandée: ${MARGIN_HOURS}h`);
+    }
+    // Check gap after
+    if (newEnd <= bStart && (bStart - newEnd) < MARGIN_MS) {
+      const gapH = Math.round((bStart - newEnd) / 3600000 * 10) / 10;
+      warnings.push(`Seulement ${gapH}h avant "${b.client}" (début ${b.timeStart}) — marge recommandée: ${MARGIN_HOURS}h`);
+    }
+  }
+
+  return apiResponse.success(res, { ok: warnings.length === 0, warnings });
+});
+
+/**
  * POST /api/agenda/assign-machine
  * Assign or reassign a machine to an event by creating/updating a preparation
  * Body: { blockId, targetMachineId, client, dateEvenement }
