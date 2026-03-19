@@ -260,15 +260,21 @@ export default function AgendaPage() {
     const unassignedBlocks: AllocationBlock[] = [];
     for (const block of filtered) {
       if (block.machineNumero) {
-        const key = `${block.produit}-${block.machineNumero}`;
-        if (!rowMap.has(key)) {
+        // Use machine type when product is unknown
+        const effectiveType = (block.produit === '?' && block.machineType) ? block.machineType : block.produit;
+        const effectiveColor = effectiveType !== '?' ? (TYPE_COLORS[effectiveType] || block.produitCouleur || '#6B7280') : (block.produitCouleur || '#6B7280');
+        const key = `${effectiveType}-${block.machineNumero}`;
+        // If the row already exists (pre-populated), just add the block
+        if (rowMap.has(key)) {
+          rowMap.get(key)!.blocks.push(block);
+        } else {
           rowMap.set(key, {
-            key, type: block.produit, numero: block.machineNumero,
-            color: block.produitCouleur || TYPE_COLORS[block.produit] || '#6B7280',
+            key, type: effectiveType, numero: block.machineNumero,
+            color: effectiveColor,
             horsService: false, blocks: [],
           });
+          rowMap.get(key)!.blocks.push(block);
         }
-        rowMap.get(key)!.blocks.push(block);
       } else {
         unassignedBlocks.push(block);
       }
