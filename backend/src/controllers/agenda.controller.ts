@@ -567,17 +567,27 @@ export const assignMachine = asyncHandler(async (req: Request, res: Response) =>
   if (!machine) return apiResponse.notFound(res, 'Machine non trouvée');
 
   const eventDate = new Date(dateEvenement + 'T12:00:00Z');
-  const clientLower = client.toLowerCase().trim();
-  const clientFw = clientLower.split(/[+\s]/)[0]?.trim() || clientLower;
 
-  // Check if there's already a preparation for this client + date on another machine
-  const existingPrep = await prisma.preparation.findFirst({
+  // Try exact client name match first, then progressively looser
+  let existingPrep = await prisma.preparation.findFirst({
     where: {
       dateEvenement: eventDate,
-      client: { contains: clientFw, mode: 'insensitive' },
+      client: { equals: client, mode: 'insensitive' },
       statut: { notIn: ['archivee', 'disponible'] },
     },
   });
+
+  // Fallback: try contains with a significant portion of the name (at least 5 chars)
+  if (!existingPrep) {
+    const searchTerm = client.length > 5 ? client.substring(0, Math.min(client.length, 20)) : client;
+    existingPrep = await prisma.preparation.findFirst({
+      where: {
+        dateEvenement: eventDate,
+        client: { contains: searchTerm, mode: 'insensitive' },
+        statut: { notIn: ['archivee', 'disponible'] },
+      },
+    });
+  }
 
   if (existingPrep) {
     // Reassign: update existing preparation to the new machine
@@ -602,9 +612,10 @@ export const assignMachine = asyncHandler(async (req: Request, res: Response) =>
   });
 
   // Mark pending point as used if exists
+  const searchClient = client.length > 5 ? client.substring(0, Math.min(client.length, 20)) : client;
   const pendingPoint = await prisma.pendingPoint.findFirst({
     where: {
-      clientName: { contains: clientFw, mode: 'insensitive' },
+      clientName: { contains: searchClient, mode: 'insensitive' },
       date: eventDate,
       type: 'livraison',
     },
