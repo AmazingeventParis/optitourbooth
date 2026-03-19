@@ -47,6 +47,7 @@ export interface AgendaMachine {
   couleur: string;
   aDefaut: boolean;
   defaut?: string;
+  horsService: boolean;
 }
 
 export const agendaService = {

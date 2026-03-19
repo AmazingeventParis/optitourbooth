@@ -232,7 +232,7 @@ export default function AgendaPage() {
   const machineRows = useMemo(() => {
     const filtered = filterType ? allocations.filter(a => a.produit === filterType) : allocations;
 
-    const rowMap = new Map<string, { key: string; type: string; numero: string; color: string; blocks: AllocationBlock[] }>();
+    const rowMap = new Map<string, { key: string; type: string; numero: string; color: string; horsService: boolean; blocks: AllocationBlock[] }>();
 
     // Pre-populate rows for Vegas, Smakk, Ring (all machines even if empty)
     const typesToShow = filterType ? [filterType].filter(t => ALWAYS_SHOW_ALL.includes(t)) : ALWAYS_SHOW_ALL;
@@ -245,6 +245,7 @@ export default function AgendaPage() {
           type,
           numero: m.numero,
           color: m.couleur || TYPE_COLORS[type] || '#6B7280',
+          horsService: m.horsService || false,
           blocks: [],
         });
       }
@@ -264,7 +265,7 @@ export default function AgendaPage() {
           rowMap.set(key, {
             key, type: block.produit, numero: block.machineNumero,
             color: block.produitCouleur || TYPE_COLORS[block.produit] || '#6B7280',
-            blocks: [],
+            horsService: false, blocks: [],
           });
         }
         rowMap.get(key)!.blocks.push(block);
@@ -275,7 +276,7 @@ export default function AgendaPage() {
 
     // Step 2: place unassigned blocks on the first free row (sorted by numero)
     // Get sorted rows per type for proper V1, V2, V3... order
-    const sortedRowsByType: Record<string, Array<{ key: string; type: string; numero: string; color: string; blocks: AllocationBlock[] }>> = {};
+    const sortedRowsByType: Record<string, Array<{ key: string; type: string; numero: string; color: string; horsService: boolean; blocks: AllocationBlock[] }>> = {};
     for (const [, row] of rowMap) {
       if (!sortedRowsByType[row.type]) sortedRowsByType[row.type] = [];
       sortedRowsByType[row.type]!.push(row);
@@ -300,7 +301,7 @@ export default function AgendaPage() {
           rowMap.set(key, {
             key, type: block.produit, numero: '—',
             color: block.produitCouleur || TYPE_COLORS[block.produit] || '#6B7280',
-            blocks: [],
+            horsService: false, blocks: [],
           });
         }
         rowMap.get(key)!.blocks.push({ ...block, _unassigned: true } as any);
@@ -486,15 +487,18 @@ export default function AgendaPage() {
                   const showTypeSeparator = row.type !== lastType;
                   lastType = row.type;
                   const isDropTarget = dragBlock && dropTargetKey === row.key && (dragBlock.produit === row.type || dragBlock.produit === '?');
+                  const isHS = row.horsService;
 
                   return (
                     <tr
                       key={row.key}
                       className={clsx(
-                        'group hover:bg-gray-50/50',
-                        isDropTarget && 'ring-2 ring-inset ring-primary-400 bg-primary-50/40'
+                        'group',
+                        isHS ? 'bg-gray-100/80 opacity-50' : 'hover:bg-gray-50/50',
+                        isDropTarget && !isHS && 'ring-2 ring-inset ring-primary-400 bg-primary-50/40'
                       )}
                       onDragOver={(e) => {
+                        if (isHS) return;
                         if (!dragBlock || (dragBlock.produit !== row.type && dragBlock.produit !== '?')) return;
                         e.preventDefault();
                         e.dataTransfer.dropEffect = 'move';
@@ -517,14 +521,16 @@ export default function AgendaPage() {
                       )}>
                         {showTypeSeparator ? (
                           <div className="flex items-center gap-1.5">
-                            <div className="w-3 h-3 rounded" style={{ backgroundColor: row.color }} />
-                            <span className="text-[10px] font-bold" style={{ color: row.color }}>{row.type}</span>
-                            <span className="text-[10px] font-bold text-gray-800">{row.numero}</span>
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: isHS ? '#9CA3AF' : row.color }} />
+                            <span className="text-[10px] font-bold" style={{ color: isHS ? '#9CA3AF' : row.color }}>{row.type}</span>
+                            <span className={clsx('text-[10px] font-bold', isHS ? 'text-gray-400' : 'text-gray-800')}>{row.numero}</span>
+                            {isHS && <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1 rounded">HS</span>}
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5 pl-[18px]">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: row.color }} />
-                            <span className="text-[10px] font-semibold text-gray-700">{row.numero}</span>
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: isHS ? '#9CA3AF' : row.color }} />
+                            <span className={clsx('text-[10px] font-semibold', isHS ? 'text-gray-400' : 'text-gray-700')}>{row.numero}</span>
+                            {isHS && <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1 rounded">HS</span>}
                           </div>
                         )}
                       </td>

@@ -684,7 +684,16 @@ export const getMachines = asyncHandler(async (_req: Request, res: Response) => 
     orderBy: [{ type: 'asc' }, { numero: 'asc' }],
     select: { id: true, type: true, numero: true, couleur: true, aDefaut: true, defaut: true },
   });
-  const grouped: Record<string, typeof machines> = {};
-  for (const m of machines) { if (!grouped[m.type]) grouped[m.type] = []; grouped[m.type]!.push(m); }
+
+  // Get hors_service machine IDs
+  const hsPreps = await prisma.preparation.findMany({
+    where: { statut: 'hors_service' },
+    select: { machineId: true },
+  });
+  const hsIds = new Set(hsPreps.map(p => p.machineId));
+
+  const enriched = machines.map(m => ({ ...m, horsService: hsIds.has(m.id) }));
+  const grouped: Record<string, typeof enriched> = {};
+  for (const m of enriched) { if (!grouped[m.type]) grouped[m.type] = []; grouped[m.type]!.push(m); }
   return apiResponse.success(res, grouped);
 });
