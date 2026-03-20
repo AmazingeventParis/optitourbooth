@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { ensureDateUTC } from '../utils/dateUtils.js';
 
 interface AllocationBlock {
   id: string;
@@ -453,7 +454,7 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
       machineSchedule.get(bestMachineId)!.push({ endMs: blockEndMs(block) });
 
       // Store suggestion on pending point (don't create preparation)
-      const eventDate = new Date(block.dateStart + 'T12:00:00Z');
+      const eventDate = ensureDateUTC(block.dateStart);
       const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
 
       const pp = await prisma.pendingPoint.findFirst({
@@ -597,7 +598,7 @@ export const assignMachine = asyncHandler(async (req: Request, res: Response) =>
   const machine = await prisma.machine.findUnique({ where: { id: targetMachineId } });
   if (!machine) return apiResponse.notFound(res, 'Machine non trouvée');
 
-  const eventDate = new Date(dateEvenement + 'T12:00:00Z');
+  const eventDate = ensureDateUTC(dateEvenement);
 
   // Store suggestion on pending point (don't create preparation)
   const searchClient = client.length > 5 ? client.substring(0, Math.min(client.length, 20)) : client;
@@ -776,69 +777,72 @@ export const validateMachine = asyncHandler(async (req: Request, res: Response) 
     return apiResponse.success(res, { created: 0, message: 'Borne déjà validée' });
   }
 
-  // Stratégie 1: utiliser suggestedMachineId
-  let suggestions = await prisma.pendingPoint.findMany({
-    where: {
-      suggestedMachineId: machineId,
-      usedInPreparation: false,
-      ignoredInPreparation: false,
-      type: 'livraison',
-    },
-    orderBy: { date: 'asc' },
-  });
+  if (!blocks || blocks.length === 0) {
+    return apiResponse.success(res, { created: 0, message: 'Aucun bloc envoyé' });
+  }
 
-  // Stratégie 2: si pas de suggestions, utiliser les blocs envoyés par le frontend
-  if (suggestions.length === 0 && blocks && blocks.length > 0) {
-    for (const block of blocks) {
-      const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
-      if (clientFw.length < 2) continue;
-      const eventDate = new Date(block.dateStart + 'T12:00:00Z');
-      const pp = await prisma.pendingPoint.findFirst({
-        where: {
-          clientName: { contains: clientFw, mode: 'insensitive' },
-          date: eventDate,
-          type: 'livraison',
-          usedInPreparation: false,
+  let created = 0;
+  const processedClients = new Set<string>();
+
+  for (const block of blocks) {
+    const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
+    if (clientFw.length < 2) continue;
+
+    // Éviter les doublons (même client, même date)
+    const dedupKey = `${clientFw}|${block.dateStart}`;
+    if (processedClients.has(dedupKey)) continue;
+    processedClients.add(dedupKey);
+
+    const eventDate = ensureDateUTC(block.dateStart);
+
+    // Chercher un pending point correspondant
+    const pp = await prisma.pendingPoint.findFirst({
+      where: {
+        clientName: { contains: clientFw, mode: 'insensitive' },
+        date: eventDate,
+        type: 'livraison',
+        usedInPreparation: false,
+        ignoredInPreparation: false,
+      },
+    });
+
+    if (pp) {
+      // Créer la préparation liée au pending point
+      await prisma.preparation.create({
+        data: {
+          machineId,
+          dateEvenement: pp.date,
+          client: pp.clientName,
+          preparateur: 'À préparer',
+          statut: 'en_preparation',
+          pendingPointId: pp.id,
         },
       });
-      if (pp && !suggestions.find(s => s.id === pp.id)) {
-        // Mettre à jour suggestedMachineId pour le futur
-        await prisma.pendingPoint.update({
-          where: { id: pp.id },
-          data: { suggestedMachineId: machineId },
-        });
-        suggestions.push(pp);
-      }
+      await prisma.pendingPoint.update({
+        where: { id: pp.id },
+        data: { usedInPreparation: true, suggestedMachineId: machineId },
+      });
+      created++;
+    } else {
+      // Pas de pending point → créer la préparation directement depuis les infos du bloc
+      await prisma.preparation.create({
+        data: {
+          machineId,
+          dateEvenement: eventDate,
+          client: block.client,
+          preparateur: 'À préparer',
+          statut: 'en_preparation',
+        },
+      });
+      created++;
     }
   }
 
-  if (suggestions.length === 0) {
-    return apiResponse.success(res, { created: 0, message: 'Aucun événement à valider' });
+  if (created > 0) {
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
+    socketEmit.toAdmins('preparation:created', {});
   }
-
-  // Créer les préparations
-  let created = 0;
-  for (const pp of suggestions) {
-    await prisma.preparation.create({
-      data: {
-        machineId,
-        dateEvenement: pp.date,
-        client: pp.clientName,
-        preparateur: 'À préparer',
-        statut: 'en_preparation',
-        pendingPointId: pp.id,
-      },
-    });
-    await prisma.pendingPoint.update({
-      where: { id: pp.id },
-      data: { usedInPreparation: true, suggestedMachineId: machineId },
-    });
-    created++;
-  }
-
-  const { socketEmit } = await import('../config/socket.js');
-  socketEmit.toAdmins('machines:updated', {});
-  socketEmit.toAdmins('preparation:created', {});
 
   return apiResponse.success(res, {
     created,
@@ -872,16 +876,22 @@ export const validateType = asyncHandler(async (req: Request, res: Response) => 
       if (existing) continue;
 
       let created = 0;
+      const processedClients = new Set<string>();
       for (const block of mb.blocks) {
         const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
         if (clientFw.length < 2) continue;
-        const eventDate = new Date(block.dateStart + 'T12:00:00Z');
+        const dedupKey = `${clientFw}|${block.dateStart}`;
+        if (processedClients.has(dedupKey)) continue;
+        processedClients.add(dedupKey);
+
+        const eventDate = ensureDateUTC(block.dateStart);
         const pp = await prisma.pendingPoint.findFirst({
           where: {
             clientName: { contains: clientFw, mode: 'insensitive' },
             date: eventDate,
             type: 'livraison',
             usedInPreparation: false,
+            ignoredInPreparation: false,
           },
         });
         if (pp) {
@@ -898,6 +908,18 @@ export const validateType = asyncHandler(async (req: Request, res: Response) => 
           await prisma.pendingPoint.update({
             where: { id: pp.id },
             data: { usedInPreparation: true, suggestedMachineId: mb.machineId },
+          });
+          created++;
+        } else {
+          // Pas de pending point → créer directement
+          await prisma.preparation.create({
+            data: {
+              machineId: mb.machineId,
+              dateEvenement: eventDate,
+              client: block.client,
+              preparateur: 'À préparer',
+              statut: 'en_preparation',
+            },
           });
           created++;
         }
