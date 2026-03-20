@@ -155,6 +155,17 @@ export default function AgendaPage() {
     } catch { toast.error('Erreur déverrouillage'); }
   };
 
+  const handleUnlockType = async (machineType: string) => {
+    const typeRows = machineRows.filter(r => r.type === machineType && r.machine && (r.machine.suggestionsCount > 0 || r.machine.validatedCount > 0));
+    try {
+      for (const r of typeRows) {
+        await agendaService.unlockMachine(r.machine!.id);
+      }
+      toast.success(`Toutes les ${machineType} déverrouillées`);
+      loadData();
+    } catch { toast.error('Erreur déverrouillage'); }
+  };
+
   const handleValidateType = async (machineType: string) => {
     // Collecter les blocs de toutes les bornes de ce type
     const typeRows = machineRows.filter(r => r.type === machineType && r.machine && r.blocks.length > 0 && !r.machine.validatedCount && !r.machine.suggestionsCount);
@@ -570,6 +581,9 @@ export default function AgendaPage() {
                         const typeHasBlocksToValidate = showTypeSeparator && machineRows.some(r =>
                           r.type === row.type && r.blocks.length > 0 && r.machine && !r.machine.validatedCount && !r.machine.suggestionsCount
                         );
+                        const typeHasValidated = showTypeSeparator && machineRows.some(r =>
+                          r.type === row.type && r.machine && (r.machine.suggestionsCount > 0 || r.machine.validatedCount > 0)
+                        );
 
                         return showTypeSeparator ? (
                           <div className="flex items-center gap-1">
@@ -593,6 +607,12 @@ export default function AgendaPage() {
                               <button onClick={(e) => { e.stopPropagation(); handleValidateType(row.type); }}
                                 className="p-0.5 rounded bg-green-600 text-white hover:bg-green-700 transition-colors text-[8px] font-bold px-1" title={`Valider toutes les ${row.type}`}>
                                 Tout
+                              </button>
+                            )}
+                            {typeHasValidated && (
+                              <button onClick={(e) => { e.stopPropagation(); handleUnlockType(row.type); }}
+                                className="p-0.5 rounded bg-amber-500 text-white hover:bg-amber-600 transition-colors text-[8px] font-bold px-1" title={`Déverrouiller toutes les ${row.type}`}>
+                                <LockOpenIcon className="h-3 w-3 inline" />
                               </button>
                             )}
                           </div>
