@@ -28,7 +28,6 @@ import {
   FilmIcon,
   ArrowPathIcon,
   CalendarDaysIcon,
-  EyeSlashIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -118,11 +117,6 @@ export default function PreparationsPage() {
   const [selectedPreparateur, setSelectedPreparateur] = useState<string>('');
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
 
-  // Suggestions state
-  const [suggestions, setSuggestions] = useState<CalendarEvent[]>([]);
-  const [suggestionMachineChoice, setSuggestionMachineChoice] = useState<Record<string, string>>({});
-  const [suggestionPreparateur, setSuggestionPreparateur] = useState<string>('Wilfried');
-
   // Action modal state
   const [isViewMode, setIsViewMode] = useState(false);
   const [defautText, setDefautText] = useState('');
@@ -172,34 +166,6 @@ export default function PreparationsPage() {
     };
   }, [fetchMachines]);
 
-  const fetchSuggestions = useCallback(async (type: MachineType) => {
-    try {
-      const calendarType = type === 'Smakk' ? 'smakk' : 'shootnbox';
-      const events = await pendingPointsService.listCalendarEvents(calendarType);
-      // Filtrer par type de machine
-      const filtered = events.filter(e => e.produitNom === type || !e.produitNom);
-      setSuggestions(filtered);
-      // Pré-sélectionner les bornes suggérées par l'agenda
-      const choices: Record<string, string> = {};
-      filtered.forEach(e => {
-        if (e.suggestedMachineId) choices[e.id] = e.suggestedMachineId;
-      });
-      setSuggestionMachineChoice(prev => ({ ...prev, ...choices }));
-    } catch (err) {
-      console.error('Erreur chargement suggestions:', err);
-      setSuggestions([]);
-    }
-  }, []);
-
-  // Charger les suggestions quand on sélectionne un type
-  useEffect(() => {
-    if (selectedType) {
-      fetchSuggestions(selectedType);
-    } else {
-      setSuggestions([]);
-    }
-  }, [selectedType, fetchSuggestions]);
-
   const fetchArchive = async () => {
     try {
       const { data } = await preparationsService.list({ archived: true, limit: 100 });
@@ -224,16 +190,28 @@ export default function PreparationsPage() {
     setSelectedMachine(machine);
     const preparation = getPreparationForMachine(machine);
 
+    const machineSuggestions = machine.suggestedPoints || [];
+
     if (preparation) {
       // Mode visualisation
       setIsViewMode(true);
       setSelectedPreparateur(preparation.preparateur || '');
     } else {
-      // Mode création - pré-sélectionner l'utilisateur connecté
+      // Mode création
       setIsViewMode(false);
-      setEvenements([{ dateEvenement: '', client: '' }]);
       setSelectedPreparateur('Wilfried');
       fetchCalendarEvents(machine.type);
+
+      // Pré-remplir avec les suggestions de l'agenda pour cette borne
+      if (machineSuggestions.length > 0) {
+        setEvenements(machineSuggestions.map(sp => ({
+          dateEvenement: typeof sp.date === 'string' ? sp.date.substring(0, 10) : new Date(sp.date).toISOString().substring(0, 10),
+          client: sp.clientName,
+          pendingPointId: sp.id,
+        })));
+      } else {
+        setEvenements([{ dateEvenement: '', client: '' }]);
+      }
     }
 
     setDefautText('');
@@ -471,51 +449,6 @@ export default function PreparationsPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-    }
-  };
-
-  const handleAcceptSuggestion = async (suggestion: CalendarEvent) => {
-    const machineId = suggestionMachineChoice[suggestion.id];
-    if (!machineId) {
-      showError('Erreur', 'Veuillez sélectionner une borne');
-      return;
-    }
-    if (!suggestionPreparateur) {
-      showError('Erreur', 'Veuillez sélectionner un préparateur');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const dateStr = typeof suggestion.date === 'string'
-        ? suggestion.date.substring(0, 10)
-        : new Date(suggestion.date).toISOString().substring(0, 10);
-
-      await preparationsService.create({
-        machineId,
-        dateEvenement: dateStr,
-        client: suggestion.clientName,
-        preparateur: suggestionPreparateur,
-        pendingPointId: suggestion.id,
-      });
-      await pendingPointsService.markUsedInPreparation(suggestion.id);
-      success('Préparation créée depuis la suggestion');
-      fetchMachines();
-      if (selectedType) fetchSuggestions(selectedType);
-    } catch (err) {
-      showError('Erreur', (err as Error).message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleIgnoreSuggestion = async (suggestionId: string) => {
-    try {
-      await pendingPointsService.ignoreSuggestion(suggestionId);
-      setSuggestions(prev => prev.filter(s => s.id !== suggestionId));
-      success('Suggestion ignorée');
-    } catch (err) {
-      showError('Erreur', (err as Error).message);
     }
   };
 
@@ -828,6 +761,7 @@ export default function PreparationsPage() {
             const pretes = machinesOfType.filter((m) => getMachineStatut(m) === 'prete').length;
             const aDecharger = machinesOfType.filter((m) => getMachineStatut(m) === 'a_decharger').length;
             const horsService = machinesOfType.filter((m) => getMachineStatut(m) === 'hors_service').length;
+            const withSuggestions = machinesOfType.filter((m) => (m.suggestedPoints || []).length > 0).length;
 
             // Récupérer la couleur d'une machine de ce type
             const machineColor = machinesOfType[0]?.couleur || '#3B82F6';
@@ -899,6 +833,12 @@ export default function PreparationsPage() {
                       <span className="font-bold text-red-600">{horsService}</span>
                     </div>
                   </div>
+                  {withSuggestions > 0 && (
+                    <div className="mt-2 flex items-center gap-1.5 bg-amber-50 rounded px-2 py-1.5 border border-amber-200">
+                      <CalendarDaysIcon className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="text-xs font-semibold text-amber-700">{withSuggestions} borne{withSuggestions > 1 ? 's' : ''} à préparer</span>
+                    </div>
+                  )}
                 </div>
               </button>
             );
@@ -993,122 +933,25 @@ export default function PreparationsPage() {
         </Button>
       </div>
 
-      {/* Section Suggestions */}
-      {suggestions.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <CalendarDaysIcon className="h-5 w-5 text-amber-600" />
-            <h3 className="font-semibold text-amber-800">
-              {suggestions.length} suggestion{suggestions.length > 1 ? 's' : ''} depuis l'agenda
-            </h3>
-          </div>
-
-          {/* Préparateur pour les suggestions */}
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs font-medium text-gray-600">Préparateur :</span>
-            <div className="flex flex-wrap gap-1">
-              {preparateurs.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setSuggestionPreparateur(p.prenom)}
-                  className={clsx(
-                    'px-2 py-0.5 rounded text-xs font-medium transition-all',
-                    suggestionPreparateur === p.prenom
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                  )}
-                >
-                  {p.prenom}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {suggestions.map((suggestion) => {
-              const dateStr = typeof suggestion.date === 'string'
-                ? suggestion.date.substring(0, 10)
-                : new Date(suggestion.date).toISOString().substring(0, 10);
-              const availableMachines = filteredMachines.filter(m => getMachineStatut(m) === 'disponible');
-
-              return (
-                <div key={suggestion.id} className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border border-amber-100">
-                  {/* Info événement */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{suggestion.clientName}</p>
-                    <p className="text-xs text-gray-500">
-                      {format(parseISO(dateStr), 'd MMMM yyyy', { locale: fr })}
-                      {suggestion.produitNom && <span className="ml-1 text-amber-600">({suggestion.produitNom})</span>}
-                    </p>
-                  </div>
-
-                  {/* Sélection borne */}
-                  <select
-                    value={suggestionMachineChoice[suggestion.id] || ''}
-                    onChange={(e) => setSuggestionMachineChoice(prev => ({ ...prev, [suggestion.id]: e.target.value }))}
-                    className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  >
-                    <option value="">Borne...</option>
-                    {availableMachines.map(m => (
-                      <option key={m.id} value={m.id}>{m.numero}</option>
-                    ))}
-                    {/* Aussi montrer les bornes occupées, séparées */}
-                    {filteredMachines.filter(m => getMachineStatut(m) !== 'disponible').length > 0 && (
-                      <optgroup label="Bornes occupées">
-                        {filteredMachines.filter(m => getMachineStatut(m) !== 'disponible').map(m => (
-                          <option key={m.id} value={m.id}>{m.numero} ({statutConfig[getMachineStatut(m)].label})</option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
-
-                  {/* Bouton Valider */}
-                  <button
-                    onClick={() => handleAcceptSuggestion(suggestion)}
-                    disabled={isSaving || !suggestionMachineChoice[suggestion.id]}
-                    className={clsx(
-                      'px-3 py-1.5 rounded-lg text-sm font-medium transition-all active:scale-95',
-                      suggestionMachineChoice[suggestion.id]
-                        ? 'bg-green-500 text-white hover:bg-green-600 shadow-sm'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    )}
-                  >
-                    <CheckCircleIcon className="h-4 w-4 inline mr-1" />
-                    Préparer
-                  </button>
-
-                  {/* Bouton Ignorer */}
-                  <button
-                    onClick={() => handleIgnoreSuggestion(suggestion.id)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"
-                    title="Ignorer cette suggestion"
-                  >
-                    <EyeSlashIcon className="h-4 w-4" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2">
         {filteredMachines.map((machine) => {
           const statut = getMachineStatut(machine);
           const allPreps = getPreparationsForMachine(machine);
           const preparation = allPreps[0];
           const statutInfo = statutConfig[statut];
+          const hasSuggestions = (machine.suggestedPoints || []).length > 0;
 
           return (
             <button
               key={machine.id}
               className={clsx(
-                'relative p-2.5 border rounded-lg transition-all duration-200 cursor-pointer hover:shadow-md hover:-translate-y-0.5',
+                'relative p-2.5 border-2 rounded-lg transition-all duration-200 cursor-pointer hover:shadow-md hover:-translate-y-0.5',
                 'bg-white',
-                statut === 'disponible' && 'border-gray-200 hover:border-blue-300',
+                hasSuggestions && statut === 'disponible' && 'border-amber-400 hover:border-amber-500 ring-2 ring-amber-200 shadow-md',
+                !hasSuggestions && statut === 'disponible' && 'border-gray-200 hover:border-blue-300',
                 statut === 'en_preparation' && 'border-orange-300 hover:border-orange-400',
-                statut === 'prete' && 'border-green-400 hover:border-green-500 shadow-sm',
+                statut === 'prete' && !hasSuggestions && 'border-green-400 hover:border-green-500 shadow-sm',
+                statut === 'prete' && hasSuggestions && 'border-amber-400 hover:border-amber-500 ring-2 ring-amber-200 shadow-md',
                 statut === 'en_cours' && 'border-purple-300 hover:border-purple-400',
                 statut === 'a_decharger' && 'border-yellow-400 hover:border-yellow-500',
                 statut === 'hors_service' && 'border-red-400 hover:border-red-500'
@@ -1118,15 +961,23 @@ export default function PreparationsPage() {
               {/* Barre de couleur statut */}
               <div
                 className={clsx(
-                  'absolute top-0 left-0 right-0 h-0.5 rounded-t-lg',
-                  statut === 'disponible' && 'bg-blue-400',
-                  statut === 'en_preparation' && 'bg-orange-400',
-                  statut === 'prete' && 'bg-green-500',
-                  statut === 'en_cours' && 'bg-purple-400',
-                  statut === 'a_decharger' && 'bg-yellow-500',
-                  statut === 'hors_service' && 'bg-red-500'
+                  'absolute top-0 left-0 right-0 h-1 rounded-t-lg',
+                  hasSuggestions ? 'bg-amber-400' : '',
+                  !hasSuggestions && statut === 'disponible' && 'bg-blue-400',
+                  !hasSuggestions && statut === 'en_preparation' && 'bg-orange-400',
+                  !hasSuggestions && statut === 'prete' && 'bg-green-500',
+                  !hasSuggestions && statut === 'en_cours' && 'bg-purple-400',
+                  !hasSuggestions && statut === 'a_decharger' && 'bg-yellow-500',
+                  !hasSuggestions && statut === 'hors_service' && 'bg-red-500'
                 )}
               />
+
+              {/* Picto suggestion agenda */}
+              {hasSuggestions && (
+                <div className="absolute -top-2 -right-2 bg-amber-400 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm z-10" title={`${machine.suggestedPoints!.length} suggestion(s) depuis l'agenda`}>
+                  <CalendarDaysIcon className="h-3 w-3" />
+                </div>
+              )}
 
               {/* Numéro de machine */}
               <div className="text-center mb-1.5">
@@ -1229,9 +1080,19 @@ export default function PreparationsPage() {
           {/* Section événements */}
           {!isViewMode ? (
             <>
+              {/* Indicateur suggestion agenda */}
+              {(selectedMachine?.suggestedPoints || []).length > 0 && evenements.some(e => e.pendingPointId) && (
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <CalendarDaysIcon className="h-5 w-5 text-amber-500 flex-shrink-0" />
+                  <p className="text-sm text-amber-800">
+                    <span className="font-semibold">{evenements.filter(e => e.pendingPointId).length} événement(s)</span> pré-rempli(s) depuis l'agenda — validez ou modifiez avant de créer
+                  </p>
+                </div>
+              )}
+
               {/* Bouton Créer en haut */}
               <Button className="w-full" onClick={handleCreatePreparation} isLoading={isSaving}>
-                Créer
+                Valider la préparation
               </Button>
 
               {/* Sélection du préparateur */}

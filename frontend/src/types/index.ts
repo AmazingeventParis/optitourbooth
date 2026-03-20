@@ -275,6 +275,15 @@ export interface Machine {
   createdAt: string;
   updatedAt: string;
   preparations?: Preparation[];
+  suggestedPoints?: SuggestedPoint[];
+}
+
+export interface SuggestedPoint {
+  id: string;
+  date: string;
+  clientName: string;
+  produitNom?: string;
+  adresse?: string;
 }
 
 export interface Preparation {
