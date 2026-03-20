@@ -87,13 +87,13 @@ export const agendaService = {
     return res.data.data;
   },
 
-  async validateMachine(machineId: string): Promise<{ created: number; machine: string; message: string }> {
-    const res = await api.post<ApiResponse<{ created: number; machine: string; message: string }>>('/agenda/validate-machine', { machineId });
+  async validateMachine(machineId: string, blocks: Array<{ client: string; dateStart: string }>): Promise<{ created: number; machine: string; message: string }> {
+    const res = await api.post<ApiResponse<{ created: number; machine: string; message: string }>>('/agenda/validate-machine', { machineId, blocks });
     return res.data.data;
   },
 
-  async validateType(machineType: string): Promise<{ created: number; machines: number; message: string }> {
-    const res = await api.post<ApiResponse<{ created: number; machines: number; message: string }>>('/agenda/validate-type', { machineType });
+  async validateType(machineType: string, machineBlocks: Array<{ machineId: string; blocks: Array<{ client: string; dateStart: string }> }>): Promise<{ created: number; machines: number; message: string }> {
+    const res = await api.post<ApiResponse<{ created: number; machines: number; message: string }>>('/agenda/validate-type', { machineType, machineBlocks });
     return res.data.data;
   },
 

@@ -762,14 +762,22 @@ export const getMachines = asyncHandler(async (_req: Request, res: Response) => 
  * Body: { machineId }
  */
 export const validateMachine = asyncHandler(async (req: Request, res: Response) => {
-  const { machineId } = req.body;
+  const { machineId, blocks } = req.body as { machineId: string; blocks?: Array<{ client: string; dateStart: string }> };
   if (!machineId) return apiResponse.badRequest(res, 'machineId requis');
 
   const machine = await prisma.machine.findUnique({ where: { id: machineId } });
   if (!machine) return apiResponse.notFound(res, 'Machine non trouvée');
 
-  // Trouver les pending points suggérés pour cette borne
-  const suggestions = await prisma.pendingPoint.findMany({
+  // Vérifier qu'il n'y a pas déjà des preps en_preparation
+  const existingPreps = await prisma.preparation.findMany({
+    where: { machineId, statut: 'en_preparation' },
+  });
+  if (existingPreps.length > 0) {
+    return apiResponse.success(res, { created: 0, message: 'Borne déjà validée' });
+  }
+
+  // Stratégie 1: utiliser suggestedMachineId
+  let suggestions = await prisma.pendingPoint.findMany({
     where: {
       suggestedMachineId: machineId,
       usedInPreparation: false,
@@ -779,8 +787,33 @@ export const validateMachine = asyncHandler(async (req: Request, res: Response) 
     orderBy: { date: 'asc' },
   });
 
+  // Stratégie 2: si pas de suggestions, utiliser les blocs envoyés par le frontend
+  if (suggestions.length === 0 && blocks && blocks.length > 0) {
+    for (const block of blocks) {
+      const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
+      if (clientFw.length < 2) continue;
+      const eventDate = new Date(block.dateStart + 'T12:00:00Z');
+      const pp = await prisma.pendingPoint.findFirst({
+        where: {
+          clientName: { contains: clientFw, mode: 'insensitive' },
+          date: eventDate,
+          type: 'livraison',
+          usedInPreparation: false,
+        },
+      });
+      if (pp && !suggestions.find(s => s.id === pp.id)) {
+        // Mettre à jour suggestedMachineId pour le futur
+        await prisma.pendingPoint.update({
+          where: { id: pp.id },
+          data: { suggestedMachineId: machineId },
+        });
+        suggestions.push(pp);
+      }
+    }
+  }
+
   if (suggestions.length === 0) {
-    return apiResponse.success(res, { created: 0, message: 'Aucune suggestion à valider' });
+    return apiResponse.success(res, { created: 0, message: 'Aucun événement à valider' });
   }
 
   // Créer les préparations
@@ -798,7 +831,7 @@ export const validateMachine = asyncHandler(async (req: Request, res: Response) 
     });
     await prisma.pendingPoint.update({
       where: { id: pp.id },
-      data: { usedInPreparation: true },
+      data: { usedInPreparation: true, suggestedMachineId: machineId },
     });
     created++;
   }
@@ -820,52 +853,56 @@ export const validateMachine = asyncHandler(async (req: Request, res: Response) 
  * Body: { machineType }
  */
 export const validateType = asyncHandler(async (req: Request, res: Response) => {
-  const { machineType } = req.body;
+  const { machineType, machineBlocks } = req.body as {
+    machineType: string;
+    machineBlocks?: Array<{ machineId: string; blocks: Array<{ client: string; dateStart: string }> }>;
+  };
   if (!machineType) return apiResponse.badRequest(res, 'machineType requis');
 
-  // Trouver toutes les bornes de ce type qui ont des suggestions
-  const machinesWithSuggestions = await prisma.machine.findMany({
-    where: {
-      type: machineType,
-      actif: true,
-      suggestedPoints: {
-        some: {
-          usedInPreparation: false,
-          ignoredInPreparation: false,
-          type: 'livraison',
-        },
-      },
-    },
-    include: {
-      suggestedPoints: {
-        where: {
-          usedInPreparation: false,
-          ignoredInPreparation: false,
-          type: 'livraison',
-        },
-        orderBy: { date: 'asc' },
-      },
-    },
-  });
-
   let totalCreated = 0;
-  for (const machine of machinesWithSuggestions) {
-    for (const pp of machine.suggestedPoints) {
-      await prisma.preparation.create({
-        data: {
-          machineId: machine.id,
-          dateEvenement: pp.date,
-          client: pp.clientName,
-          preparateur: 'À préparer',
-          statut: 'en_preparation',
-          pendingPointId: pp.id,
-        },
+  let machineCount = 0;
+
+  // Pour chaque borne avec des blocs, valider
+  if (machineBlocks && machineBlocks.length > 0) {
+    for (const mb of machineBlocks) {
+      // Vérifier pas déjà validée
+      const existing = await prisma.preparation.findFirst({
+        where: { machineId: mb.machineId, statut: 'en_preparation' },
       });
-      await prisma.pendingPoint.update({
-        where: { id: pp.id },
-        data: { usedInPreparation: true },
-      });
-      totalCreated++;
+      if (existing) continue;
+
+      let created = 0;
+      for (const block of mb.blocks) {
+        const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
+        if (clientFw.length < 2) continue;
+        const eventDate = new Date(block.dateStart + 'T12:00:00Z');
+        const pp = await prisma.pendingPoint.findFirst({
+          where: {
+            clientName: { contains: clientFw, mode: 'insensitive' },
+            date: eventDate,
+            type: 'livraison',
+            usedInPreparation: false,
+          },
+        });
+        if (pp) {
+          await prisma.preparation.create({
+            data: {
+              machineId: mb.machineId,
+              dateEvenement: pp.date,
+              client: pp.clientName,
+              preparateur: 'À préparer',
+              statut: 'en_preparation',
+              pendingPointId: pp.id,
+            },
+          });
+          await prisma.pendingPoint.update({
+            where: { id: pp.id },
+            data: { usedInPreparation: true, suggestedMachineId: mb.machineId },
+          });
+          created++;
+        }
+      }
+      if (created > 0) { totalCreated += created; machineCount++; }
     }
   }
 
@@ -877,8 +914,8 @@ export const validateType = asyncHandler(async (req: Request, res: Response) => 
 
   return apiResponse.success(res, {
     created: totalCreated,
-    machines: machinesWithSuggestions.length,
-    message: `${totalCreated} préparation(s) envoyée(s) sur ${machinesWithSuggestions.length} borne(s) ${machineType}`,
+    machines: machineCount,
+    message: `${totalCreated} préparation(s) envoyée(s) sur ${machineCount} borne(s) ${machineType}`,
   });
 });
 

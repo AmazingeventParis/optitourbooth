@@ -136,9 +136,12 @@ export default function AgendaPage() {
   };
 
   // Validate / unlock machine
-  const handleValidateMachine = async (machineId: string) => {
+  const handleValidateMachine = async (machineId: string, blocks: AllocationBlock[]) => {
     try {
-      const result = await agendaService.validateMachine(machineId);
+      const result = await agendaService.validateMachine(
+        machineId,
+        blocks.map(b => ({ client: b.client, dateStart: b.dateStart }))
+      );
       toast.success(result.message);
       loadData();
     } catch { toast.error('Erreur validation'); }
@@ -153,8 +156,14 @@ export default function AgendaPage() {
   };
 
   const handleValidateType = async (machineType: string) => {
+    // Collecter les blocs de toutes les bornes de ce type
+    const typeRows = machineRows.filter(r => r.type === machineType && r.machine && r.blocks.length > 0 && !r.machine.validatedCount);
+    const machineBlocks = typeRows.map(r => ({
+      machineId: r.machine!.id,
+      blocks: r.blocks.map(b => ({ client: b.client, dateStart: b.dateStart })),
+    }));
     try {
-      const result = await agendaService.validateType(machineType);
+      const result = await agendaService.validateType(machineType, machineBlocks);
       toast.success(result.message);
       loadData();
     } catch { toast.error('Erreur validation'); }
@@ -553,11 +562,13 @@ export default function AgendaPage() {
                       )}>
                         {(() => {
                         const m = row.machine;
-                        const hasSuggestions = m && m.suggestionsCount > 0;
+                        const hasBlocks = row.blocks.length > 0;
                         const isValidated = m && m.validatedCount > 0;
-                        // Compute type-level suggestion count for "Validate all" button
-                        const typeMachinesList = machines[row.type] || [];
-                        const typeSuggestionsTotal = typeMachinesList.reduce((sum, tm) => sum + (tm.suggestionsCount || 0), 0);
+                        const canValidate = m && hasBlocks && !isValidated;
+                        // Check if any row of this type has blocks to validate
+                        const typeHasBlocksToValidate = showTypeSeparator && machineRows.some(r =>
+                          r.type === row.type && r.blocks.length > 0 && r.machine && !r.machine.validatedCount
+                        );
 
                         return showTypeSeparator ? (
                           <div className="flex items-center gap-1">
@@ -565,19 +576,19 @@ export default function AgendaPage() {
                             <span className="text-[10px] font-bold" style={{ color: isHS ? '#9CA3AF' : row.color }}>{row.type}</span>
                             <span className={clsx('text-[10px] font-bold', isHS ? 'text-gray-400' : 'text-gray-800')}>{row.numero}</span>
                             {isHS && <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1 rounded">HS</span>}
-                            {!isHS && hasSuggestions && (
-                              <button onClick={(e) => { e.stopPropagation(); handleValidateMachine(m.id); }}
-                                className="ml-auto p-0.5 rounded bg-green-500 text-white hover:bg-green-600 transition-colors" title="Valider cette borne">
+                            {!isHS && canValidate && (
+                              <button onClick={(e) => { e.stopPropagation(); handleValidateMachine(m!.id, row.blocks); }}
+                                className="ml-auto p-0.5 rounded bg-green-500 text-white hover:bg-green-600 transition-colors" title="Envoyer en préparation">
                                 <CheckCircleIcon className="h-3 w-3" />
                               </button>
                             )}
                             {!isHS && isValidated && (
-                              <button onClick={(e) => { e.stopPropagation(); handleUnlockMachine(m.id); }}
+                              <button onClick={(e) => { e.stopPropagation(); handleUnlockMachine(m!.id); }}
                                 className="ml-auto p-0.5 rounded bg-amber-500 text-white hover:bg-amber-600 transition-colors" title="Déverrouiller">
                                 <LockOpenIcon className="h-3 w-3" />
                               </button>
                             )}
-                            {typeSuggestionsTotal > 0 && (
+                            {typeHasBlocksToValidate && (
                               <button onClick={(e) => { e.stopPropagation(); handleValidateType(row.type); }}
                                 className="p-0.5 rounded bg-green-600 text-white hover:bg-green-700 transition-colors text-[8px] font-bold px-1" title={`Valider toutes les ${row.type}`}>
                                 Tout
@@ -589,14 +600,14 @@ export default function AgendaPage() {
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: isHS ? '#9CA3AF' : row.color }} />
                             <span className={clsx('text-[10px] font-semibold', isHS ? 'text-gray-400' : 'text-gray-700')}>{row.numero}</span>
                             {isHS && <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1 rounded">HS</span>}
-                            {!isHS && hasSuggestions && (
-                              <button onClick={(e) => { e.stopPropagation(); handleValidateMachine(m.id); }}
-                                className="ml-auto p-0.5 rounded bg-green-500 text-white hover:bg-green-600 transition-colors" title="Valider cette borne">
+                            {!isHS && canValidate && (
+                              <button onClick={(e) => { e.stopPropagation(); handleValidateMachine(m!.id, row.blocks); }}
+                                className="ml-auto p-0.5 rounded bg-green-500 text-white hover:bg-green-600 transition-colors" title="Envoyer en préparation">
                                 <CheckCircleIcon className="h-3 w-3" />
                               </button>
                             )}
                             {!isHS && isValidated && (
-                              <button onClick={(e) => { e.stopPropagation(); handleUnlockMachine(m.id); }}
+                              <button onClick={(e) => { e.stopPropagation(); handleUnlockMachine(m!.id); }}
                                 className="ml-auto p-0.5 rounded bg-amber-500 text-white hover:bg-amber-600 transition-colors" title="Déverrouiller">
                                 <LockOpenIcon className="h-3 w-3" />
                               </button>
