@@ -911,10 +911,10 @@ export const unlockMachine = asyncHandler(async (req: Request, res: Response) =>
   const { machineId } = req.body;
   if (!machineId) return apiResponse.badRequest(res, 'machineId requis');
 
-  // Retirer les suggestions de cette borne
+  // Masquer les suggestions (mais garder l'assignation machine pour l'affichage agenda)
   const updated = await prisma.pendingPoint.updateMany({
-    where: { suggestedMachineId: machineId },
-    data: { suggestedMachineId: null },
+    where: { suggestedMachineId: machineId, ignoredInPreparation: false },
+    data: { ignoredInPreparation: true },
   });
 
   // Aussi supprimer d'éventuelles preps en_preparation
