@@ -630,6 +630,7 @@ export default function AgendaPage() {
                         }}
                         onDrop={(e) => {
                           e.preventDefault();
+                          e.stopPropagation();
                           setDropTargetKey(null);
                           if (dragBlock) { handleDrop(dragBlock, row.key); setDragBlock(null); }
                         }}
