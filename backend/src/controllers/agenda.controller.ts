@@ -754,7 +754,9 @@ export const getStock = asyncHandler(async (req: Request, res: Response) => {
 /**
  * GET /api/agenda/machines
  */
-export const getMachines = asyncHandler(async (_req: Request, res: Response) => {
+export const getMachines = asyncHandler(async (req: Request, res: Response) => {
+  const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
+
   const machines = await prisma.machine.findMany({
     where: { actif: true },
     orderBy: [{ type: 'asc' }, { numero: 'asc' }],
@@ -768,17 +770,25 @@ export const getMachines = asyncHandler(async (_req: Request, res: Response) => 
   });
   const hsIds = new Set(hsPreps.map(p => p.machineId));
 
-  // Compter les suggestions et preps en_preparation par borne
+  // Filtre par plage de dates si fourni
+  const dateFilter = (dateFrom && dateTo) ? {
+    date: { gte: ensureDateUTC(dateFrom), lte: ensureDateUTC(dateTo) },
+  } : {};
+  const prepDateFilter = (dateFrom && dateTo) ? {
+    dateEvenement: { gte: ensureDateUTC(dateFrom), lte: ensureDateUTC(dateTo) },
+  } : {};
+
+  // Compter les suggestions et preps en_preparation par borne (filtrées par période)
   const suggestionsCount = await prisma.pendingPoint.groupBy({
     by: ['suggestedMachineId'],
-    where: { suggestedMachineId: { not: null }, usedInPreparation: false, ignoredInPreparation: false, type: 'livraison' },
+    where: { suggestedMachineId: { not: null }, usedInPreparation: false, ignoredInPreparation: false, type: 'livraison', ...dateFilter },
     _count: true,
   });
   const suggestMap = new Map(suggestionsCount.map(s => [s.suggestedMachineId!, s._count]));
 
   const enPrepCount = await prisma.preparation.groupBy({
     by: ['machineId'],
-    where: { statut: 'en_preparation' },
+    where: { statut: 'en_preparation', ...prepDateFilter },
     _count: true,
   });
   const enPrepMap = new Map(enPrepCount.map(p => [p.machineId, p._count]));
@@ -800,20 +810,31 @@ export const getMachines = asyncHandler(async (_req: Request, res: Response) => 
  * Body: { machineId }
  */
 export const validateMachine = asyncHandler(async (req: Request, res: Response) => {
-  const { machineId, blocks } = req.body as { machineId: string; blocks?: Array<{ client: string; dateStart: string }> };
+  const { machineId, blocks, dateFrom, dateTo } = req.body as {
+    machineId: string;
+    blocks?: Array<{ client: string; dateStart: string }>;
+    dateFrom?: string;
+    dateTo?: string;
+  };
   if (!machineId) return apiResponse.badRequest(res, 'machineId requis');
 
   const machine = await prisma.machine.findUnique({ where: { id: machineId } });
   if (!machine) return apiResponse.notFound(res, 'Machine non trouvée');
 
-  if (!blocks || blocks.length === 0) {
-    return apiResponse.success(res, { suggested: 0, message: 'Aucun bloc envoyé' });
+  // Filtrer les blocs par la plage de dates visible
+  const filteredBlocks = (blocks || []).filter(b => {
+    if (!dateFrom || !dateTo) return true;
+    return b.dateStart >= dateFrom && b.dateStart <= dateTo;
+  });
+
+  if (filteredBlocks.length === 0) {
+    return apiResponse.success(res, { suggested: 0, message: 'Aucun bloc dans cette période' });
   }
 
   let suggested = 0;
   const processedClients = new Set<string>();
 
-  for (const block of blocks) {
+  for (const block of filteredBlocks) {
     const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
     if (clientFw.length < 2) continue;
 
@@ -946,18 +967,26 @@ export const validateType = asyncHandler(async (req: Request, res: Response) => 
  * Body: { machineId }
  */
 export const unlockMachine = asyncHandler(async (req: Request, res: Response) => {
-  const { machineId } = req.body;
+  const { machineId, dateFrom, dateTo } = req.body;
   if (!machineId) return apiResponse.badRequest(res, 'machineId requis');
 
-  // Masquer les suggestions (mais garder l'assignation machine pour l'affichage agenda)
+  // Filtre par plage de dates si fournie
+  const dateFilter = (dateFrom && dateTo) ? {
+    date: { gte: ensureDateUTC(dateFrom), lte: ensureDateUTC(dateTo) },
+  } : {};
+
+  // Masquer les suggestions de la période (garder l'assignation machine pour l'affichage agenda)
   const updated = await prisma.pendingPoint.updateMany({
-    where: { suggestedMachineId: machineId, ignoredInPreparation: false },
+    where: { suggestedMachineId: machineId, ignoredInPreparation: false, ...dateFilter },
     data: { ignoredInPreparation: true },
   });
 
-  // Aussi supprimer d'éventuelles preps en_preparation
+  // Aussi supprimer d'éventuelles preps en_preparation de la période
+  const prepDateFilter = (dateFrom && dateTo) ? {
+    dateEvenement: { gte: ensureDateUTC(dateFrom), lte: ensureDateUTC(dateTo) },
+  } : {};
   const preps = await prisma.preparation.findMany({
-    where: { machineId, statut: 'en_preparation' },
+    where: { machineId, statut: 'en_preparation', ...prepDateFilter },
     select: { id: true, pendingPointId: true },
   });
   if (preps.length > 0) {

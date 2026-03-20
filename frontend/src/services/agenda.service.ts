@@ -67,8 +67,11 @@ export const agendaService = {
     return res.data.data;
   },
 
-  async getMachines(): Promise<Record<string, AgendaMachine[]>> {
-    const res = await api.get<ApiResponse<Record<string, AgendaMachine[]>>>('/agenda/machines');
+  async getMachines(dateFrom?: string, dateTo?: string): Promise<Record<string, AgendaMachine[]>> {
+    const params: Record<string, string> = {};
+    if (dateFrom) params.dateFrom = dateFrom;
+    if (dateTo) params.dateTo = dateTo;
+    const res = await api.get<ApiResponse<Record<string, AgendaMachine[]>>>('/agenda/machines', { params });
     return res.data.data;
   },
 
@@ -87,18 +90,18 @@ export const agendaService = {
     return res.data.data;
   },
 
-  async validateMachine(machineId: string, blocks: Array<{ client: string; dateStart: string }>): Promise<{ created: number; machine: string; message: string }> {
-    const res = await api.post<ApiResponse<{ created: number; machine: string; message: string }>>('/agenda/validate-machine', { machineId, blocks });
+  async validateMachine(machineId: string, blocks: Array<{ client: string; dateStart: string }>, dateFrom: string, dateTo: string): Promise<{ suggested: number; machine: string; message: string }> {
+    const res = await api.post<ApiResponse<{ suggested: number; machine: string; message: string }>>('/agenda/validate-machine', { machineId, blocks, dateFrom, dateTo });
     return res.data.data;
   },
 
-  async validateType(machineType: string, machineBlocks: Array<{ machineId: string; blocks: Array<{ client: string; dateStart: string }> }>): Promise<{ created: number; machines: number; message: string }> {
-    const res = await api.post<ApiResponse<{ created: number; machines: number; message: string }>>('/agenda/validate-type', { machineType, machineBlocks });
+  async validateType(machineType: string, machineBlocks: Array<{ machineId: string; blocks: Array<{ client: string; dateStart: string }> }>, dateFrom: string, dateTo: string): Promise<{ suggested: number; machines: number; message: string }> {
+    const res = await api.post<ApiResponse<{ suggested: number; machines: number; message: string }>>('/agenda/validate-type', { machineType, machineBlocks, dateFrom, dateTo });
     return res.data.data;
   },
 
-  async unlockMachine(machineId: string): Promise<{ deleted: number; message: string }> {
-    const res = await api.post<ApiResponse<{ deleted: number; message: string }>>('/agenda/unlock-machine', { machineId });
+  async unlockMachine(machineId: string, dateFrom: string, dateTo: string): Promise<{ cleared: number; message: string }> {
+    const res = await api.post<ApiResponse<{ cleared: number; message: string }>>('/agenda/unlock-machine', { machineId, dateFrom, dateTo });
     return res.data.data;
   },
 };

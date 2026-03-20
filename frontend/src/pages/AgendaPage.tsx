@@ -140,7 +140,9 @@ export default function AgendaPage() {
     try {
       const result = await agendaService.validateMachine(
         machineId,
-        blocks.map(b => ({ client: b.client, dateStart: b.dateStart }))
+        blocks.map(b => ({ client: b.client, dateStart: b.dateStart })),
+        dateRange.from,
+        dateRange.to,
       );
       toast.success(result.message);
       loadData();
@@ -149,7 +151,7 @@ export default function AgendaPage() {
 
   const handleUnlockMachine = async (machineId: string) => {
     try {
-      const result = await agendaService.unlockMachine(machineId);
+      const result = await agendaService.unlockMachine(machineId, dateRange.from, dateRange.to);
       toast.success(result.message);
       loadData();
     } catch { toast.error('Erreur déverrouillage'); }
@@ -159,7 +161,7 @@ export default function AgendaPage() {
     const typeRows = machineRows.filter(r => r.type === machineType && r.machine && (r.machine.suggestionsCount > 0 || r.machine.validatedCount > 0));
     try {
       for (const r of typeRows) {
-        await agendaService.unlockMachine(r.machine!.id);
+        await agendaService.unlockMachine(r.machine!.id, dateRange.from, dateRange.to);
       }
       toast.success(`Toutes les ${machineType} déverrouillées`);
       loadData();
@@ -174,7 +176,7 @@ export default function AgendaPage() {
       blocks: r.blocks.map(b => ({ client: b.client, dateStart: b.dateStart })),
     }));
     try {
-      const result = await agendaService.validateType(machineType, machineBlocks);
+      const result = await agendaService.validateType(machineType, machineBlocks, dateRange.from, dateRange.to);
       toast.success(result.message);
       loadData();
     } catch { toast.error('Erreur validation'); }
@@ -208,7 +210,7 @@ export default function AgendaPage() {
       const [allocs, stockData, machinesData] = await Promise.all([
         agendaService.getAllocations(dateRange.from, dateRange.to),
         agendaService.getStock(dateRange.from, dateRange.to),
-        agendaService.getMachines(),
+        agendaService.getMachines(dateRange.from, dateRange.to),
       ]);
       setAllocations(allocs);
       setStock(stockData);
