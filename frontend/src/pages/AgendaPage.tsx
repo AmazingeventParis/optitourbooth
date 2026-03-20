@@ -699,7 +699,8 @@ export default function AgendaPage() {
                               onClick={() => { if (!wasDragged) setSelectedBlock(block); }}
                               className={clsx(
                                 'absolute top-[1px] bottom-[1px] cursor-grab overflow-hidden flex items-center justify-between px-1 hover:brightness-95 transition-all z-[1]',
-                                dragBlock?.id === block.id && 'opacity-50 ring-2 ring-primary-500'
+                                dragBlock?.id === block.id && 'opacity-50 ring-2 ring-primary-500',
+                                dragBlock && dragBlock.id !== block.id && 'pointer-events-none'
                               )}
                               style={{
                                 left: `${leftPct}%`,
