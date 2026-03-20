@@ -463,7 +463,7 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
       if (pp) {
         await prisma.pendingPoint.update({
           where: { id: pp.id },
-          data: { suggestedMachineId: bestMachineId, ignoredInPreparation: false },
+          data: { suggestedMachineId: bestMachineId, ignoredInPreparation: true },
         });
         assigned++;
       } else {
@@ -615,16 +615,16 @@ export const assignMachine = asyncHandler(async (req: Request, res: Response) =>
   if (pendingPoint) {
     await prisma.pendingPoint.update({
       where: { id: pendingPoint.id },
-      data: { suggestedMachineId: targetMachineId, ignoredInPreparation: false },
+      data: { suggestedMachineId: targetMachineId, ignoredInPreparation: true },
     });
     socketEmit.toAdmins('machines:updated', {});
     return apiResponse.success(res, {
-      action: 'suggested',
+      action: 'assigned',
       suggestion: { pendingPointId: pendingPoint.id, machineId: targetMachineId, client, dateEvenement },
     });
   }
 
-  // Pas de pending point trouvé — créer la suggestion manuellement
+  // Pas de pending point trouvé — créer manuellement (assigné mais pas envoyé en préparation)
   const manualPp = await prisma.pendingPoint.create({
     data: {
       date: eventDate,
@@ -633,6 +633,7 @@ export const assignMachine = asyncHandler(async (req: Request, res: Response) =>
       produitNom: machine.type,
       source: 'manual',
       suggestedMachineId: targetMachineId,
+      ignoredInPreparation: true,
     },
   });
 
@@ -803,7 +804,7 @@ export const validateMachine = asyncHandler(async (req: Request, res: Response) 
       });
       suggested++;
     } else {
-      // Pas de pending point → en créer un pour porter la suggestion
+      // Pas de pending point → en créer un pour porter la suggestion (envoyé en préparation)
       await prisma.pendingPoint.create({
         data: {
           date: eventDate,
@@ -812,6 +813,7 @@ export const validateMachine = asyncHandler(async (req: Request, res: Response) 
           produitNom: machine.type,
           source: 'manual',
           suggestedMachineId: machineId,
+          ignoredInPreparation: false,
         },
       });
       suggested++;
