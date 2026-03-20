@@ -34,6 +34,7 @@ export const listMachines = async (req: Request, res: Response) => {
         suggestedPoints: {
           where: {
             usedInPreparation: false,
+            ignoredInPreparation: false,
             type: 'livraison',
           },
           orderBy: {
