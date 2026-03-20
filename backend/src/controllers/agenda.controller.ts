@@ -471,10 +471,16 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
     }
   }
 
+  // Notifier la page préparations en temps réel
+  if (assigned > 0) {
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
+  }
+
   return apiResponse.success(res, {
     assigned,
     skipped,
-    message: `${assigned} assignation(s), ${skipped} non placée(s)`,
+    message: `${assigned} suggestion(s), ${skipped} non placée(s)`,
   });
 });
 
@@ -603,11 +609,14 @@ export const assignMachine = asyncHandler(async (req: Request, res: Response) =>
     },
   });
 
+  const { socketEmit } = await import('../config/socket.js');
+
   if (pendingPoint) {
     await prisma.pendingPoint.update({
       where: { id: pendingPoint.id },
       data: { suggestedMachineId: targetMachineId, ignoredInPreparation: false },
     });
+    socketEmit.toAdmins('machines:updated', {});
     return apiResponse.success(res, {
       action: 'suggested',
       suggestion: { pendingPointId: pendingPoint.id, machineId: targetMachineId, client, dateEvenement },
@@ -626,6 +635,7 @@ export const assignMachine = asyncHandler(async (req: Request, res: Response) =>
     },
   });
 
+  socketEmit.toAdmins('machines:updated', {});
   return apiResponse.success(res, {
     action: 'suggested',
     suggestion: { pendingPointId: manualPp.id, machineId: targetMachineId, client, dateEvenement },
