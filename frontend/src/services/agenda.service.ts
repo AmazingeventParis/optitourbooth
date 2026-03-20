@@ -48,6 +48,8 @@ export interface AgendaMachine {
   aDefaut: boolean;
   defaut?: string;
   horsService: boolean;
+  suggestionsCount: number;
+  validatedCount: number;
 }
 
 export const agendaService = {
@@ -82,6 +84,21 @@ export const agendaService = {
 
   async checkMargin(data: { targetMachineId: string; dateStart: string; timeStart: string; dateEnd: string; timeEnd: string; dateFrom?: string; dateTo?: string; blockClient?: string }): Promise<{ ok: boolean; warnings: string[] }> {
     const res = await api.post<ApiResponse<{ ok: boolean; warnings: string[] }>>('/agenda/check-margin', data);
+    return res.data.data;
+  },
+
+  async validateMachine(machineId: string): Promise<{ created: number; machine: string; message: string }> {
+    const res = await api.post<ApiResponse<{ created: number; machine: string; message: string }>>('/agenda/validate-machine', { machineId });
+    return res.data.data;
+  },
+
+  async validateType(machineType: string): Promise<{ created: number; machines: number; message: string }> {
+    const res = await api.post<ApiResponse<{ created: number; machines: number; message: string }>>('/agenda/validate-type', { machineType });
+    return res.data.data;
+  },
+
+  async unlockMachine(machineId: string): Promise<{ deleted: number; message: string }> {
+    const res = await api.post<ApiResponse<{ deleted: number; message: string }>>('/agenda/unlock-machine', { machineId });
     return res.data.data;
   },
 };

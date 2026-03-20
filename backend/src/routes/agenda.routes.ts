@@ -23,4 +23,9 @@ router.post('/optimize', requireAdmin, agendaController.optimizeAssignments);
 // Check 4h margin before manual assignment
 router.post('/check-margin', requireAdmin, agendaController.checkMargin);
 
+// Validation des préparations depuis l'agenda
+router.post('/validate-machine', requireAdmin, agendaController.validateMachine);
+router.post('/validate-type', requireAdmin, agendaController.validateType);
+router.post('/unlock-machine', requireAdmin, agendaController.unlockMachine);
+
 export default router;

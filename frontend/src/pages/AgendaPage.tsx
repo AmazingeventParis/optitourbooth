@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { agendaService, AllocationBlock, StockData, AgendaMachine } from '@/services/agenda.service';
 import { pendingPointsService } from '@/services/pendingPoints.service';
 import { Modal } from '@/components/ui';
-import { ChevronLeftIcon, ChevronRightIcon, MapPinIcon, PhoneIcon, UserIcon, TruckIcon, CalendarDaysIcon, ClockIcon, WrenchScrewdriverIcon, FunnelIcon, BoltIcon, ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ChevronLeftIcon, ChevronRightIcon, MapPinIcon, PhoneIcon, UserIcon, TruckIcon, CalendarDaysIcon, ClockIcon, WrenchScrewdriverIcon, FunnelIcon, BoltIcon, ExclamationTriangleIcon, ArrowPathIcon, CheckCircleIcon, LockOpenIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 
@@ -135,6 +135,31 @@ export default function AgendaPage() {
     }
   };
 
+  // Validate / unlock machine
+  const handleValidateMachine = async (machineId: string) => {
+    try {
+      const result = await agendaService.validateMachine(machineId);
+      toast.success(result.message);
+      loadData();
+    } catch { toast.error('Erreur validation'); }
+  };
+
+  const handleUnlockMachine = async (machineId: string) => {
+    try {
+      const result = await agendaService.unlockMachine(machineId);
+      toast.success(result.message);
+      loadData();
+    } catch { toast.error('Erreur déverrouillage'); }
+  };
+
+  const handleValidateType = async (machineType: string) => {
+    try {
+      const result = await agendaService.validateType(machineType);
+      toast.success(result.message);
+      loadData();
+    } catch { toast.error('Erreur validation'); }
+  };
+
   const dateRange = useMemo(() => {
     const d = parseISO(currentDate);
     switch (viewMode) {
@@ -232,7 +257,7 @@ export default function AgendaPage() {
   const machineRows = useMemo(() => {
     const filtered = filterType ? allocations.filter(a => a.produit === filterType) : allocations;
 
-    const rowMap = new Map<string, { key: string; type: string; numero: string; color: string; horsService: boolean; blocks: AllocationBlock[] }>();
+    const rowMap = new Map<string, { key: string; type: string; numero: string; color: string; horsService: boolean; blocks: AllocationBlock[]; machine?: AgendaMachine }>();
 
     // Pre-populate rows for Vegas, Smakk, Ring (all machines even if empty)
     const typesToShow = filterType ? [filterType].filter(t => ALWAYS_SHOW_ALL.includes(t)) : ALWAYS_SHOW_ALL;
@@ -247,6 +272,7 @@ export default function AgendaPage() {
           color: m.couleur || TYPE_COLORS[type] || '#6B7280',
           horsService: m.horsService || false,
           blocks: [],
+          machine: m,
         });
       }
     }
@@ -282,7 +308,7 @@ export default function AgendaPage() {
 
     // Step 2: place unassigned blocks on the first free row (sorted by numero)
     // Get sorted rows per type for proper V1, V2, V3... order
-    const sortedRowsByType: Record<string, Array<{ key: string; type: string; numero: string; color: string; horsService: boolean; blocks: AllocationBlock[] }>> = {};
+    const sortedRowsByType: Record<string, Array<{ key: string; type: string; numero: string; color: string; horsService: boolean; blocks: AllocationBlock[]; machine?: AgendaMachine }>> = {};
     for (const [, row] of rowMap) {
       if (!sortedRowsByType[row.type]) sortedRowsByType[row.type] = [];
       sortedRowsByType[row.type]!.push(row);
@@ -525,20 +551,59 @@ export default function AgendaPage() {
                         'sticky left-0 z-10 border-b border-r border-gray-50 px-1.5 py-0',
                         isDropTarget ? 'bg-primary-50' : 'bg-white group-hover:bg-gray-50'
                       )}>
-                        {showTypeSeparator ? (
-                          <div className="flex items-center gap-1.5">
+                        {(() => {
+                        const m = row.machine;
+                        const hasSuggestions = m && m.suggestionsCount > 0;
+                        const isValidated = m && m.validatedCount > 0;
+                        // Compute type-level suggestion count for "Validate all" button
+                        const typeMachinesList = machines[row.type] || [];
+                        const typeSuggestionsTotal = typeMachinesList.reduce((sum, tm) => sum + (tm.suggestionsCount || 0), 0);
+
+                        return showTypeSeparator ? (
+                          <div className="flex items-center gap-1">
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: isHS ? '#9CA3AF' : row.color }} />
                             <span className="text-[10px] font-bold" style={{ color: isHS ? '#9CA3AF' : row.color }}>{row.type}</span>
                             <span className={clsx('text-[10px] font-bold', isHS ? 'text-gray-400' : 'text-gray-800')}>{row.numero}</span>
                             {isHS && <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1 rounded">HS</span>}
+                            {!isHS && hasSuggestions && (
+                              <button onClick={(e) => { e.stopPropagation(); handleValidateMachine(m.id); }}
+                                className="ml-auto p-0.5 rounded bg-green-500 text-white hover:bg-green-600 transition-colors" title="Valider cette borne">
+                                <CheckCircleIcon className="h-3 w-3" />
+                              </button>
+                            )}
+                            {!isHS && isValidated && (
+                              <button onClick={(e) => { e.stopPropagation(); handleUnlockMachine(m.id); }}
+                                className="ml-auto p-0.5 rounded bg-amber-500 text-white hover:bg-amber-600 transition-colors" title="Déverrouiller">
+                                <LockOpenIcon className="h-3 w-3" />
+                              </button>
+                            )}
+                            {typeSuggestionsTotal > 0 && (
+                              <button onClick={(e) => { e.stopPropagation(); handleValidateType(row.type); }}
+                                className="p-0.5 rounded bg-green-600 text-white hover:bg-green-700 transition-colors text-[8px] font-bold px-1" title={`Valider toutes les ${row.type}`}>
+                                Tout
+                              </button>
+                            )}
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1.5 pl-[18px]">
+                          <div className="flex items-center gap-1 pl-[18px]">
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: isHS ? '#9CA3AF' : row.color }} />
                             <span className={clsx('text-[10px] font-semibold', isHS ? 'text-gray-400' : 'text-gray-700')}>{row.numero}</span>
                             {isHS && <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1 rounded">HS</span>}
+                            {!isHS && hasSuggestions && (
+                              <button onClick={(e) => { e.stopPropagation(); handleValidateMachine(m.id); }}
+                                className="ml-auto p-0.5 rounded bg-green-500 text-white hover:bg-green-600 transition-colors" title="Valider cette borne">
+                                <CheckCircleIcon className="h-3 w-3" />
+                              </button>
+                            )}
+                            {!isHS && isValidated && (
+                              <button onClick={(e) => { e.stopPropagation(); handleUnlockMachine(m.id); }}
+                                className="ml-auto p-0.5 rounded bg-amber-500 text-white hover:bg-amber-600 transition-colors" title="Déverrouiller">
+                                <LockOpenIcon className="h-3 w-3" />
+                              </button>
+                            )}
                           </div>
-                        )}
+                        );
+                      })()}
                       </td>
                       {/* Single merged cell for all days — blocks are positioned absolutely across the full width */}
                       <td

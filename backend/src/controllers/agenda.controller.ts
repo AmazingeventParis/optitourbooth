@@ -730,8 +730,196 @@ export const getMachines = asyncHandler(async (_req: Request, res: Response) => 
   });
   const hsIds = new Set(hsPreps.map(p => p.machineId));
 
-  const enriched = machines.map(m => ({ ...m, horsService: hsIds.has(m.id) }));
+  // Compter les suggestions et preps en_preparation par borne
+  const suggestionsCount = await prisma.pendingPoint.groupBy({
+    by: ['suggestedMachineId'],
+    where: { suggestedMachineId: { not: null }, usedInPreparation: false, ignoredInPreparation: false, type: 'livraison' },
+    _count: true,
+  });
+  const suggestMap = new Map(suggestionsCount.map(s => [s.suggestedMachineId!, s._count]));
+
+  const enPrepCount = await prisma.preparation.groupBy({
+    by: ['machineId'],
+    where: { statut: 'en_preparation' },
+    _count: true,
+  });
+  const enPrepMap = new Map(enPrepCount.map(p => [p.machineId, p._count]));
+
+  const enriched = machines.map(m => ({
+    ...m,
+    horsService: hsIds.has(m.id),
+    suggestionsCount: suggestMap.get(m.id) || 0,
+    validatedCount: enPrepMap.get(m.id) || 0,
+  }));
   const grouped: Record<string, typeof enriched> = {};
   for (const m of enriched) { if (!grouped[m.type]) grouped[m.type] = []; grouped[m.type]!.push(m); }
   return apiResponse.success(res, grouped);
+});
+
+/**
+ * POST /api/agenda/validate-machine
+ * Valide les suggestions d'une borne : crée les préparations en statut en_preparation
+ * Body: { machineId }
+ */
+export const validateMachine = asyncHandler(async (req: Request, res: Response) => {
+  const { machineId } = req.body;
+  if (!machineId) return apiResponse.badRequest(res, 'machineId requis');
+
+  const machine = await prisma.machine.findUnique({ where: { id: machineId } });
+  if (!machine) return apiResponse.notFound(res, 'Machine non trouvée');
+
+  // Trouver les pending points suggérés pour cette borne
+  const suggestions = await prisma.pendingPoint.findMany({
+    where: {
+      suggestedMachineId: machineId,
+      usedInPreparation: false,
+      ignoredInPreparation: false,
+      type: 'livraison',
+    },
+    orderBy: { date: 'asc' },
+  });
+
+  if (suggestions.length === 0) {
+    return apiResponse.success(res, { created: 0, message: 'Aucune suggestion à valider' });
+  }
+
+  // Créer les préparations
+  let created = 0;
+  for (const pp of suggestions) {
+    await prisma.preparation.create({
+      data: {
+        machineId,
+        dateEvenement: pp.date,
+        client: pp.clientName,
+        preparateur: 'À préparer',
+        statut: 'en_preparation',
+        pendingPointId: pp.id,
+      },
+    });
+    await prisma.pendingPoint.update({
+      where: { id: pp.id },
+      data: { usedInPreparation: true },
+    });
+    created++;
+  }
+
+  const { socketEmit } = await import('../config/socket.js');
+  socketEmit.toAdmins('machines:updated', {});
+  socketEmit.toAdmins('preparation:created', {});
+
+  return apiResponse.success(res, {
+    created,
+    machine: `${machine.type} ${machine.numero}`,
+    message: `${created} préparation(s) envoyée(s) pour ${machine.type} ${machine.numero}`,
+  });
+});
+
+/**
+ * POST /api/agenda/validate-type
+ * Valide toutes les suggestions de toutes les bornes d'un type
+ * Body: { machineType }
+ */
+export const validateType = asyncHandler(async (req: Request, res: Response) => {
+  const { machineType } = req.body;
+  if (!machineType) return apiResponse.badRequest(res, 'machineType requis');
+
+  // Trouver toutes les bornes de ce type qui ont des suggestions
+  const machinesWithSuggestions = await prisma.machine.findMany({
+    where: {
+      type: machineType,
+      actif: true,
+      suggestedPoints: {
+        some: {
+          usedInPreparation: false,
+          ignoredInPreparation: false,
+          type: 'livraison',
+        },
+      },
+    },
+    include: {
+      suggestedPoints: {
+        where: {
+          usedInPreparation: false,
+          ignoredInPreparation: false,
+          type: 'livraison',
+        },
+        orderBy: { date: 'asc' },
+      },
+    },
+  });
+
+  let totalCreated = 0;
+  for (const machine of machinesWithSuggestions) {
+    for (const pp of machine.suggestedPoints) {
+      await prisma.preparation.create({
+        data: {
+          machineId: machine.id,
+          dateEvenement: pp.date,
+          client: pp.clientName,
+          preparateur: 'À préparer',
+          statut: 'en_preparation',
+          pendingPointId: pp.id,
+        },
+      });
+      await prisma.pendingPoint.update({
+        where: { id: pp.id },
+        data: { usedInPreparation: true },
+      });
+      totalCreated++;
+    }
+  }
+
+  if (totalCreated > 0) {
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
+    socketEmit.toAdmins('preparation:created', {});
+  }
+
+  return apiResponse.success(res, {
+    created: totalCreated,
+    machines: machinesWithSuggestions.length,
+    message: `${totalCreated} préparation(s) envoyée(s) sur ${machinesWithSuggestions.length} borne(s) ${machineType}`,
+  });
+});
+
+/**
+ * POST /api/agenda/unlock-machine
+ * Déverrouille une borne : supprime les préparations en_preparation et restaure les suggestions
+ * Body: { machineId }
+ */
+export const unlockMachine = asyncHandler(async (req: Request, res: Response) => {
+  const { machineId } = req.body;
+  if (!machineId) return apiResponse.badRequest(res, 'machineId requis');
+
+  // Trouver les preps en_preparation pour cette borne
+  const preps = await prisma.preparation.findMany({
+    where: { machineId, statut: 'en_preparation' },
+    select: { id: true, pendingPointId: true },
+  });
+
+  if (preps.length === 0) {
+    return apiResponse.success(res, { deleted: 0, message: 'Aucune préparation à déverrouiller' });
+  }
+
+  // Restaurer les pending points
+  const ppIds = preps.map(p => p.pendingPointId).filter(Boolean) as string[];
+  if (ppIds.length > 0) {
+    await prisma.pendingPoint.updateMany({
+      where: { id: { in: ppIds } },
+      data: { usedInPreparation: false },
+    });
+  }
+
+  // Supprimer les preps
+  await prisma.preparation.deleteMany({
+    where: { id: { in: preps.map(p => p.id) } },
+  });
+
+  const { socketEmit } = await import('../config/socket.js');
+  socketEmit.toAdmins('machines:updated', {});
+
+  return apiResponse.success(res, {
+    deleted: preps.length,
+    message: `${preps.length} préparation(s) déverrouillée(s)`,
+  });
 });
