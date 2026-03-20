@@ -769,26 +769,17 @@ export const validateMachine = asyncHandler(async (req: Request, res: Response) 
   const machine = await prisma.machine.findUnique({ where: { id: machineId } });
   if (!machine) return apiResponse.notFound(res, 'Machine non trouvée');
 
-  // Vérifier qu'il n'y a pas déjà des preps en_preparation
-  const existingPreps = await prisma.preparation.findMany({
-    where: { machineId, statut: 'en_preparation' },
-  });
-  if (existingPreps.length > 0) {
-    return apiResponse.success(res, { created: 0, message: 'Borne déjà validée' });
-  }
-
   if (!blocks || blocks.length === 0) {
-    return apiResponse.success(res, { created: 0, message: 'Aucun bloc envoyé' });
+    return apiResponse.success(res, { suggested: 0, message: 'Aucun bloc envoyé' });
   }
 
-  let created = 0;
+  let suggested = 0;
   const processedClients = new Set<string>();
 
   for (const block of blocks) {
     const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
     if (clientFw.length < 2) continue;
 
-    // Éviter les doublons (même client, même date)
     const dedupKey = `${clientFw}|${block.dateStart}`;
     if (processedClients.has(dedupKey)) continue;
     processedClients.add(dedupKey);
@@ -796,58 +787,46 @@ export const validateMachine = asyncHandler(async (req: Request, res: Response) 
     const eventDate = ensureDateUTC(block.dateStart);
 
     // Chercher un pending point correspondant
-    const pp = await prisma.pendingPoint.findFirst({
+    let pp = await prisma.pendingPoint.findFirst({
       where: {
         clientName: { contains: clientFw, mode: 'insensitive' },
         date: eventDate,
         type: 'livraison',
-        usedInPreparation: false,
-        ignoredInPreparation: false,
       },
     });
 
     if (pp) {
-      // Créer la préparation liée au pending point
-      await prisma.preparation.create({
-        data: {
-          machineId,
-          dateEvenement: pp.date,
-          client: pp.clientName,
-          preparateur: 'À préparer',
-          statut: 'en_preparation',
-          pendingPointId: pp.id,
-        },
-      });
+      // Marquer comme suggestion pour cette borne
       await prisma.pendingPoint.update({
         where: { id: pp.id },
-        data: { usedInPreparation: true, suggestedMachineId: machineId },
+        data: { suggestedMachineId: machineId, ignoredInPreparation: false, usedInPreparation: false },
       });
-      created++;
+      suggested++;
     } else {
-      // Pas de pending point → créer la préparation directement depuis les infos du bloc
-      await prisma.preparation.create({
+      // Pas de pending point → en créer un pour porter la suggestion
+      await prisma.pendingPoint.create({
         data: {
-          machineId,
-          dateEvenement: eventDate,
-          client: block.client,
-          preparateur: 'À préparer',
-          statut: 'en_preparation',
+          date: eventDate,
+          clientName: block.client,
+          type: 'livraison',
+          produitNom: machine.type,
+          source: 'manual',
+          suggestedMachineId: machineId,
         },
       });
-      created++;
+      suggested++;
     }
   }
 
-  if (created > 0) {
+  if (suggested > 0) {
     const { socketEmit } = await import('../config/socket.js');
     socketEmit.toAdmins('machines:updated', {});
-    socketEmit.toAdmins('preparation:created', {});
   }
 
   return apiResponse.success(res, {
-    created,
+    suggested,
     machine: `${machine.type} ${machine.numero}`,
-    message: `${created} préparation(s) envoyée(s) pour ${machine.type} ${machine.numero}`,
+    message: `${suggested} suggestion(s) envoyée(s) pour ${machine.type} ${machine.numero}`,
   });
 });
 
@@ -863,19 +842,15 @@ export const validateType = asyncHandler(async (req: Request, res: Response) => 
   };
   if (!machineType) return apiResponse.badRequest(res, 'machineType requis');
 
-  let totalCreated = 0;
+  let totalSuggested = 0;
   let machineCount = 0;
 
-  // Pour chaque borne avec des blocs, valider
   if (machineBlocks && machineBlocks.length > 0) {
     for (const mb of machineBlocks) {
-      // Vérifier pas déjà validée
-      const existing = await prisma.preparation.findFirst({
-        where: { machineId: mb.machineId, statut: 'en_preparation' },
-      });
-      if (existing) continue;
+      const mach = await prisma.machine.findUnique({ where: { id: mb.machineId } });
+      if (!mach) continue;
 
-      let created = 0;
+      let count = 0;
       const processedClients = new Set<string>();
       for (const block of mb.blocks) {
         const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
@@ -885,59 +860,45 @@ export const validateType = asyncHandler(async (req: Request, res: Response) => 
         processedClients.add(dedupKey);
 
         const eventDate = ensureDateUTC(block.dateStart);
-        const pp = await prisma.pendingPoint.findFirst({
+        let pp = await prisma.pendingPoint.findFirst({
           where: {
             clientName: { contains: clientFw, mode: 'insensitive' },
             date: eventDate,
             type: 'livraison',
-            usedInPreparation: false,
-            ignoredInPreparation: false,
           },
         });
         if (pp) {
-          await prisma.preparation.create({
-            data: {
-              machineId: mb.machineId,
-              dateEvenement: pp.date,
-              client: pp.clientName,
-              preparateur: 'À préparer',
-              statut: 'en_preparation',
-              pendingPointId: pp.id,
-            },
-          });
           await prisma.pendingPoint.update({
             where: { id: pp.id },
-            data: { usedInPreparation: true, suggestedMachineId: mb.machineId },
+            data: { suggestedMachineId: mb.machineId, ignoredInPreparation: false, usedInPreparation: false },
           });
-          created++;
         } else {
-          // Pas de pending point → créer directement
-          await prisma.preparation.create({
+          await prisma.pendingPoint.create({
             data: {
-              machineId: mb.machineId,
-              dateEvenement: eventDate,
-              client: block.client,
-              preparateur: 'À préparer',
-              statut: 'en_preparation',
+              date: eventDate,
+              clientName: block.client,
+              type: 'livraison',
+              produitNom: mach.type,
+              source: 'manual',
+              suggestedMachineId: mb.machineId,
             },
           });
-          created++;
         }
+        count++;
       }
-      if (created > 0) { totalCreated += created; machineCount++; }
+      if (count > 0) { totalSuggested += count; machineCount++; }
     }
   }
 
-  if (totalCreated > 0) {
+  if (totalSuggested > 0) {
     const { socketEmit } = await import('../config/socket.js');
     socketEmit.toAdmins('machines:updated', {});
-    socketEmit.toAdmins('preparation:created', {});
   }
 
   return apiResponse.success(res, {
-    created: totalCreated,
+    suggested: totalSuggested,
     machines: machineCount,
-    message: `${totalCreated} préparation(s) envoyée(s) sur ${machineCount} borne(s) ${machineType}`,
+    message: `${totalSuggested} suggestion(s) envoyée(s) sur ${machineCount} borne(s) ${machineType}`,
   });
 });
 
@@ -950,35 +911,35 @@ export const unlockMachine = asyncHandler(async (req: Request, res: Response) =>
   const { machineId } = req.body;
   if (!machineId) return apiResponse.badRequest(res, 'machineId requis');
 
-  // Trouver les preps en_preparation pour cette borne
+  // Retirer les suggestions de cette borne
+  const updated = await prisma.pendingPoint.updateMany({
+    where: { suggestedMachineId: machineId },
+    data: { suggestedMachineId: null },
+  });
+
+  // Aussi supprimer d'éventuelles preps en_preparation
   const preps = await prisma.preparation.findMany({
     where: { machineId, statut: 'en_preparation' },
     select: { id: true, pendingPointId: true },
   });
-
-  if (preps.length === 0) {
-    return apiResponse.success(res, { deleted: 0, message: 'Aucune préparation à déverrouiller' });
-  }
-
-  // Restaurer les pending points
-  const ppIds = preps.map(p => p.pendingPointId).filter(Boolean) as string[];
-  if (ppIds.length > 0) {
-    await prisma.pendingPoint.updateMany({
-      where: { id: { in: ppIds } },
-      data: { usedInPreparation: false },
+  if (preps.length > 0) {
+    const ppIds = preps.map(p => p.pendingPointId).filter(Boolean) as string[];
+    if (ppIds.length > 0) {
+      await prisma.pendingPoint.updateMany({
+        where: { id: { in: ppIds } },
+        data: { usedInPreparation: false },
+      });
+    }
+    await prisma.preparation.deleteMany({
+      where: { id: { in: preps.map(p => p.id) } },
     });
   }
-
-  // Supprimer les preps
-  await prisma.preparation.deleteMany({
-    where: { id: { in: preps.map(p => p.id) } },
-  });
 
   const { socketEmit } = await import('../config/socket.js');
   socketEmit.toAdmins('machines:updated', {});
 
   return apiResponse.success(res, {
-    deleted: preps.length,
-    message: `${preps.length} préparation(s) déverrouillée(s)`,
+    cleared: updated.count + preps.length,
+    message: `Borne déverrouillée`,
   });
 });
