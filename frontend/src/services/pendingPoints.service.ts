@@ -24,6 +24,7 @@ export interface CalendarEvent {
   produitNom?: string;
   adresse?: string;
   externalId?: string;
+  suggestedMachineId?: string | null;
 }
 
 export const pendingPointsService = {
@@ -64,6 +65,14 @@ export const pendingPointsService = {
   }): Promise<BackendPendingPoint> {
     const response = await api.post<ApiResponse<BackendPendingPoint>>('/pending-points/manual', data);
     return response.data.data;
+  },
+
+  async ignoreSuggestion(id: string): Promise<void> {
+    await api.patch(`/pending-points/${id}/ignore-suggestion`);
+  },
+
+  async restoreSuggestion(id: string): Promise<void> {
+    await api.patch(`/pending-points/${id}/restore-suggestion`);
   },
 
   async markDispatched(id: string): Promise<void> {

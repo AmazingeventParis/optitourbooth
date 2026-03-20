@@ -70,6 +70,7 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
   // Build pending_points lookup for fallback produit info
   const allPendingPoints = await prisma.pendingPoint.findMany({
     where: { date: { gte: extFrom, lte: extTo } },
+    include: { suggestedMachine: { select: { id: true, type: true, numero: true, couleur: true } } },
   });
   const pendingByClientDate = new Map<string, typeof allPendingPoints[0]>();
   for (const pp of allPendingPoints) {
@@ -102,10 +103,21 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     const fw = clientFirstWord(clientName);
     if (!fw || fw.length < 2) return null;
     const key = `${fw}|${date}`;
+
+    // 1. Préparation validée (source of truth)
     const preps = prepsByClient.get(key);
-    if (!preps) return null;
-    const match = preps.find(p => p.machine.type === produitNom) || preps[0];
-    return match ? { numero: match.machine.numero, type: match.machine.type } : null;
+    if (preps) {
+      const match = preps.find(p => p.machine.type === produitNom) || preps[0];
+      if (match) return { numero: match.machine.numero, type: match.machine.type };
+    }
+
+    // 2. Suggestion depuis pending point
+    const pp = pendingByClientDate.get(key);
+    if (pp?.suggestedMachine) {
+      return { numero: pp.suggestedMachine.numero, type: pp.suggestedMachine.type };
+    }
+
+    return null;
   }
 
   // ========== Build blocks from point pairs ==========
@@ -440,44 +452,21 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
       // Record the assignment
       machineSchedule.get(bestMachineId)!.push({ endMs: blockEndMs(block) });
 
-      // Create/update preparation
-      const machine = typeMachines.find(m => m.id === bestMachineId)!;
+      // Store suggestion on pending point (don't create preparation)
       const eventDate = new Date(block.dateStart + 'T12:00:00Z');
       const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
 
-      const existingPrep = await prisma.preparation.findFirst({
-        where: {
-          dateEvenement: eventDate,
-          client: { contains: clientFw, mode: 'insensitive' },
-          statut: { notIn: ['archivee', 'disponible'] },
-        },
+      const pp = await prisma.pendingPoint.findFirst({
+        where: { clientName: { contains: clientFw, mode: 'insensitive' }, date: eventDate, type: 'livraison' },
       });
-
-      if (existingPrep) {
-        if (existingPrep.machineId !== bestMachineId) {
-          await prisma.preparation.update({
-            where: { id: existingPrep.id },
-            data: { machineId: bestMachineId },
-          });
-          assigned++;
-        }
-      } else {
-        await prisma.preparation.create({
-          data: {
-            machineId: bestMachineId,
-            dateEvenement: eventDate,
-            client: block.client,
-            preparateur: 'Auto',
-            statut: 'en_preparation',
-          },
+      if (pp) {
+        await prisma.pendingPoint.update({
+          where: { id: pp.id },
+          data: { suggestedMachineId: bestMachineId, ignoredInPreparation: false },
         });
         assigned++;
-
-        // Mark pending point as used
-        const pp = await prisma.pendingPoint.findFirst({
-          where: { clientName: { contains: clientFw, mode: 'insensitive' }, date: eventDate, type: 'livraison' },
-        });
-        if (pp) await prisma.pendingPoint.update({ where: { id: pp.id }, data: { usedInPreparation: true } });
+      } else {
+        skipped++;
       }
     }
   }
@@ -604,50 +593,7 @@ export const assignMachine = asyncHandler(async (req: Request, res: Response) =>
 
   const eventDate = new Date(dateEvenement + 'T12:00:00Z');
 
-  // Try exact client name match first, then progressively looser
-  let existingPrep = await prisma.preparation.findFirst({
-    where: {
-      dateEvenement: eventDate,
-      client: { equals: client, mode: 'insensitive' },
-      statut: { notIn: ['archivee', 'disponible'] },
-    },
-  });
-
-  // Fallback: try contains with a significant portion of the name (at least 5 chars)
-  if (!existingPrep) {
-    const searchTerm = client.length > 5 ? client.substring(0, Math.min(client.length, 20)) : client;
-    existingPrep = await prisma.preparation.findFirst({
-      where: {
-        dateEvenement: eventDate,
-        client: { contains: searchTerm, mode: 'insensitive' },
-        statut: { notIn: ['archivee', 'disponible'] },
-      },
-    });
-  }
-
-  if (existingPrep) {
-    // Reassign: update existing preparation to the new machine
-    const updated = await prisma.preparation.update({
-      where: { id: existingPrep.id },
-      data: { machineId: targetMachineId },
-      include: { machine: true },
-    });
-    return apiResponse.success(res, { action: 'reassigned', preparation: updated });
-  }
-
-  // Create new preparation
-  const newPrep = await prisma.preparation.create({
-    data: {
-      machineId: targetMachineId,
-      dateEvenement: eventDate,
-      client,
-      preparateur: 'Admin',
-      statut: 'en_preparation',
-    },
-    include: { machine: true },
-  });
-
-  // Mark pending point as used if exists
+  // Store suggestion on pending point (don't create preparation)
   const searchClient = client.length > 5 ? client.substring(0, Math.min(client.length, 20)) : client;
   const pendingPoint = await prisma.pendingPoint.findFirst({
     where: {
@@ -656,14 +602,34 @@ export const assignMachine = asyncHandler(async (req: Request, res: Response) =>
       type: 'livraison',
     },
   });
+
   if (pendingPoint) {
     await prisma.pendingPoint.update({
       where: { id: pendingPoint.id },
-      data: { usedInPreparation: true },
+      data: { suggestedMachineId: targetMachineId, ignoredInPreparation: false },
+    });
+    return apiResponse.success(res, {
+      action: 'suggested',
+      suggestion: { pendingPointId: pendingPoint.id, machineId: targetMachineId, client, dateEvenement },
     });
   }
 
-  return apiResponse.success(res, { action: 'created', preparation: newPrep });
+  // Pas de pending point trouvé — créer la suggestion manuellement
+  const manualPp = await prisma.pendingPoint.create({
+    data: {
+      date: eventDate,
+      clientName: client,
+      type: 'livraison',
+      produitNom: machine.type,
+      source: 'manual',
+      suggestedMachineId: targetMachineId,
+    },
+  });
+
+  return apiResponse.success(res, {
+    action: 'suggested',
+    suggestion: { pendingPointId: manualPp.id, machineId: targetMachineId, client, dateEvenement },
+  });
 });
 
 /**

@@ -558,8 +558,9 @@ model Machine {
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
   // Relations
-  preparations Preparation[]
-  incidents    MachineIncident[]
+  preparations    Preparation[]
+  incidents       MachineIncident[]
+  suggestedPoints PendingPoint[]
 
   @@unique([type, numero])
   @@index([type])
@@ -789,8 +790,11 @@ model PendingPoint {
   calendarId        String?  @map("calendar_id")
   externalId        String?  @unique @map("external_id")
   dispatched        Boolean  @default(false)
-  usedInPreparation Boolean  @default(false) @map("used_in_preparation")
-  attachments       Json?    @default("[]")
+  usedInPreparation    Boolean  @default(false) @map("used_in_preparation")
+  ignoredInPreparation Boolean  @default(false) @map("ignored_in_preparation")
+  suggestedMachineId   String?  @map("suggested_machine_id")
+  suggestedMachine     Machine? @relation(fields: [suggestedMachineId], references: [id])
+  attachments          Json?    @default("[]")
 
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")

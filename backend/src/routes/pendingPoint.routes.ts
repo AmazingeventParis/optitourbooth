@@ -16,6 +16,8 @@ router.get('/calendar-events', authenticate, requireRole('preparateur', 'warehou
 router.delete('/:id', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.deletePendingPoint));
 router.patch('/:id/dispatch', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.markDispatched));
 router.patch('/:id/use-in-preparation', authenticate, requireRole('preparateur', 'warehouse', 'admin', 'superadmin'), asyncHandler(controller.markUsedInPreparation));
+router.patch('/:id/ignore-suggestion', authenticate, requireRole('preparateur', 'warehouse', 'admin', 'superadmin'), asyncHandler(controller.ignoreSuggestion));
+router.patch('/:id/restore-suggestion', authenticate, requireRole('preparateur', 'warehouse', 'admin', 'superadmin'), asyncHandler(controller.restoreSuggestion));
 router.patch('/:id', authenticate, requireRole('admin', 'warehouse', 'superadmin'), asyncHandler(controller.updatePendingPoint));
 
 // Sync manuelle Google Calendar

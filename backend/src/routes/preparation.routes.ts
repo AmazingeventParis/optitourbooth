@@ -9,6 +9,7 @@ const router = Router();
 router.use(authenticate, requireRole('preparateur', 'warehouse', 'admin', 'superadmin'));
 
 router.get('/', asyncHandler(preparationController.listPreparations));
+router.post('/cleanup-auto', asyncHandler(preparationController.cleanupAutoPreparations));
 router.get('/:id', asyncHandler(preparationController.getPreparation));
 router.post('/', asyncHandler(preparationController.createPreparation));
 router.patch('/:id', asyncHandler(preparationController.updatePreparation));

@@ -123,4 +123,9 @@ export const preparationsService = {
     const { data } = await api.post<Preparation>(`/preparations/${id}/out-of-service`, { raison });
     return data;
   },
+
+  async cleanupAuto(): Promise<{ deleted: number; message: string }> {
+    const { data } = await api.post<{ deleted: number; message: string }>('/preparations/cleanup-auto');
+    return data;
+  },
 };

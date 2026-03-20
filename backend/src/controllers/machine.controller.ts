@@ -28,9 +28,8 @@ export const listMachines = async (req: Request, res: Response) => {
             },
           },
           orderBy: {
-            dateEvenement: 'desc',
+            dateEvenement: 'asc',
           },
-          take: 1,
         },
       },
     });

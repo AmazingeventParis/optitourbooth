@@ -243,13 +243,14 @@ export async function listCalendarEvents(req: Request, res: Response): Promise<v
       source: 'google_calendar',
       date: { gte: dateStart, lte: dateEnd },
       usedInPreparation: false,
-      type: 'livraison', // On prend uniquement les livraisons pour éviter les doublons
+      ignoredInPreparation: false,
+      type: 'livraison',
       ...calendarFilter,
     },
     orderBy: { date: 'asc' },
   });
 
-  // Retourner les événements avec date et client
+  // Retourner les événements avec date, client et suggestion de borne
   const events = points.map((p: any) => ({
     id: p.id,
     date: p.date,
@@ -257,6 +258,7 @@ export async function listCalendarEvents(req: Request, res: Response): Promise<v
     produitNom: p.produitNom,
     adresse: p.adresse,
     externalId: p.externalId,
+    suggestedMachineId: p.suggestedMachineId || null,
   }));
 
   apiResponse.success(res, events);
@@ -288,6 +290,50 @@ export async function markUsedInPreparation(req: Request, res: Response): Promis
     }
 
     apiResponse.success(res, { message: 'Événement marqué comme utilisé' });
+  } catch (error) {
+    if ((error as any).code === 'P2025') {
+      apiResponse.notFound(res, 'Point non trouvé');
+      return;
+    }
+    throw error;
+  }
+}
+
+/**
+ * PATCH /api/pending-points/:id/ignore-suggestion - Ignorer la suggestion de préparation
+ */
+export async function ignoreSuggestion(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+
+  try {
+    await prisma.pendingPoint.update({
+      where: { id },
+      data: { ignoredInPreparation: true },
+    });
+
+    apiResponse.success(res, { message: 'Suggestion ignorée' });
+  } catch (error) {
+    if ((error as any).code === 'P2025') {
+      apiResponse.notFound(res, 'Point non trouvé');
+      return;
+    }
+    throw error;
+  }
+}
+
+/**
+ * PATCH /api/pending-points/:id/restore-suggestion - Restaurer une suggestion ignorée
+ */
+export async function restoreSuggestion(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+
+  try {
+    await prisma.pendingPoint.update({
+      where: { id },
+      data: { ignoredInPreparation: false },
+    });
+
+    apiResponse.success(res, { message: 'Suggestion restaurée' });
   } catch (error) {
     if ((error as any).code === 'P2025') {
       apiResponse.notFound(res, 'Point non trouvé');

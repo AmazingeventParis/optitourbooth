@@ -27,6 +27,8 @@ import {
   CubeIcon,
   FilmIcon,
   ArrowPathIcon,
+  CalendarDaysIcon,
+  EyeSlashIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -116,6 +118,11 @@ export default function PreparationsPage() {
   const [selectedPreparateur, setSelectedPreparateur] = useState<string>('');
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
 
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<CalendarEvent[]>([]);
+  const [suggestionMachineChoice, setSuggestionMachineChoice] = useState<Record<string, string>>({});
+  const [suggestionPreparateur, setSuggestionPreparateur] = useState<string>('Wilfried');
+
   // Action modal state
   const [isViewMode, setIsViewMode] = useState(false);
   const [defautText, setDefautText] = useState('');
@@ -145,6 +152,10 @@ export default function PreparationsPage() {
   }, []);
 
   useEffect(() => {
+    // Nettoyer les vieilles préparations auto-créées par l'agenda au chargement
+    preparationsService.cleanupAuto().then((result) => {
+      if (result.deleted > 0) console.log(`[Cleanup] ${result.message}`);
+    }).catch(() => {});
     fetchMachines();
   }, [fetchMachines]);
 
@@ -160,6 +171,34 @@ export default function PreparationsPage() {
       socketService.off('machines:updated', refresh);
     };
   }, [fetchMachines]);
+
+  const fetchSuggestions = useCallback(async (type: MachineType) => {
+    try {
+      const calendarType = type === 'Smakk' ? 'smakk' : 'shootnbox';
+      const events = await pendingPointsService.listCalendarEvents(calendarType);
+      // Filtrer par type de machine
+      const filtered = events.filter(e => e.produitNom === type || !e.produitNom);
+      setSuggestions(filtered);
+      // Pré-sélectionner les bornes suggérées par l'agenda
+      const choices: Record<string, string> = {};
+      filtered.forEach(e => {
+        if (e.suggestedMachineId) choices[e.id] = e.suggestedMachineId;
+      });
+      setSuggestionMachineChoice(prev => ({ ...prev, ...choices }));
+    } catch (err) {
+      console.error('Erreur chargement suggestions:', err);
+      setSuggestions([]);
+    }
+  }, []);
+
+  // Charger les suggestions quand on sélectionne un type
+  useEffect(() => {
+    if (selectedType) {
+      fetchSuggestions(selectedType);
+    } else {
+      setSuggestions([]);
+    }
+  }, [selectedType, fetchSuggestions]);
 
   const fetchArchive = async () => {
     try {
@@ -291,8 +330,7 @@ export default function PreparationsPage() {
     try {
       await preparationsService.markPhotosUnloaded(preparationId);
       success('Photos déchargées et événement archivé');
-      setIsModalOpen(false);
-      fetchMachines();
+      await refreshModalAfterAction();
     } catch (err) {
       showError('Erreur', (err as Error).message);
     } finally {
@@ -305,8 +343,7 @@ export default function PreparationsPage() {
     try {
       await preparationsService.markPhotosNotUnloaded(preparationId);
       success('Photos marquées comme non déchargées');
-      setIsModalOpen(false);
-      fetchMachines();
+      await refreshModalAfterAction();
     } catch (err) {
       showError('Erreur', (err as Error).message);
     } finally {
@@ -314,13 +351,50 @@ export default function PreparationsPage() {
     }
   };
 
+  const refreshModalAfterAction = async () => {
+    const data = await machinesService.list({ actif: true });
+    setMachines(data);
+    if (selectedMachine) {
+      const updatedMachine = data.find((m: Machine) => m.id === selectedMachine.id);
+      if (updatedMachine) {
+        setSelectedMachine(updatedMachine);
+        const remainingPreps = getPreparationsForMachine(updatedMachine);
+        if (remainingPreps.length === 0) {
+          setIsModalOpen(false);
+        }
+      } else {
+        setIsModalOpen(false);
+      }
+    } else {
+      setIsModalOpen(false);
+    }
+  };
+
   const handleCancelPreparation = async (preparationId: string) => {
     setIsSaving(true);
     try {
       await preparationsService.delete(preparationId);
-      success('Préparation annulée — borne remise disponible');
-      setIsModalOpen(false);
-      fetchMachines();
+      success('Événement supprimé');
+
+      // Rafraîchir les machines et mettre à jour le modal
+      const data = await machinesService.list({ actif: true });
+      setMachines(data);
+
+      // Vérifier si la machine a encore des préparations
+      if (selectedMachine) {
+        const updatedMachine = data.find((m: Machine) => m.id === selectedMachine.id);
+        if (updatedMachine) {
+          setSelectedMachine(updatedMachine);
+          const remainingPreps = getPreparationsForMachine(updatedMachine);
+          if (remainingPreps.length === 0) {
+            setIsModalOpen(false);
+          }
+        } else {
+          setIsModalOpen(false);
+        }
+      } else {
+        setIsModalOpen(false);
+      }
     } catch (err) {
       showError('Erreur', (err as Error).message);
     } finally {
@@ -400,6 +474,51 @@ export default function PreparationsPage() {
     }
   };
 
+  const handleAcceptSuggestion = async (suggestion: CalendarEvent) => {
+    const machineId = suggestionMachineChoice[suggestion.id];
+    if (!machineId) {
+      showError('Erreur', 'Veuillez sélectionner une borne');
+      return;
+    }
+    if (!suggestionPreparateur) {
+      showError('Erreur', 'Veuillez sélectionner un préparateur');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const dateStr = typeof suggestion.date === 'string'
+        ? suggestion.date.substring(0, 10)
+        : new Date(suggestion.date).toISOString().substring(0, 10);
+
+      await preparationsService.create({
+        machineId,
+        dateEvenement: dateStr,
+        client: suggestion.clientName,
+        preparateur: suggestionPreparateur,
+        pendingPointId: suggestion.id,
+      });
+      await pendingPointsService.markUsedInPreparation(suggestion.id);
+      success('Préparation créée depuis la suggestion');
+      fetchMachines();
+      if (selectedType) fetchSuggestions(selectedType);
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleIgnoreSuggestion = async (suggestionId: string) => {
+    try {
+      await pendingPointsService.ignoreSuggestion(suggestionId);
+      setSuggestions(prev => prev.filter(s => s.id !== suggestionId));
+      success('Suggestion ignorée');
+    } catch (err) {
+      showError('Erreur', (err as Error).message);
+    }
+  };
+
   const handleAddNewEvent = () => {
     // Ajouter un nouvel événement à la liste
     setEvenements([...evenements, { dateEvenement: '', client: '' }]);
@@ -415,8 +534,13 @@ export default function PreparationsPage() {
   };
 
   const getMachineStatut = (machine: Machine): PreparationStatut => {
-    const prep = getPreparationForMachine(machine);
-    return prep?.statut || 'disponible';
+    const preps = getPreparationsForMachine(machine);
+    if (preps.length === 0) return 'disponible';
+    // Priorité : hors_service > a_decharger > en_cours > en_preparation > prete
+    const priority: Record<string, number> = {
+      hors_service: 5, a_decharger: 4, en_cours: 3, en_preparation: 2, prete: 1,
+    };
+    return preps.reduce((best, p) => (priority[p.statut] || 0) > (priority[best.statut] || 0) ? p : best).statut;
   };
 
   const filteredMachines = selectedType
@@ -869,6 +993,106 @@ export default function PreparationsPage() {
         </Button>
       </div>
 
+      {/* Section Suggestions */}
+      {suggestions.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <CalendarDaysIcon className="h-5 w-5 text-amber-600" />
+            <h3 className="font-semibold text-amber-800">
+              {suggestions.length} suggestion{suggestions.length > 1 ? 's' : ''} depuis l'agenda
+            </h3>
+          </div>
+
+          {/* Préparateur pour les suggestions */}
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs font-medium text-gray-600">Préparateur :</span>
+            <div className="flex flex-wrap gap-1">
+              {preparateurs.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setSuggestionPreparateur(p.prenom)}
+                  className={clsx(
+                    'px-2 py-0.5 rounded text-xs font-medium transition-all',
+                    suggestionPreparateur === p.prenom
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                  )}
+                >
+                  {p.prenom}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {suggestions.map((suggestion) => {
+              const dateStr = typeof suggestion.date === 'string'
+                ? suggestion.date.substring(0, 10)
+                : new Date(suggestion.date).toISOString().substring(0, 10);
+              const availableMachines = filteredMachines.filter(m => getMachineStatut(m) === 'disponible');
+
+              return (
+                <div key={suggestion.id} className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border border-amber-100">
+                  {/* Info événement */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{suggestion.clientName}</p>
+                    <p className="text-xs text-gray-500">
+                      {format(parseISO(dateStr), 'd MMMM yyyy', { locale: fr })}
+                      {suggestion.produitNom && <span className="ml-1 text-amber-600">({suggestion.produitNom})</span>}
+                    </p>
+                  </div>
+
+                  {/* Sélection borne */}
+                  <select
+                    value={suggestionMachineChoice[suggestion.id] || ''}
+                    onChange={(e) => setSuggestionMachineChoice(prev => ({ ...prev, [suggestion.id]: e.target.value }))}
+                    className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  >
+                    <option value="">Borne...</option>
+                    {availableMachines.map(m => (
+                      <option key={m.id} value={m.id}>{m.numero}</option>
+                    ))}
+                    {/* Aussi montrer les bornes occupées, séparées */}
+                    {filteredMachines.filter(m => getMachineStatut(m) !== 'disponible').length > 0 && (
+                      <optgroup label="Bornes occupées">
+                        {filteredMachines.filter(m => getMachineStatut(m) !== 'disponible').map(m => (
+                          <option key={m.id} value={m.id}>{m.numero} ({statutConfig[getMachineStatut(m)].label})</option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+
+                  {/* Bouton Valider */}
+                  <button
+                    onClick={() => handleAcceptSuggestion(suggestion)}
+                    disabled={isSaving || !suggestionMachineChoice[suggestion.id]}
+                    className={clsx(
+                      'px-3 py-1.5 rounded-lg text-sm font-medium transition-all active:scale-95',
+                      suggestionMachineChoice[suggestion.id]
+                        ? 'bg-green-500 text-white hover:bg-green-600 shadow-sm'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    )}
+                  >
+                    <CheckCircleIcon className="h-4 w-4 inline mr-1" />
+                    Préparer
+                  </button>
+
+                  {/* Bouton Ignorer */}
+                  <button
+                    onClick={() => handleIgnoreSuggestion(suggestion.id)}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                    title="Ignorer cette suggestion"
+                  >
+                    <EyeSlashIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2">
         {filteredMachines.map((machine) => {
           const statut = getMachineStatut(machine);
@@ -1167,19 +1391,49 @@ export default function PreparationsPage() {
                           <label className="block text-sm font-medium text-gray-700 mb-1">Préparateur</label>
                           <p className="text-sm text-gray-900">{prep.preparateur || '—'}</p>
                         </div>
-                        {/* Annuler cet événement */}
-                        {prep.statut === 'prete' && (
+                        {/* Actions par événement */}
+                        <div className="flex gap-2 mt-1">
+                          {/* Photos déchargées - disponible si date passée */}
+                          {(() => {
+                            const isPast = new Date(prep.dateEvenement) < new Date();
+                            if (!isPast || prep.statut === 'prete') return null;
+                            return (
+                              <>
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  className="flex-1"
+                                  onClick={() => handleMarkPhotosUnloaded(prep.id)}
+                                  disabled={isSaving}
+                                >
+                                  <CheckCircleIcon className="h-4 w-4 mr-1" />
+                                  Photos OK
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  className="flex-1 !bg-amber-500 !text-white hover:!bg-amber-600"
+                                  onClick={() => handleMarkPhotosNotUnloaded(prep.id)}
+                                  disabled={isSaving}
+                                >
+                                  <ExclamationTriangleIcon className="h-4 w-4 mr-1" />
+                                  Pas de photos
+                                </Button>
+                              </>
+                            );
+                          })()}
+                          {/* Supprimer cet événement */}
                           <Button
                             variant="danger"
                             size="sm"
-                            className="w-full"
+                            className={allPreps.length > 1 && new Date(prep.dateEvenement) < new Date() && prep.statut !== 'prete' ? '' : 'w-full'}
                             onClick={() => handleCancelPreparation(prep.id)}
                             disabled={isSaving}
                           >
                             <XMarkIcon className="h-4 w-4 mr-1" />
-                            Annuler cet événement
+                            Supprimer
                           </Button>
-                        )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1190,48 +1444,6 @@ export default function PreparationsPage() {
 
           {/* Boutons d'action - Toujours visibles */}
           <div className="border-t border-gray-200 pt-4 space-y-3">
-            {/* Photos déchargées */}
-            {isViewMode && (
-              <div>
-                {(() => {
-                  const prep = getPreparationForMachine(selectedMachine!);
-                  if (!prep) return null;
-                  const isPastDate = new Date(prep.dateEvenement) < new Date();
-                  return (
-                    <>
-                      <Button
-                        variant={isPastDate ? 'primary' : 'secondary'}
-                        className="w-full"
-                        onClick={() => handleMarkPhotosUnloaded(prep.id)}
-                        disabled={!isPastDate || isSaving}
-                        isLoading={isSaving}
-                      >
-                        <CheckCircleIcon className="h-5 w-5 mr-2" />
-                        Photos déchargées
-                      </Button>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {isPastDate
-                          ? 'Marquer les photos comme déchargées et archiver'
-                          : 'Disponible après la date de l\'événement'}
-                      </p>
-                      {isPastDate && (
-                        <Button
-                          variant="secondary"
-                          className="w-full mt-2 !bg-amber-500 !text-white hover:!bg-amber-600"
-                          onClick={() => handleMarkPhotosNotUnloaded(prep.id)}
-                          disabled={isSaving}
-                          isLoading={isSaving}
-                        >
-                          <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
-                          Photos non déchargées
-                        </Button>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-
             {/* Champ partagé pour défaut/hors service */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Préciser la panne</label>

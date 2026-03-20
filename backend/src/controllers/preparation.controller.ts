@@ -760,3 +760,45 @@ export const markOutOfService = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+/**
+ * Supprime toutes les préparations auto-créées par l'agenda (preparateur = 'Auto' ou 'Admin')
+ * qui ne sont pas archivées. Restaure les pending points associés.
+ */
+export const cleanupAutoPreparations = async (req: Request, res: Response) => {
+  try {
+    const autoPreps = await prisma.preparation.findMany({
+      where: {
+        preparateur: { in: ['Auto', 'Admin'] },
+        statut: { notIn: ['archivee'] },
+      },
+      select: { id: true, pendingPointId: true },
+    });
+
+    if (autoPreps.length === 0) {
+      return res.json({ deleted: 0, message: 'Aucune préparation automatique à nettoyer' });
+    }
+
+    // Restore pending points
+    const ppIds = autoPreps.map(p => p.pendingPointId).filter(Boolean) as string[];
+    if (ppIds.length > 0) {
+      await prisma.pendingPoint.updateMany({
+        where: { id: { in: ppIds } },
+        data: { usedInPreparation: false },
+      });
+    }
+
+    // Delete all auto preparations
+    await prisma.preparation.deleteMany({
+      where: { id: { in: autoPreps.map(p => p.id) } },
+    });
+
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
+
+    return res.json({ deleted: autoPreps.length, message: `${autoPreps.length} préparation(s) automatique(s) supprimée(s)` });
+  } catch (error) {
+    console.error('Error cleaning up auto preparations:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
