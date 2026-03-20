@@ -243,7 +243,6 @@ export async function listCalendarEvents(req: Request, res: Response): Promise<v
       source: 'google_calendar',
       date: { gte: dateStart, lte: dateEnd },
       usedInPreparation: false,
-      ignoredInPreparation: false,
       type: 'livraison',
       ...calendarFilter,
     },
