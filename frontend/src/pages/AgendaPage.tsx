@@ -34,7 +34,7 @@ function timeToPercent(time: string): number {
 }
 
 export default function AgendaPage() {
-  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [allocations, setAllocations] = useState<AllocationBlock[]>([]);
   const [stock, setStock] = useState<StockData | null>(null);
