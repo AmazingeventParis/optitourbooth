@@ -491,91 +491,127 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
  * Body: { targetMachineId, dateStart, timeStart, dateEnd, timeEnd }
  */
 export const checkMargin = asyncHandler(async (req: Request, res: Response) => {
-  const { targetMachineId, dateStart, timeStart, dateEnd, timeEnd, blockClient } = req.body;
+  const { targetMachineId, dateStart, timeStart, dateEnd, timeEnd, blockClient, dateFrom, dateTo } = req.body;
   const MARGIN_HOURS = 4;
   const MARGIN_MS = MARGIN_HOURS * 60 * 60 * 1000;
 
   const machine = await prisma.machine.findUnique({ where: { id: targetMachineId } });
   if (!machine) return apiResponse.success(res, { ok: true, warnings: [] });
 
-  // Get all OTHER preparations on this machine (not the one being moved)
+  // Récupérer les allocations actuelles pour cette borne via getAllocations
+  // On utilise la même logique que l'agenda pour trouver les blocs existants
+  const from = dateFrom || dateStart;
+  const to = dateTo || dateEnd;
+  const extFrom = new Date(new Date(from + 'T00:00:00Z').getTime() - 14 * 86400000);
+  const extTo = new Date(new Date(to + 'T23:59:59Z').getTime() + 14 * 86400000);
+
+  // Source 1: préparations actives
   const preps = await prisma.preparation.findMany({
     where: {
       machineId: targetMachineId,
       statut: { notIn: ['archivee', 'disponible', 'hors_service'] },
     },
-    include: { machine: true },
   });
 
-  // Also get points to find delivery/pickup times for each prep
-  const warnings: string[] = [];
-  const newStart = new Date(`${dateStart}T${timeStart || '00:00'}:00Z`).getTime();
-  const newEnd = new Date(`${dateEnd}T${timeEnd || '23:59'}:00Z`).getTime();
-  const blockClientLower = (blockClient || '').toLowerCase().trim();
+  // Source 2: pending points assignés à cette borne (via suggestedMachineId)
+  const suggestedPPs = await prisma.pendingPoint.findMany({
+    where: {
+      suggestedMachineId: targetMachineId,
+      type: 'livraison',
+      date: { gte: extFrom, lte: extTo },
+    },
+  });
 
+  // Source 3: pending points dont le findMachine matcherait cette borne (via preps)
+  // Combiner toutes les occupations en une liste de {client, startDate, startTime, endDate, endTime}
+  type Occupation = { client: string; startDate: string; startTime: string; endDate: string; endTime: string };
+  const occupations: Occupation[] = [];
+
+  // Depuis les preps
   for (const prep of preps) {
-    // Skip the block being moved
-    if (blockClientLower && prep.client.toLowerCase().trim() === blockClientLower) continue;
-    const prepFw = prep.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
-    const blockFw = blockClientLower.split(/[+\s]/)[0]?.trim() || '';
-    if (blockFw && blockFw.length > 2 && prepFw === blockFw) continue;
-
-    // Find the delivery+pickup points for this prep to get actual time window
-    const prepDate = fmtDate(prep.dateEvenement);
     const fw = clientFirstWord(prep.client);
+    const prepDate = fmtDate(prep.dateEvenement);
 
-    // Look for matching points
     const deliveryPoint = await prisma.point.findFirst({
-      where: {
-        tournee: { date: prep.dateEvenement },
-        client: { nom: { contains: fw, mode: 'insensitive' } },
-        type: { in: ['livraison', 'livraison_ramassage'] },
-      },
+      where: { tournee: { date: prep.dateEvenement }, client: { nom: { contains: fw, mode: 'insensitive' } }, type: { in: ['livraison', 'livraison_ramassage'] } },
       include: { tournee: { select: { date: true } } },
     });
-
     const pickupPoint = await prisma.point.findFirst({
-      where: {
-        tournee: { date: { gte: prep.dateEvenement } },
-        client: { nom: { contains: fw, mode: 'insensitive' } },
-        type: { in: ['ramassage', 'livraison_ramassage'] },
-      },
+      where: { tournee: { date: { gte: prep.dateEvenement } }, client: { nom: { contains: fw, mode: 'insensitive' } }, type: { in: ['ramassage', 'livraison_ramassage'] } },
       include: { tournee: { select: { date: true } } },
       orderBy: { tournee: { date: 'asc' } },
-    });
-
-    // Also check pending points
-    const pendingDelivery = await prisma.pendingPoint.findFirst({
-      where: { clientName: { contains: fw, mode: 'insensitive' }, date: prep.dateEvenement, type: 'livraison' },
     });
     const pendingPickup = await prisma.pendingPoint.findFirst({
       where: { clientName: { contains: fw, mode: 'insensitive' }, type: 'ramassage', date: { gte: prep.dateEvenement } },
       orderBy: { date: 'asc' },
     });
 
-    const bStartDate = prepDate;
-    const bStartTime = (deliveryPoint?.creneauDebut ? fmtTime(deliveryPoint.creneauDebut) : pendingDelivery?.creneauDebut) || '00:00';
-    const bEndDate = pickupPoint ? fmtDate(pickupPoint.tournee.date) : pendingPickup ? fmtDate(pendingPickup.date) : prepDate;
-    const bEndTime = (pickupPoint?.creneauFin ? fmtTime(pickupPoint.creneauFin) : pendingPickup?.creneauFin) || '23:59';
+    occupations.push({
+      client: prep.client,
+      startDate: prepDate,
+      startTime: (deliveryPoint?.creneauDebut ? fmtTime(deliveryPoint.creneauDebut) : null) || '00:00',
+      endDate: pickupPoint ? fmtDate(pickupPoint.tournee.date) : pendingPickup ? fmtDate(pendingPickup.date) : prepDate,
+      endTime: (pickupPoint?.creneauFin ? fmtTime(pickupPoint.creneauFin) : pendingPickup?.creneauFin) || '23:59',
+    });
+  }
 
-    const bStart = new Date(`${bStartDate}T${bStartTime}:00Z`).getTime();
-    const bEnd = new Date(`${bEndDate}T${bEndTime}:00Z`).getTime();
+  // Depuis les pending points suggérés (pas encore validés en preps)
+  for (const pp of suggestedPPs) {
+    // Vérifier qu'il n'est pas déjà couvert par une prep
+    const fw = clientFirstWord(pp.clientName);
+    const ppDate = fmtDate(pp.date);
+    const alreadyCovered = occupations.some(o => {
+      const oFw = clientFirstWord(o.client);
+      return oFw === fw && o.startDate <= ppDate && o.endDate >= ppDate;
+    });
+    if (alreadyCovered) continue;
+
+    const pendingPickup = await prisma.pendingPoint.findFirst({
+      where: { clientName: { contains: fw, mode: 'insensitive' }, type: 'ramassage', date: { gte: pp.date } },
+      orderBy: { date: 'asc' },
+    });
+
+    occupations.push({
+      client: pp.clientName,
+      startDate: ppDate,
+      startTime: pp.creneauDebut || '00:00',
+      endDate: pendingPickup ? fmtDate(pendingPickup.date) : ppDate,
+      endTime: pendingPickup?.creneauFin || '23:59',
+    });
+  }
+
+  // Vérifier les marges
+  const warnings: string[] = [];
+  const newStart = new Date(`${dateStart}T${timeStart || '00:00'}:00Z`).getTime();
+  const newEnd = new Date(`${dateEnd}T${timeEnd || '23:59'}:00Z`).getTime();
+  const blockClientLower = (blockClient || '').toLowerCase().trim();
+
+  for (const occ of occupations) {
+    // Skip the block being moved (same client)
+    const occClientLower = occ.client.toLowerCase().trim();
+    if (blockClientLower && occClientLower === blockClientLower) continue;
+    const occFw = occClientLower.split(/[+\s]/)[0]?.trim() || '';
+    const blockFw = blockClientLower.split(/[+\s]/)[0]?.trim() || '';
+    if (blockFw && blockFw.length > 2 && occFw === blockFw) continue;
+
+    const bStart = new Date(`${occ.startDate}T${occ.startTime}:00Z`).getTime();
+    const bEnd = new Date(`${occ.endDate}T${occ.endTime}:00Z`).getTime();
 
     // Check overlap
     if (newStart < bEnd && newEnd > bStart) {
-      warnings.push(`Chevauche "${prep.client}" (${bStartDate} ${bStartTime} → ${bEndDate} ${bEndTime})`);
+      warnings.push(`Chevauche "${occ.client}" (${occ.startDate} ${occ.startTime} → ${occ.endDate} ${occ.endTime})`);
       continue;
     }
 
     // Check gap before
     if (bEnd <= newStart && (newStart - bEnd) < MARGIN_MS) {
       const gapH = Math.round((newStart - bEnd) / 3600000 * 10) / 10;
-      warnings.push(`Seulement ${gapH}h après "${prep.client}" (fin ${bEndTime} le ${bEndDate}) — marge recommandée: ${MARGIN_HOURS}h`);
+      warnings.push(`Seulement ${gapH}h après "${occ.client}" (fin ${occ.endTime} le ${occ.endDate}) — marge recommandée: ${MARGIN_HOURS}h`);
     }
-    // Check gap after
+    // Check gap after (inclut le cas horaires identiques: gap = 0)
     if (newEnd <= bStart && (bStart - newEnd) < MARGIN_MS) {
       const gapH = Math.round((bStart - newEnd) / 3600000 * 10) / 10;
-      warnings.push(`Seulement ${gapH}h avant "${prep.client}" (début ${bStartTime} le ${bStartDate}) — marge recommandée: ${MARGIN_HOURS}h`);
+      warnings.push(`Seulement ${gapH}h avant "${occ.client}" (début ${occ.startTime} le ${occ.startDate}) — marge recommandée: ${MARGIN_HOURS}h`);
     }
   }
 
