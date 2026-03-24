@@ -735,6 +735,43 @@ export async function syncGoogleCalendarEvents(): Promise<{
       || existingPointsSet.has(`${startDate}|${clientNameLower}`);
 
     // Point livraison (date de début)
+    // Détecter changement de date sur un point déjà dispatché → re-dispatcher
+    let livDispatchOverride: boolean | undefined;
+    try {
+      const existingLiv = await prisma.pendingPoint.findUnique({
+        where: { externalId: `${eventId}_livraison` },
+        select: { id: true, date: true, dispatched: true },
+      });
+      if (existingLiv && existingLiv.dispatched && isLivraison) {
+        const oldDateStr = existingLiv.date.toISOString().substring(0, 10);
+        if (oldDateStr !== startDate) {
+          console.log(`[Google Calendar] 📅 Date changée pour livraison "${clientName}": ${oldDateStr} → ${startDate}, re-dispatch nécessaire`);
+          livDispatchOverride = false;
+          // Supprimer le point orphelin de l'ancienne tournée
+          const deletedPoints = await prisma.point.deleteMany({
+            where: {
+              tournee: {
+                date: ensureDateUTC(oldDateStr),
+                statut: { not: 'annulee' },
+              },
+              client: {
+                OR: [
+                  { nom: { equals: clientName, mode: 'insensitive' } },
+                  { societe: { equals: clientName, mode: 'insensitive' } },
+                ],
+              },
+              type: 'livraison',
+            },
+          });
+          if (deletedPoints.count > 0) {
+            console.log(`[Google Calendar] 🗑️ ${deletedPoints.count} point(s) livraison orphelin(s) supprimé(s) de tournée ${oldDateStr}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`[Google Calendar] Erreur détection changement date livraison ${clientName}:`, e);
+    }
+
     try {
       await prisma.pendingPoint.upsert({
         where: { externalId: `${eventId}_livraison` },
@@ -752,6 +789,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           calendarId,
           attachments,
           ...(!isLivraison && { dispatched: true }),
+          ...(livDispatchOverride === false && { dispatched: false }),
         },
         create: {
           date: ensureDateUTC(startDate),
@@ -771,7 +809,10 @@ export async function syncGoogleCalendarEvents(): Promise<{
           dispatched: !isLivraison || livAlreadyInTournee,
         },
       });
-      if (!isLivraison) {
+      if (livDispatchOverride === false) {
+        console.log(`[Google Calendar] ♻️ ${clientName} livraison re-mis à dispatcher pour ${startDate}`);
+        created++;
+      } else if (!isLivraison) {
         console.log(`[Google Calendar] ${clientName} ${startDate} → non-LIR (${tagInner}), visible prépa/galeries uniquement`);
         created++;
       } else if (livAlreadyInTournee) {
@@ -790,6 +831,43 @@ export async function syncGoogleCalendarEvents(): Promise<{
       || existingPointsSet.has(`${endDate}|${clientNameLower}`);
 
     // Point ramassage (date de fin)
+    // Détecter changement de date sur un point ramassage déjà dispatché → re-dispatcher
+    let recDispatchOverride: boolean | undefined;
+    try {
+      const existingRec = await prisma.pendingPoint.findUnique({
+        where: { externalId: `${eventId}_ramassage` },
+        select: { id: true, date: true, dispatched: true },
+      });
+      if (existingRec && existingRec.dispatched) {
+        const oldDateStr = existingRec.date.toISOString().substring(0, 10);
+        if (oldDateStr !== endDate) {
+          console.log(`[Google Calendar] 📅 Date changée pour ramassage "${clientName}": ${oldDateStr} → ${endDate}, re-dispatch nécessaire`);
+          recDispatchOverride = false;
+          // Supprimer le point orphelin de l'ancienne tournée
+          const deletedPoints = await prisma.point.deleteMany({
+            where: {
+              tournee: {
+                date: ensureDateUTC(oldDateStr),
+                statut: { not: 'annulee' },
+              },
+              client: {
+                OR: [
+                  { nom: { equals: clientName, mode: 'insensitive' } },
+                  { societe: { equals: clientName, mode: 'insensitive' } },
+                ],
+              },
+              type: 'ramassage',
+            },
+          });
+          if (deletedPoints.count > 0) {
+            console.log(`[Google Calendar] 🗑️ ${deletedPoints.count} point(s) ramassage orphelin(s) supprimé(s) de tournée ${oldDateStr}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`[Google Calendar] Erreur détection changement date ramassage ${clientName}:`, e);
+    }
+
     try {
       await prisma.pendingPoint.upsert({
         where: { externalId: `${eventId}_ramassage` },
@@ -807,6 +885,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           calendarId,
           attachments,
           ...(!isLivraison && { dispatched: true }),
+          ...(recDispatchOverride === false && { dispatched: false }),
         },
         create: {
           date: ensureDateUTC(endDate),
@@ -826,7 +905,10 @@ export async function syncGoogleCalendarEvents(): Promise<{
           dispatched: !isLivraison || recAlreadyInTournee,
         },
       });
-      if (recAlreadyInTournee) {
+      if (recDispatchOverride === false) {
+        console.log(`[Google Calendar] ♻️ ${clientName} ramassage re-mis à dispatcher pour ${endDate}`);
+        created++;
+      } else if (recAlreadyInTournee) {
         skipped++;
         console.log(`[Google Calendar] ${clientName} ramassage ${endDate} → déjà dans tournée, skip`);
       } else {
@@ -861,16 +943,28 @@ export async function syncGoogleCalendarEvents(): Promise<{
           });
           console.log(`[Google Calendar] Booking créé pour "${clientName}" (dossier Drive sera matché par scan)`);
         } else {
-          // Booking exists — update missing info (contact)
+          // Booking exists — update missing info (contact) and dates if changed
           const bookingUpdate: Record<string, any> = {};
           if (contactTelephone && !existingBooking.customerPhone) {
             bookingUpdate.customerPhone = contactTelephone;
+          }
+          // Mettre à jour les dates du booking si elles ont changé dans Google Calendar
+          const newEventDate = ensureDateUTC(startDate);
+          const newEventEndDate = ensureDateUTC(endDate);
+          if (existingBooking.eventDate.toISOString().substring(0, 10) !== startDate) {
+            bookingUpdate.eventDate = newEventDate;
+          }
+          if (existingBooking.eventEndDate && existingBooking.eventEndDate.toISOString().substring(0, 10) !== endDate) {
+            bookingUpdate.eventEndDate = newEventEndDate;
           }
           if (Object.keys(bookingUpdate).length > 0) {
             await prisma.booking.update({
               where: { id: existingBooking.id },
               data: bookingUpdate,
             });
+            if (bookingUpdate.eventDate || bookingUpdate.eventEndDate) {
+              console.log(`[Google Calendar] 📅 Dates booking mises à jour pour "${clientName}"`);
+            }
           }
         }
       } catch (e) {
