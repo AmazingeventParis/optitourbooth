@@ -499,6 +499,70 @@ export const computeEntries = asyncHandler(async (req: Request, res: Response) =
         }
       }
     }
+
+    // Check recovery hours (récupération) - per point
+    const hasRecup1 = config.recuperationDebut && config.recuperationFin;
+    const hasRecup2 = (config as any).recuperationDebut2 && (config as any).recuperationFin2;
+    if (hasRecup1 || hasRecup2) {
+      for (const point of tournee.points) {
+        const timeToCheck = point.creneauDebut
+          ? formatTimeFromDate(point.creneauDebut)
+          : point.heureArriveeReelle
+            ? formatTimeFromDate(point.heureArriveeReelle)
+            : null;
+        if (!timeToCheck) continue;
+
+        const pointMinutes = timeToMinutes(timeToCheck);
+        let recupMinutes = 0;
+        let recupRange = '';
+
+        // Range 1 (pre-work): recovery = rangeFin - pointTime
+        if (hasRecup1) {
+          const r1Debut = timeToMinutes(config.recuperationDebut!);
+          const r1Fin = timeToMinutes(config.recuperationFin!);
+          if (pointMinutes >= r1Debut && pointMinutes <= r1Fin) {
+            recupMinutes = r1Fin - pointMinutes;
+            recupRange = `${config.recuperationDebut} → ${config.recuperationFin}`;
+          }
+        }
+
+        // Range 2 (post-work): recovery = pointTime - rangeDebut
+        if (recupMinutes === 0 && hasRecup2) {
+          const r2Debut = timeToMinutes((config as any).recuperationDebut2!);
+          const r2Fin = timeToMinutes((config as any).recuperationFin2!);
+          if (pointMinutes >= r2Debut && pointMinutes <= r2Fin) {
+            recupMinutes = pointMinutes - r2Debut;
+            recupRange = `${(config as any).recuperationDebut2} → ${(config as any).recuperationFin2}`;
+          }
+        }
+
+        if (recupMinutes <= 0) continue;
+
+        // Check if entry already exists
+        const existing = await prisma.billingEntry.findFirst({
+          where: { pointId: point.id, type: 'recuperation' },
+        });
+        if (existing) continue;
+
+        const recupHours = Math.round(recupMinutes / 30) * 0.5; // arrondi au demi-heure
+
+        await prisma.billingEntry.create({
+          data: {
+            userId: tournee.chauffeurId,
+            tourneeId: tournee.id,
+            pointId: point.id,
+            date: tournee.date,
+            type: 'recuperation',
+            label: `Récup. - ${point.client.nom} (${timeToCheck}, plage ${recupRange})`,
+            quantity: recupHours,
+            unitPrice: 0,
+            totalPrice: 0,
+            metadata: { time: timeToCheck, recupMinutes, recupRange, clientName: point.client.nom },
+          },
+        });
+        created++;
+      }
+    }
   }
 
   return apiResponse.success(res, { created, message: `${created} entrée(s) créée(s)` });
