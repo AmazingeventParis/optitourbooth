@@ -24,6 +24,7 @@ import { processOverdueDispatches } from './services/galleryDispatch.service.js'
 import { checkAndPoll, isReviewPollingConfigured } from './services/reviewPolling.service.js';
 import { startGalleryWorker, stopGalleryWorker } from './workers/galleryWorker.js';
 import { startCrmSync, stopCrmSync } from './services/crmSync.service.js';
+import { startRingPhotosSync, stopRingPhotosSync } from './services/ringPhotosSync.service.js';
 
 // Créer l'application Express
 const app = express();
@@ -186,6 +187,9 @@ async function startServer(): Promise<void> {
       // CRON: Sync CRM emails into bookings every hour
       startCrmSync();
 
+      // CRON: Ring photos sync (CRM → Google Drive) every hour
+      startRingPhotosSync();
+
       // CRON: Auto-update preparation statuses every 5 minutes
       setInterval(async () => {
         try {
@@ -220,6 +224,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
   stopDriveFolderSync();
   stopGalleryWorker();
   stopCrmSync();
+  stopRingPhotosSync();
 
   // Fermer les connexions
   await disconnectDatabase();

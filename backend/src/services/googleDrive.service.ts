@@ -7,7 +7,7 @@ let scanInterval: ReturnType<typeof setInterval> | null = null;
 /**
  * Get authenticated Google Drive client using the same service account as Calendar
  */
-function getDriveClient() {
+export function getDriveClient() {
   if (!config.googleCalendar.serviceAccountBase64) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_BASE64 non configuré');
   }
