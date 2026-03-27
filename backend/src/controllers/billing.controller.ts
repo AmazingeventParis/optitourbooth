@@ -516,24 +516,28 @@ export const computeEntries = asyncHandler(async (req: Request, res: Response) =
         let recupMinutes = 0;
         let recupRange = '';
 
-        // Range 1 (pre-work): recovery = rangeFin - pointTime
-        if (hasRecup1) {
-          const r1Debut = timeToMinutes(config.recuperationDebut!);
-          const r1Fin = timeToMinutes(config.recuperationFin!);
-          if (pointMinutes >= r1Debut && pointMinutes <= r1Fin) {
-            recupMinutes = r1Fin - pointMinutes;
-            recupRange = `${config.recuperationDebut} → ${config.recuperationFin}`;
-          }
-        }
+        // For each range, detect pre-work vs post-work based on midpoint vs noon (720min)
+        // Pre-work (morning, midpoint < 12:00): recovery = rangeFin - pointTime
+        // Post-work (evening, midpoint >= 12:00): recovery = pointTime - rangeDebut
+        const recupRanges: Array<{ debut: string; fin: string }> = [];
+        if (hasRecup1) recupRanges.push({ debut: config.recuperationDebut!, fin: config.recuperationFin! });
+        if (hasRecup2) recupRanges.push({ debut: (config as any).recuperationDebut2!, fin: (config as any).recuperationFin2! });
 
-        // Range 2 (post-work): recovery = pointTime - rangeDebut
-        if (recupMinutes === 0 && hasRecup2) {
-          const r2Debut = timeToMinutes((config as any).recuperationDebut2!);
-          const r2Fin = timeToMinutes((config as any).recuperationFin2!);
-          if (pointMinutes >= r2Debut && pointMinutes <= r2Fin) {
-            recupMinutes = pointMinutes - r2Debut;
-            recupRange = `${(config as any).recuperationDebut2} → ${(config as any).recuperationFin2}`;
+        for (const range of recupRanges) {
+          if (recupMinutes > 0) break;
+          const rDebut = timeToMinutes(range.debut);
+          const rFin = timeToMinutes(range.fin);
+          if (pointMinutes < rDebut || pointMinutes > rFin) continue;
+
+          const midpoint = (rDebut + rFin) / 2;
+          if (midpoint < 720) {
+            // Pre-work: recovery = rangeFin - pointTime
+            recupMinutes = rFin - pointMinutes;
+          } else {
+            // Post-work: recovery = pointTime - rangeDebut
+            recupMinutes = pointMinutes - rDebut;
           }
+          recupRange = `${range.debut} → ${range.fin}`;
         }
 
         if (recupMinutes <= 0) continue;
