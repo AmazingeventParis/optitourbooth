@@ -18,6 +18,10 @@ router.put('/entries/point-hf/:pointId', requireAdmin, billingController.upsertP
 router.delete('/entries/point-hf/:pointId', requireAdmin, billingController.deletePointHfEntry);
 router.delete('/entries/:id', requireAdmin, billingController.deleteEntry);
 
+// Recovery (récupération)
+router.get('/recovery', requireAdmin, billingController.getRecoveryEntries);
+router.post('/recovery/solde', requireAdmin, billingController.createRecoverySolde);
+
 // Auto-compute
 router.post('/compute', requireAdmin, billingController.computeEntries);
 

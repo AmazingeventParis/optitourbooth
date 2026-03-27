@@ -36,6 +36,8 @@ export const getConfigs = asyncHandler(async (_req: Request, res: Response) => {
       tarifHeureSupp: 0,
       horsForfaitDebut: '18:00',
       horsForfaitFin: '07:00',
+      recuperationDebut: null,
+      recuperationFin: null,
       customItems: [],
     },
   }));
@@ -49,7 +51,7 @@ export const getConfigs = asyncHandler(async (_req: Request, res: Response) => {
  */
 export const upsertConfig = asyncHandler(async (req: Request, res: Response) => {
   const { userId } = req.params;
-  const { tarifPointHorsForfait, tarifHeureSupp, horsForfaitDebut, horsForfaitFin, isIndependent, customItems } = req.body;
+  const { tarifPointHorsForfait, tarifHeureSupp, horsForfaitDebut, horsForfaitFin, recuperationDebut, recuperationFin, isIndependent, customItems } = req.body;
 
   // Validate user exists
   const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -62,6 +64,8 @@ export const upsertConfig = asyncHandler(async (req: Request, res: Response) => 
       tarifHeureSupp: tarifHeureSupp ?? 0,
       horsForfaitDebut: horsForfaitDebut || '18:00',
       horsForfaitFin: horsForfaitFin || '07:00',
+      recuperationDebut: recuperationDebut || null,
+      recuperationFin: recuperationFin || null,
       isIndependent: isIndependent ?? false,
       customItems: customItems || [],
     },
@@ -71,6 +75,8 @@ export const upsertConfig = asyncHandler(async (req: Request, res: Response) => 
       tarifHeureSupp: tarifHeureSupp ?? 0,
       horsForfaitDebut: horsForfaitDebut || '18:00',
       horsForfaitFin: horsForfaitFin || '07:00',
+      recuperationDebut: recuperationDebut || null,
+      recuperationFin: recuperationFin || null,
       isIndependent: isIndependent ?? false,
       customItems: customItems || [],
     },
@@ -86,7 +92,9 @@ export const upsertConfig = asyncHandler(async (req: Request, res: Response) => 
 export const getEntries = asyncHandler(async (req: Request, res: Response) => {
   const { userId, dateFrom, dateTo, page = '1', limit = '50' } = req.query as Record<string, string>;
 
-  const where: any = {};
+  const where: any = {
+    type: { notIn: ['recuperation', 'recuperation_solde'] },
+  };
   if (userId) where.userId = userId;
   if (dateFrom || dateTo) {
     where.date = {};
@@ -488,4 +496,107 @@ export const computeEntries = asyncHandler(async (req: Request, res: Response) =
   }
 
   return apiResponse.success(res, { created, message: `${created} entrée(s) créée(s)` });
+});
+
+/**
+ * GET /api/billing/recovery
+ * List recovery entries (type = recuperation | recuperation_solde) with summary
+ */
+export const getRecoveryEntries = asyncHandler(async (req: Request, res: Response) => {
+  const { userId, dateFrom, dateTo, page = '1', limit = '50' } = req.query as Record<string, string>;
+
+  const where: any = {
+    type: { in: ['recuperation', 'recuperation_solde'] },
+  };
+  if (userId) where.userId = userId;
+  if (dateFrom || dateTo) {
+    where.date = {};
+    if (dateFrom) where.date.gte = new Date(dateFrom + 'T00:00:00Z');
+    if (dateTo) where.date.lte = new Date(dateTo + 'T23:59:59Z');
+  }
+
+  const pageNum = Math.max(1, parseInt(page));
+  const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+
+  const [entries, total] = await Promise.all([
+    prisma.billingEntry.findMany({
+      where,
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      skip: (pageNum - 1) * limitNum,
+      take: limitNum,
+    }),
+    prisma.billingEntry.count({ where }),
+  ]);
+
+  // Get user names
+  const userIds = [...new Set(entries.map((e) => e.userId))];
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, nom: true, prenom: true, couleur: true },
+  });
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
+  const enriched = entries.map((e) => ({
+    ...e,
+    user: userMap.get(e.userId) || null,
+  }));
+
+  // Compute sums: recuperation (credited hours) vs recuperation_solde (deducted hours)
+  const whereAll = { ...where };
+  delete whereAll.type; // remove type filter for aggregation per type
+
+  const [creditSum, soldeSum] = await Promise.all([
+    prisma.billingEntry.aggregate({
+      where: { ...whereAll, type: 'recuperation' },
+      _sum: { quantity: true },
+    }),
+    prisma.billingEntry.aggregate({
+      where: { ...whereAll, type: 'recuperation_solde' },
+      _sum: { quantity: true },
+    }),
+  ]);
+
+  const totalCredite = creditSum._sum.quantity || 0;
+  const totalSolde = soldeSum._sum.quantity || 0;
+  const balance = totalCredite - totalSolde;
+
+  return res.status(200).json({
+    success: true,
+    data: enriched,
+    meta: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum),
+      totalCredite,
+      totalSolde,
+      balance,
+    },
+  });
+});
+
+/**
+ * POST /api/billing/recovery/solde
+ * Create a manual recovery settlement (deduction)
+ */
+export const createRecoverySolde = asyncHandler(async (req: Request, res: Response) => {
+  const { userId, date, hours, label } = req.body;
+
+  if (!userId || !hours || hours <= 0) {
+    return apiResponse.badRequest(res, 'userId et hours (> 0) requis');
+  }
+
+  const entry = await prisma.billingEntry.create({
+    data: {
+      userId,
+      date: new Date((date || new Date().toISOString().substring(0, 10)) + 'T12:00:00Z'),
+      type: 'recuperation_solde',
+      label: label || `Solde récupération`,
+      quantity: hours,
+      unitPrice: 0,
+      totalPrice: 0,
+    },
+  });
+
+  return apiResponse.success(res, entry);
 });

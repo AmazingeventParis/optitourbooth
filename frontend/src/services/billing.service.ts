@@ -10,6 +10,8 @@ export interface BillingConfigData {
   tarifHeureSupp: number;
   horsForfaitDebut: string;
   horsForfaitFin: string;
+  recuperationDebut: string | null;
+  recuperationFin: string | null;
   isIndependent?: boolean;
   customItems: CustomItem[];
 }
@@ -113,5 +115,26 @@ export const billingService = {
 
   async deletePointHfEntry(pointId: string): Promise<void> {
     await api.delete(`/billing/entries/point-hf/${pointId}`);
+  },
+
+  async getRecoveryEntries(params: {
+    userId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: BillingEntry[]; meta: { page: number; limit: number; total: number; totalPages: number; totalCredite: number; totalSolde: number; balance: number } }> {
+    const res = await api.get<ApiResponse<BillingEntry[]>>('/billing/recovery', { params });
+    return { data: res.data.data, meta: res.data.meta as any };
+  },
+
+  async createRecoverySolde(data: {
+    userId: string;
+    date: string;
+    hours: number;
+    label?: string;
+  }): Promise<BillingEntry> {
+    const res = await api.post<ApiResponse<BillingEntry>>('/billing/recovery/solde', data);
+    return res.data.data;
   },
 };

@@ -11,6 +11,7 @@ import {
   ClockIcon,
   CheckCircleIcon,
   CurrencyEuroIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { CheckCircleIcon as CheckCircleSolidIcon } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
@@ -21,6 +22,8 @@ const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   heure_supp: { label: 'Heure supp', color: 'bg-red-100 text-red-800' },
   custom: { label: 'Manuel', color: 'bg-blue-100 text-blue-800' },
   payment: { label: 'Paiement', color: 'bg-green-100 text-green-800' },
+  recuperation: { label: 'Récup.', color: 'bg-indigo-100 text-indigo-800' },
+  recuperation_solde: { label: 'Soldé récup.', color: 'bg-purple-100 text-purple-800' },
 };
 
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
@@ -30,7 +33,7 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
 });
 
 export default function ComptaChauffeurPage() {
-  const [section, setSection] = useState<'tarifs' | 'historique'>('tarifs');
+  const [section, setSection] = useState<'tarifs' | 'historique' | 'recuperation'>('tarifs');
 
   return (
     <div className="space-y-6">
@@ -56,10 +59,21 @@ export default function ComptaChauffeurPage() {
           <ClockIcon className="h-4 w-4" />
           Historique compta
         </button>
+        <button
+          onClick={() => setSection('recuperation')}
+          className={clsx(
+            'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+            section === 'recuperation' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+          )}
+        >
+          <ArrowPathIcon className="h-4 w-4" />
+          Récupération
+        </button>
       </div>
 
       {section === 'tarifs' && <TarifsSection />}
       {section === 'historique' && <HistoriqueSection />}
+      {section === 'recuperation' && <RecuperationSection />}
     </div>
   );
 }
@@ -141,6 +155,14 @@ function TarifsSection() {
                 </span>
               </div>
               )}
+              {uc.config.recuperationDebut && uc.config.recuperationFin && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Plage récupération</span>
+                <span className="font-medium text-indigo-600">
+                  {uc.config.recuperationDebut} &rarr; {uc.config.recuperationFin}
+                </span>
+              </div>
+              )}
               {(uc.config.customItems as CustomItem[])?.length > 0 && (
                 <div className="pt-1.5 border-t border-gray-100 mt-1.5">
                   <span className="text-gray-400">Tarifs personnalisés :</span>
@@ -178,6 +200,8 @@ function EditConfigModal({ user, onClose, onSaved }: {
   const [tarifHS, setTarifHS] = useState(user.config.tarifHeureSupp);
   const [debut, setDebut] = useState(user.config.horsForfaitDebut || '18:00');
   const [fin, setFin] = useState(user.config.horsForfaitFin || '07:00');
+  const [recupDebut, setRecupDebut] = useState(user.config.recuperationDebut || '');
+  const [recupFin, setRecupFin] = useState(user.config.recuperationFin || '');
   const [isIndependent, setIsIndependent] = useState(user.config.isIndependent || false);
   const [customItems, setCustomItems] = useState<CustomItem[]>((user.config.customItems as CustomItem[]) || []);
   const [saving, setSaving] = useState(false);
@@ -190,6 +214,8 @@ function EditConfigModal({ user, onClose, onSaved }: {
         tarifHeureSupp: tarifHS,
         horsForfaitDebut: debut,
         horsForfaitFin: fin,
+        recuperationDebut: recupDebut || null,
+        recuperationFin: recupFin || null,
         isIndependent,
         customItems,
       });
@@ -251,6 +277,31 @@ function EditConfigModal({ user, onClose, onSaved }: {
           <p className="text-xs text-gray-400 mt-1">Les points livrés dans cette plage seront facturés en hors forfait</p>
         </div>
         )}
+
+        {/* Plage récupération */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Plage horaire de récupération</label>
+          <div className="flex items-center gap-2">
+            <select
+              value={recupDebut}
+              onChange={(e) => setRecupDebut(e.target.value)}
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Non défini</option>
+              {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <span className="text-gray-400 text-sm">&rarr;</span>
+            <select
+              value={recupFin}
+              onChange={(e) => setRecupFin(e.target.value)}
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Non défini</option>
+              {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Les heures travaillées dans cette plage ne sont pas payées mais créditent des heures de récupération</p>
+        </div>
 
         {/* Tarif point HF */}
         <div>
@@ -769,6 +820,303 @@ function AddEntryModal({ configs, onClose, onCreated }: {
           <Button variant="outline" onClick={onClose}>Annuler</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? 'Création...' : mode === 'payment' ? 'Enregistrer le paiement' : 'Créer'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// =============================================
+// SECTION 3: Récupération
+// =============================================
+function RecuperationSection() {
+  const [entries, setEntries] = useState<BillingEntry[]>([]);
+  const [meta, setMeta] = useState({ page: 1, limit: 50, total: 0, totalPages: 0, totalCredite: 0, totalSolde: 0, balance: 0 });
+  const [loading, setLoading] = useState(true);
+  const [configs, setConfigs] = useState<UserBillingConfig[]>([]);
+
+  // Filters
+  const [filterUser, setFilterUser] = useState('');
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().substring(0, 10);
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().substring(0, 10));
+  const [page, setPage] = useState(1);
+
+  // Solde modal
+  const [soldeModal, setSoldeModal] = useState(false);
+
+  const fetchEntries = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await billingService.getRecoveryEntries({
+        userId: filterUser || undefined,
+        dateFrom,
+        dateTo,
+        page,
+        limit: 50,
+      });
+      setEntries(res.data);
+      setMeta(res.meta);
+    } catch {
+      toast.error('Erreur chargement récupération');
+    } finally {
+      setLoading(false);
+    }
+  }, [filterUser, dateFrom, dateTo, page]);
+
+  const fetchConfigs = useCallback(async () => {
+    try {
+      const data = await billingService.getConfigs();
+      setConfigs(data);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { fetchConfigs(); }, [fetchConfigs]);
+  useEffect(() => { fetchEntries(); }, [fetchEntries]);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Supprimer cette entrée ?')) return;
+    try {
+      await billingService.deleteEntry(id);
+      toast.success('Entrée supprimée');
+      fetchEntries();
+    } catch {
+      toast.error('Erreur suppression');
+    }
+  };
+
+  const formatHours = (h: number) => {
+    const hrs = Math.floor(h);
+    const mins = Math.round((h - hrs) * 60);
+    return mins > 0 ? `${hrs}h${String(mins).padStart(2, '0')}` : `${hrs}h`;
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Chauffeur</label>
+            <select
+              value={filterUser}
+              onChange={(e) => { setFilterUser(e.target.value); setPage(1); }}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Tous</option>
+              {configs.map((c) => (
+                <option key={c.userId} value={c.userId}>{c.prenom} {c.nom}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Du</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Au</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <Button size="sm" onClick={() => setSoldeModal(true)}>
+            <PlusIcon className="h-4 w-4 mr-1.5" />
+            Solder des heures
+          </Button>
+        </div>
+      </Card>
+
+      {/* Summary */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="px-4 py-1.5 rounded-full text-base font-semibold bg-indigo-100 text-indigo-800">
+          Créditées : {formatHours(meta.totalCredite || 0)}
+        </span>
+        <span className="px-4 py-1.5 rounded-full text-base font-semibold bg-purple-100 text-purple-800">
+          Soldées : {formatHours(meta.totalSolde || 0)}
+        </span>
+        <span className={clsx(
+          'px-4 py-1.5 rounded-full text-base font-bold',
+          (meta.balance || 0) > 0 ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-600'
+        )}>
+          Solde : {formatHours(meta.balance || 0)}
+        </span>
+        <span className="text-sm text-gray-400">{meta.total} entrée(s)</span>
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="text-center py-8 text-gray-500">Chargement...</div>
+      ) : entries.length === 0 ? (
+        <div className="text-center py-12 text-gray-400">
+          <ArrowPathIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
+          <p>Aucune heure de récupération pour cette période</p>
+          <p className="text-xs mt-1">Les heures sont créditées automatiquement depuis les points dans la plage de récupération</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-gray-500">
+                <th className="pb-2 font-medium">Date</th>
+                <th className="pb-2 font-medium">Chauffeur</th>
+                <th className="pb-2 font-medium">Type</th>
+                <th className="pb-2 font-medium">Description</th>
+                <th className="pb-2 font-medium text-right">Heures</th>
+                <th className="pb-2 w-10"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry) => {
+                const typeInfo = TYPE_LABELS[entry.type] || { label: entry.type, color: 'bg-gray-100 text-gray-600' };
+                const isSolde = entry.type === 'recuperation_solde';
+                return (
+                  <tr key={entry.id} className={clsx(
+                    'border-b border-gray-50 hover:bg-gray-50',
+                    isSolde && 'bg-purple-50/50'
+                  )}>
+                    <td className="py-2 whitespace-nowrap">
+                      {new Date(typeof entry.date === 'string' && !entry.date.includes('T') ? entry.date + 'T12:00:00Z' : entry.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td className="py-2">
+                      <div className="flex items-center gap-1.5">
+                        {entry.user && (
+                          <div
+                            className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                            style={{ backgroundColor: entry.user.couleur || '#6B7280' }}
+                          >
+                            {entry.user.prenom[0]}{entry.user.nom[0]}
+                          </div>
+                        )}
+                        <span className="text-gray-900">{entry.user ? `${entry.user.prenom} ${entry.user.nom}` : '-'}</span>
+                      </div>
+                    </td>
+                    <td className="py-2">
+                      <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', typeInfo.color)}>
+                        {typeInfo.label}
+                      </span>
+                    </td>
+                    <td className="py-2 text-gray-600 max-w-xs truncate">{entry.label}</td>
+                    <td className={clsx(
+                      'py-2 text-right font-semibold tabular-nums',
+                      isSolde ? 'text-purple-700' : 'text-indigo-700'
+                    )}>
+                      {isSolde ? '-' : '+'}{formatHours(entry.quantity)}
+                    </td>
+                    <td className="py-2">
+                      <button onClick={() => handleDelete(entry.id)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {meta.totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>
+            Précédent
+          </Button>
+          <span className="text-sm text-gray-500">Page {page} / {meta.totalPages}</span>
+          <Button variant="outline" size="sm" disabled={page >= meta.totalPages} onClick={() => setPage(page + 1)}>
+            Suivant
+          </Button>
+        </div>
+      )}
+
+      {/* Solde Modal */}
+      {soldeModal && (
+        <SoldeRecupModal
+          configs={configs}
+          onClose={() => setSoldeModal(false)}
+          onCreated={() => { setSoldeModal(false); fetchEntries(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SoldeRecupModal({ configs, onClose, onCreated }: {
+  configs: UserBillingConfig[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [userId, setUserId] = useState(configs[0]?.userId || '');
+  const [date, setDate] = useState(new Date().toISOString().substring(0, 10));
+  const [hours, setHours] = useState(1);
+  const [label, setLabel] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!userId || hours <= 0) {
+      toast.error('Sélectionnez un chauffeur et un nombre d\'heures > 0');
+      return;
+    }
+    setSaving(true);
+    try {
+      await billingService.createRecoverySolde({ userId, date, hours, label: label || undefined });
+      toast.success('Heures soldées');
+      onCreated();
+    } catch {
+      toast.error('Erreur');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title="Solder des heures de récupération">
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Chauffeur *</label>
+          <select value={userId} onChange={(e) => setUserId(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            {configs.map((c) => (
+              <option key={c.userId} value={c.userId}>{c.prenom} {c.nom}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Nombre d'heures *</label>
+          <Input type="number" min={0.5} step={0.5} value={hours} onChange={(e) => setHours(parseFloat(e.target.value) || 0)} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+          <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex: Récup posée le 28 mars" />
+        </div>
+
+        <div className="bg-purple-50 rounded-lg p-3 text-sm border border-purple-200">
+          <span className="text-purple-700">Déduction :</span>
+          <span className="font-bold text-purple-800 ml-2">-{hours}h</span>
+          <p className="text-xs text-purple-600 mt-1">Ces heures seront déduites du solde de récupération du chauffeur</p>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2 border-t">
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? 'Enregistrement...' : 'Solder'}
           </Button>
         </div>
       </div>
