@@ -881,8 +881,8 @@ function RecuperationSection() {
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().substring(0, 10));
   const [page, setPage] = useState(1);
 
-  // Solde modal
-  const [soldeModal, setSoldeModal] = useState(false);
+  const [addModal, setAddModal] = useState(false);
+  const [computing, setComputing] = useState(false);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -912,6 +912,19 @@ function RecuperationSection() {
 
   useEffect(() => { fetchConfigs(); }, [fetchConfigs]);
   useEffect(() => { fetchEntries(); }, [fetchEntries]);
+
+  const handleCompute = async () => {
+    setComputing(true);
+    try {
+      const result = await billingService.computeEntries(dateFrom, dateTo, filterUser || undefined);
+      toast.success(result.message);
+      fetchEntries();
+    } catch {
+      toast.error('Erreur lors du calcul');
+    } finally {
+      setComputing(false);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Supprimer cette entrée ?')) return;
@@ -966,9 +979,13 @@ function RecuperationSection() {
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
-          <Button size="sm" onClick={() => setSoldeModal(true)}>
+          <Button variant="outline" size="sm" onClick={handleCompute} disabled={computing}>
+            <CalculatorIcon className="h-4 w-4 mr-1.5" />
+            {computing ? 'Calcul...' : 'Calculer auto'}
+          </Button>
+          <Button size="sm" onClick={() => setAddModal(true)}>
             <PlusIcon className="h-4 w-4 mr-1.5" />
-            Solder des heures
+            Entrée manuelle
           </Button>
         </div>
       </Card>
@@ -997,7 +1014,7 @@ function RecuperationSection() {
         <div className="text-center py-12 text-gray-400">
           <ArrowPathIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
           <p>Aucune heure de récupération pour cette période</p>
-          <p className="text-xs mt-1">Les heures sont créditées automatiquement depuis les points dans la plage de récupération</p>
+          <p className="text-xs mt-1">Utilisez "Calculer auto" pour générer les entrées depuis les tournées</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -1075,23 +1092,24 @@ function RecuperationSection() {
         </div>
       )}
 
-      {/* Solde Modal */}
-      {soldeModal && (
-        <SoldeRecupModal
+      {/* Add Recovery Entry Modal */}
+      {addModal && (
+        <AddRecupModal
           configs={configs}
-          onClose={() => setSoldeModal(false)}
-          onCreated={() => { setSoldeModal(false); fetchEntries(); }}
+          onClose={() => setAddModal(false)}
+          onCreated={() => { setAddModal(false); fetchEntries(); }}
         />
       )}
     </div>
   );
 }
 
-function SoldeRecupModal({ configs, onClose, onCreated }: {
+function AddRecupModal({ configs, onClose, onCreated }: {
   configs: UserBillingConfig[];
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const [mode, setMode] = useState<'credit' | 'debit'>('credit');
   const [userId, setUserId] = useState(configs[0]?.userId || '');
   const [date, setDate] = useState(new Date().toISOString().substring(0, 10));
   const [hours, setHours] = useState(1);
@@ -1105,8 +1123,14 @@ function SoldeRecupModal({ configs, onClose, onCreated }: {
     }
     setSaving(true);
     try {
-      await billingService.createRecoverySolde({ userId, date, hours, label: label || undefined });
-      toast.success('Heures soldées');
+      await billingService.createRecoverySolde({
+        userId,
+        date,
+        hours,
+        label: label || undefined,
+        type: mode === 'credit' ? 'recuperation' : 'recuperation_solde',
+      });
+      toast.success(mode === 'credit' ? 'Heures créditées' : 'Heures retirées');
       onCreated();
     } catch {
       toast.error('Erreur');
@@ -1116,8 +1140,32 @@ function SoldeRecupModal({ configs, onClose, onCreated }: {
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Solder des heures de récupération">
+    <Modal isOpen onClose={onClose} title="Entrée manuelle récupération">
       <div className="space-y-4">
+        {/* Mode toggle */}
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => setMode('credit')}
+            className={clsx(
+              'flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium transition-colors',
+              mode === 'credit' ? 'bg-indigo-50 text-indigo-700 border-r border-indigo-200' : 'bg-white text-gray-500 hover:bg-gray-50 border-r border-gray-200'
+            )}
+          >
+            <PlusIcon className="h-4 w-4" />
+            Créditer
+          </button>
+          <button
+            onClick={() => setMode('debit')}
+            className={clsx(
+              'flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium transition-colors',
+              mode === 'debit' ? 'bg-purple-50 text-purple-700' : 'bg-white text-gray-500 hover:bg-gray-50'
+            )}
+          >
+            <XMarkIcon className="h-4 w-4" />
+            Retirer
+          </button>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Chauffeur *</label>
           <select value={userId} onChange={(e) => setUserId(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -1139,19 +1187,27 @@ function SoldeRecupModal({ configs, onClose, onCreated }: {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-          <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex: Récup posée le 28 mars" />
+          <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={mode === 'credit' ? 'Ex: Heures récup manuelles' : 'Ex: Récup posée le 28 mars'} />
         </div>
 
-        <div className="bg-purple-50 rounded-lg p-3 text-sm border border-purple-200">
-          <span className="text-purple-700">Déduction :</span>
-          <span className="font-bold text-purple-800 ml-2">-{hours}h</span>
-          <p className="text-xs text-purple-600 mt-1">Ces heures seront déduites du solde de récupération du chauffeur</p>
-        </div>
+        {mode === 'credit' ? (
+          <div className="bg-indigo-50 rounded-lg p-3 text-sm border border-indigo-200">
+            <span className="text-indigo-700">Crédit :</span>
+            <span className="font-bold text-indigo-800 ml-2">+{hours}h</span>
+            <p className="text-xs text-indigo-600 mt-1">Ces heures seront ajoutées au solde de récupération du chauffeur</p>
+          </div>
+        ) : (
+          <div className="bg-purple-50 rounded-lg p-3 text-sm border border-purple-200">
+            <span className="text-purple-700">Déduction :</span>
+            <span className="font-bold text-purple-800 ml-2">-{hours}h</span>
+            <p className="text-xs text-purple-600 mt-1">Ces heures seront déduites du solde de récupération du chauffeur</p>
+          </div>
+        )}
 
         <div className="flex justify-end gap-3 pt-2 border-t">
           <Button variant="outline" onClick={onClose}>Annuler</Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? 'Enregistrement...' : 'Solder'}
+            {saving ? 'Enregistrement...' : mode === 'credit' ? 'Créditer' : 'Retirer'}
           </Button>
         </div>
       </div>

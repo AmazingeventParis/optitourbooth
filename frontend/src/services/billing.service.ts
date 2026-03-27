@@ -135,6 +135,7 @@ export const billingService = {
     date: string;
     hours: number;
     label?: string;
+    type?: 'recuperation' | 'recuperation_solde';
   }): Promise<BillingEntry> {
     const res = await api.post<ApiResponse<BillingEntry>>('/billing/recovery/solde', data);
     return res.data.data;

@@ -654,18 +654,20 @@ export const getRecoveryEntries = asyncHandler(async (req: Request, res: Respons
  * Create a manual recovery settlement (deduction)
  */
 export const createRecoverySolde = asyncHandler(async (req: Request, res: Response) => {
-  const { userId, date, hours, label } = req.body;
+  const { userId, date, hours, label, type } = req.body;
 
   if (!userId || !hours || hours <= 0) {
     return apiResponse.badRequest(res, 'userId et hours (> 0) requis');
   }
 
+  const entryType = type === 'recuperation' ? 'recuperation' : 'recuperation_solde';
+
   const entry = await prisma.billingEntry.create({
     data: {
       userId,
       date: new Date((date || new Date().toISOString().substring(0, 10)) + 'T12:00:00Z'),
-      type: 'recuperation_solde',
-      label: label || `Solde récupération`,
+      type: entryType,
+      label: label || (entryType === 'recuperation' ? 'Récup. manuelle' : 'Solde récupération'),
       quantity: hours,
       unitPrice: 0,
       totalPrice: 0,
