@@ -2853,8 +2853,16 @@ export default function DailyPlanningPage() {
       editClientTelephone: client?.telephone || '',
       editClientAdresse: client?.adresse || '',
       editClientComplementAdresse: client?.complementAdresse || '',
-      editClientCodePostal: client?.codePostal || '',
-      editClientVille: client?.ville || '',
+      editClientCodePostal: client?.codePostal || (() => {
+        // Extract postal code from full address if missing
+        const match = (client?.adresse || '').match(/\b(\d{5})\b/);
+        return match ? match[1]! : '';
+      })(),
+      editClientVille: client?.ville || (() => {
+        // Extract city from full address if missing (text after 5-digit postal code)
+        const match = (client?.adresse || '').match(/\b\d{5}\s+([A-Za-zÀ-ÿ\s-]+)/);
+        return match ? match[1]!.trim() : '';
+      })(),
       editClientInstructionsAcces: client?.instructionsAcces || '',
       editClientContactNom: client?.contactNom || '',
       editClientContactTelephone: client?.contactTelephone || '',
