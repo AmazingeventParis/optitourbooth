@@ -152,23 +152,28 @@ async function crmLogin(): Promise<string> {
 }
 
 /**
- * Source 1: Scrape orders_ajax.php?status=2 (confirmed reservations)
- * Best source — has company name, person name, email, phone, date, borne.
+ * Fetch paginated orders from orders_ajax.php.
+ * Used for both current reservations and archives.
  */
-async function scrapeOrders(cookie: string): Promise<CrmRecord[]> {
-  const records: CrmRecord[] = [];
-
-  const response = await fetch(`${CRM_BASE_URL}/orders_ajax.php?status=2`, {
+async function fetchOrdersPage(cookie: string, url: string, start: number, length: number): Promise<{ rows: any[]; totalFiltered: number }> {
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       Cookie: cookie,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: 'draw=1&start=0&length=500',
+    body: `draw=1&start=${start}&length=${length}`,
   });
 
   const data = await response.json() as any;
-  const rows = data.aaData || data.data || [];
+  return {
+    rows: data.aaData || data.data || [],
+    totalFiltered: data.iTotalDisplayRecords || 0,
+  };
+}
+
+function parseOrderRows(rows: any[]): CrmRecord[] {
+  const records: CrmRecord[] = [];
 
   for (const row of rows) {
     const email = stripHtml(String(row.email || ''));
@@ -191,6 +196,36 @@ async function scrapeOrders(cookie: string): Promise<CrmRecord[]> {
       source: 'orders',
     });
   }
+
+  return records;
+}
+
+/**
+ * Source 1: Scrape orders_ajax.php?status=2 (confirmed reservations)
+ * + archives (status=2&arch=true). Best source — has company name,
+ * person name, email, phone, event date, borne.
+ * Paginates through all pages (500 per page).
+ */
+async function scrapeOrders(cookie: string): Promise<CrmRecord[]> {
+  const PAGE_SIZE = 500;
+  const records: CrmRecord[] = [];
+
+  // Current reservations (usually < 500)
+  const currentUrl = `${CRM_BASE_URL}/orders_ajax.php?status=2`;
+  const current = await fetchOrdersPage(cookie, currentUrl, 0, PAGE_SIZE);
+  records.push(...parseOrderRows(current.rows));
+
+  // Archives (can be 1500+, paginate)
+  const archiveUrl = `${CRM_BASE_URL}/orders_ajax.php?status=2&arch=true`;
+  let start = 0;
+  let totalArchives = 0;
+
+  do {
+    const page = await fetchOrdersPage(cookie, archiveUrl, start, PAGE_SIZE);
+    records.push(...parseOrderRows(page.rows));
+    totalArchives = page.totalFiltered;
+    start += PAGE_SIZE;
+  } while (start < totalArchives);
 
   return records;
 }
