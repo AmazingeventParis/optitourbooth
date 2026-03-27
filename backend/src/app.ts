@@ -23,6 +23,7 @@ import { initializeQueues } from './config/queue.js';
 import { processOverdueDispatches } from './services/galleryDispatch.service.js';
 import { checkAndPoll, isReviewPollingConfigured } from './services/reviewPolling.service.js';
 import { startGalleryWorker, stopGalleryWorker } from './workers/galleryWorker.js';
+import { startCrmSync, stopCrmSync } from './services/crmSync.service.js';
 
 // Créer l'application Express
 const app = express();
@@ -182,6 +183,9 @@ async function startServer(): Promise<void> {
         console.log(`🏓 Keep-alive enabled: pinging ${url} every 10 min`);
       }
 
+      // CRON: Sync CRM emails into bookings every hour
+      startCrmSync();
+
       // CRON: Auto-update preparation statuses every 5 minutes
       setInterval(async () => {
         try {
@@ -215,6 +219,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
   stopGoogleCalendarSync();
   stopDriveFolderSync();
   stopGalleryWorker();
+  stopCrmSync();
 
   // Fermer les connexions
   await disconnectDatabase();
