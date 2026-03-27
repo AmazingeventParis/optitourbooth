@@ -2,7 +2,11 @@ import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_URL = import.meta.env.VITE_API_URL || (
+  window.location.hostname.includes('shootnbox-galerie')
+    ? 'https://optitourbooth-api.swipego.app/api'
+    : '/api'
+);
 
 type PageState = 'loading' | 'rating' | 'low_rating' | 'ask_review' | 'no_review_done' | 'closed' | 'gallery_sent' | 'error';
 
