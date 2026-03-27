@@ -10,6 +10,7 @@ import { notificationService } from '../services/notification.service.js';
 import { withCache } from '../utils/cacheWrapper.js';
 import { cacheKeys, cacheTTL } from '../utils/cacheKeys.js';
 import { invalidateTourneesCache } from '../utils/cacheInvalidation.js';
+import { syncPointBilling, syncTourneeBilling } from '../services/billingSync.service.js';
 import { ensureDateUTC, timeToUTCDateTime } from '../utils/dateUtils.js';
 import {
   CreateTourneeInput,
@@ -735,9 +736,10 @@ export const tourneeController = {
     // Fire-and-forget push notifications
     const tourneeDate = (data.date || tournee.date.toISOString()).split('T')[0]!;
     notificationService.notifyTourneeUpdated(updated.chauffeurId, tourneeDate, 'mise à jour générale').catch(console.error);
-    // If chauffeur changed, notify the old chauffeur too
+    // If chauffeur changed, notify the old chauffeur too and resync billing
     if (data.chauffeurId && data.chauffeurId !== tournee.chauffeurId) {
       notificationService.notifyTourneeUpdated(tournee.chauffeurId, tourneeDate, 'réassignation à un autre chauffeur').catch(console.error);
+      syncTourneeBilling(id).catch(console.error);
     }
 
     // Invalider le cache (ancienne et nouvelle date si changement)
@@ -1481,6 +1483,9 @@ export const tourneeController = {
       client.nom
     ).catch(console.error);
 
+    // Auto-sync HF/recovery billing
+    syncPointBilling(point.id).catch(console.error);
+
     // Retourner la tournée complète avec tous les points et leurs ETAs
     const updatedTournee = await getFullTournee(id);
     apiResponse.created(res, updatedTournee, 'Point ajouté');
@@ -1878,6 +1883,9 @@ export const tourneeController = {
         notificationService.notifyTourneeUpdated(point.tournee.chauffeurId, srcDate, 'déplacement d\'un point entre tournées').catch(console.error);
       }
     }
+
+    // Auto-sync HF/recovery billing (chauffeur may have changed)
+    syncPointBilling(pointId).catch(console.error);
 
     apiResponse.success(res, {
       sourceTournee,

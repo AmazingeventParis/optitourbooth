@@ -1,6 +1,7 @@
 import { prisma } from '../config/database.js';
 import { osrmService } from './osrm.service.js';
 import { optimizationService } from './optimization.service.js';
+import { syncPointBilling } from './billingSync.service.js';
 
 interface PendingPoint {
   clientId: string;
@@ -259,6 +260,9 @@ export const autoDispatchService = {
         } else {
           bestTournee.centroid = { lat: clientCoords.lat, lng: clientCoords.lng };
         }
+
+        // Auto-sync HF/recovery billing for the new point
+        syncPointBilling(newPoint.id).catch(console.error);
 
         result.dispatched.push({
           pointIndex: i,
