@@ -19,8 +19,9 @@
  */
 
 import { Readable } from 'stream';
+import { google } from 'googleapis';
 import { config } from '../config/index.js';
-import { getDriveClient, isDriveConfigured } from './googleDrive.service.js';
+import { isDriveConfigured } from './googleDrive.service.js';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -51,6 +52,27 @@ const CRM_EMAIL = process.env.CRM_SHOOTNBOX_EMAIL || '';
 const CRM_PASSWORD = process.env.CRM_SHOOTNBOX_PASSWORD || '';
 
 const SYNC_PAST_DAYS = 14;
+
+// ─── Drive client (OAuth — needed for upload quota) ──────────────
+
+/**
+ * Get Drive client using OAuth2 (user credentials) instead of service account.
+ * Service accounts have no storage quota and can't upload to personal Drive.
+ */
+function getOAuthDriveClient() {
+  const clientId = config.googleCalendar.oauthClientId;
+  const clientSecret = config.googleCalendar.oauthClientSecret;
+  const refreshToken = config.googleCalendar.oauthRefreshToken;
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('OAuth credentials not configured (GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN)');
+  }
+
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
+
+  return google.drive({ version: 'v3', auth: oauth2Client });
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -221,7 +243,7 @@ interface DriveFolder {
  * List all folders in the parent Drive folder.
  */
 async function listDriveFolders(): Promise<DriveFolder[]> {
-  const drive = getDriveClient();
+  const drive = getOAuthDriveClient();
   const parentId = config.googleDrive.parentFolderId;
   const folders: DriveFolder[] = [];
 
@@ -279,7 +301,7 @@ function findMatchingDriveFolder(album: CrmAlbumRecord, driveFolders: DriveFolde
  * Get existing file names in a Drive folder.
  */
 async function listDriveFileNames(folderId: string): Promise<Set<string>> {
-  const drive = getDriveClient();
+  const drive = getOAuthDriveClient();
   const names = new Set<string>();
 
   let pageToken: string | undefined;
@@ -304,7 +326,7 @@ async function listDriveFileNames(folderId: string): Promise<Set<string>> {
  * Create a folder in Drive.
  */
 async function createDriveFolder(folderName: string): Promise<string> {
-  const drive = getDriveClient();
+  const drive = getOAuthDriveClient();
   const response = await drive.files.create({
     requestBody: {
       name: folderName,
@@ -321,7 +343,7 @@ async function createDriveFolder(folderName: string): Promise<string> {
  * Upload a file to Drive by streaming from a URL.
  */
 async function uploadFileToDrive(folderId: string, fileName: string, fileUrl: string): Promise<void> {
-  const drive = getDriveClient();
+  const drive = getOAuthDriveClient();
 
   const response = await fetch(fileUrl);
   if (!response.ok) throw new Error(`Download failed: ${response.status}`);
