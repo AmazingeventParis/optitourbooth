@@ -3,15 +3,14 @@
  * Scrapes the Shootnbox CRM (shootnbox.fr/manager2/) and syncs customer
  * emails + phones into OptiTourBooth bookings.
  *
- * Strategy:
- *  1. Scrape readiness_ajax.php → gets (orderId, date, société, nom, borne)
- *  2. Scrape albums_list.php    → gets (orderId, nom, email, phone, borne, date)
- *  3. Join on orderId           → enriched record with société + email
- *  4. Match booking by date + fuzzy(société OR nom) → update customerEmail
+ * Strategy (3 sources, priority order):
+ *  1. orders_ajax.php?status=2 (confirmed reservations) → best source:
+ *     has email, phone, company+person in "customer" field, event date, borne
+ *  2. readiness_ajax.php (preparation) → has société ↔ nom link
+ *  3. albums_list.php (past events) → has email but only contact name
  *
- * OptiTourBooth booking names come from Google Calendar event titles, which
- * are usually the company name (société), not the contact person (nom).
- * The readiness page provides the société↔nom↔orderId link.
+ * Matching: date + fuzzy(company name OR contact name OR person name)
+ * against OptiTourBooth booking customerName (from Google Calendar = company).
  *
  * Runs every hour via setInterval (configured in app.ts).
  * Read-only on the CRM side — only updates OptiTourBooth bookings.
@@ -23,18 +22,19 @@ import { prisma } from '../config/database.js';
 
 interface CrmRecord {
   orderId: string;
-  societe: string;
-  contactName: string;
+  company: string;       // société / company name
+  contactName: string;   // person name
   email: string;
   phone: string;
   borne: string;
-  eventDate: string; // DD.MM.YYYY
+  eventDate: string;     // DD.MM.YYYY
+  source: 'orders' | 'readiness+albums' | 'albums';
 }
 
 interface SyncResult {
-  scrapedAlbums: number;
+  scrapedOrders: number;
   scrapedReadiness: number;
-  enriched: number;
+  scrapedAlbums: number;
   matched: number;
   updated: number;
   errors: string[];
@@ -61,11 +61,10 @@ function namesMatch(crmName: string, bookingName: string): boolean {
   const a = normalizeForMatch(crmName);
   const b = normalizeForMatch(bookingName);
   if (!a || !b) return false;
-  // Bidirectional substring
   if (a.includes(b) || b.includes(a)) return true;
-  // Also try matching first 6+ chars (handles truncated/suffixed names)
-  if (a.length >= 6 && b.length >= 6) {
-    if (a.startsWith(b.slice(0, 6)) || b.startsWith(a.slice(0, 6))) return true;
+  // Prefix match for truncated/suffixed names (min 5 chars)
+  if (a.length >= 5 && b.length >= 5) {
+    if (a.startsWith(b.slice(0, 5)) || b.startsWith(a.slice(0, 5))) return true;
   }
   return false;
 }
@@ -103,6 +102,26 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, '').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Parse the "customer" field from orders_ajax.php.
+ * Format: "COMPANY    PERSON  Lieu de l'évènement : ..." or "Person Name  Lieu..."
+ * Returns [company, person].
+ */
+function parseCustomerField(raw: string): [string, string] {
+  let text = stripHtml(raw);
+  // Remove everything after location/event type markers
+  for (const sep of ["Lieu de l'", "Type d'", 'Retrait']) {
+    const idx = text.indexOf(sep);
+    if (idx > 0) text = text.slice(0, idx).trim();
+  }
+  // Split by 3+ spaces (company vs person)
+  const parts = text.split(/\s{3,}/);
+  if (parts.length >= 2) {
+    return [parts[0]!.trim(), parts[1]!.trim()];
+  }
+  return ['', parts[0]!.trim()];
+}
+
 // ─── CRM Scraping ────────────────────────────────────────────────
 
 async function crmLogin(): Promise<string> {
@@ -133,13 +152,56 @@ async function crmLogin(): Promise<string> {
 }
 
 /**
- * Scrape readiness_ajax.php → orderId, date, société, nom, borne
- * This page links company names (société) to contact names (nom) via orderId.
+ * Source 1: Scrape orders_ajax.php?status=2 (confirmed reservations)
+ * Best source — has company name, person name, email, phone, date, borne.
+ */
+async function scrapeOrders(cookie: string): Promise<CrmRecord[]> {
+  const records: CrmRecord[] = [];
+
+  const response = await fetch(`${CRM_BASE_URL}/orders_ajax.php?status=2`, {
+    method: 'POST',
+    headers: {
+      Cookie: cookie,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'draw=1&start=0&length=500',
+  });
+
+  const data = await response.json() as any;
+  const rows = data.aaData || data.data || [];
+
+  for (const row of rows) {
+    const email = stripHtml(String(row.email || ''));
+    if (!email) continue;
+
+    const orderId = String(row.id || '').trim();
+    const [company, person] = parseCustomerField(String(row.customer || ''));
+    const phone = stripHtml(String(row.phone || ''));
+    const borne = stripHtml(String(row.box_type || ''));
+    const eventDate = stripHtml(String(row.event_date || ''));
+
+    records.push({
+      orderId,
+      company,
+      contactName: person,
+      email,
+      phone,
+      borne,
+      eventDate,
+      source: 'orders',
+    });
+  }
+
+  return records;
+}
+
+/**
+ * Source 2: Scrape readiness_ajax.php (preparation page)
+ * Has société ↔ nom link. No email — must be joined with albums.
  */
 async function scrapeReadiness(cookie: string): Promise<Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>> {
   const map = new Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>();
 
-  // Fetch all rows (up to 500)
   const response = await fetch(`${CRM_BASE_URL}/readiness_ajax.php`, {
     method: 'POST',
     headers: {
@@ -171,8 +233,8 @@ async function scrapeReadiness(cookie: string): Promise<Map<string, { societe: s
 }
 
 /**
- * Scrape albums_list.php → orderId, nom, email, phone, borne, date
- * This page has the customer emails.
+ * Source 3: Scrape albums_list.php (past events with photos)
+ * Has email + phone, but only contact name (no company).
  */
 async function scrapeAlbums(cookie: string): Promise<Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>> {
   const map = new Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>();
@@ -219,28 +281,34 @@ async function scrapeAlbums(cookie: string): Promise<Map<string, { contactName: 
   return map;
 }
 
+// ─── Merge sources ───────────────────────────────────────────────
+
 /**
- * Merge readiness (société) + albums (email) into enriched CRM records.
- * Join on orderId. Also include album-only records (no société = use contactName).
+ * Merge readiness (société) + albums (email) into additional records.
+ * These complement the orders source for past events not in reservations.
  */
-function buildEnrichedRecords(
+function buildAlbumRecords(
   readinessMap: Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>,
   albumsMap: Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>,
+  existingOrderIds: Set<string>,
 ): CrmRecord[] {
   const records: CrmRecord[] = [];
 
-  // For each album entry with an email, enrich with readiness data
   for (const [orderId, album] of albumsMap) {
+    // Skip if already covered by orders source
+    if (existingOrderIds.has(orderId)) continue;
+
     const readiness = readinessMap.get(orderId);
 
     records.push({
       orderId,
-      societe: readiness?.societe || '',
+      company: readiness?.societe || '',
       contactName: album.contactName || readiness?.contactName || '',
       email: album.email,
       phone: album.phone,
       borne: readiness?.borne || album.borne,
       eventDate: readiness?.eventDate || album.eventDate,
+      source: readiness ? 'readiness+albums' : 'albums',
     });
   }
 
@@ -249,27 +317,20 @@ function buildEnrichedRecords(
 
 // ─── Matching & Sync ─────────────────────────────────────────────
 
-/**
- * Try to match a booking name against a CRM record.
- * Booking names are usually company names (from Google Calendar).
- * CRM has both société (company) and contactName (person).
- * We try matching against both.
- */
 function recordMatchesBooking(
   record: CrmRecord,
   bookingName: string,
   bookingDate: Date,
   bookingEndDate: Date | null,
 ): boolean {
-  // 1. Date must match
   const crmDate = parseCrmDate(record.eventDate);
   if (!crmDate) return false;
   if (!dateInRange(crmDate, bookingDate, bookingEndDate)) return false;
 
-  // 2. Try matching booking name against société first (most common case)
-  if (record.societe && namesMatch(record.societe, bookingName)) return true;
+  // Try company name first (most common for OptiTourBooth bookings)
+  if (record.company && namesMatch(record.company, bookingName)) return true;
 
-  // 3. Try matching against contact name
+  // Try contact/person name
   if (record.contactName && namesMatch(record.contactName, bookingName)) return true;
 
   return false;
@@ -280,9 +341,9 @@ function recordMatchesBooking(
  */
 export async function syncCrmEmails(): Promise<SyncResult> {
   const result: SyncResult = {
-    scrapedAlbums: 0,
+    scrapedOrders: 0,
     scrapedReadiness: 0,
-    enriched: 0,
+    scrapedAlbums: 0,
     matched: 0,
     updated: 0,
     errors: [],
@@ -297,15 +358,18 @@ export async function syncCrmEmails(): Promise<SyncResult> {
     return result;
   }
 
-  // 2. Scrape both sources in parallel
+  // 2. Scrape all 3 sources in parallel
+  let orderRecords: CrmRecord[];
   let readinessMap: Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>;
   let albumsMap: Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>;
 
   try {
-    [readinessMap, albumsMap] = await Promise.all([
+    [orderRecords, readinessMap, albumsMap] = await Promise.all([
+      scrapeOrders(cookie),
       scrapeReadiness(cookie),
       scrapeAlbums(cookie),
     ]);
+    result.scrapedOrders = orderRecords.length;
     result.scrapedReadiness = readinessMap.size;
     result.scrapedAlbums = albumsMap.size;
   } catch (e: any) {
@@ -313,12 +377,13 @@ export async function syncCrmEmails(): Promise<SyncResult> {
     return result;
   }
 
-  // 3. Build enriched records (société + email joined on orderId)
-  const records = buildEnrichedRecords(readinessMap, albumsMap);
-  result.enriched = records.length;
+  // 3. Build complete record set: orders first (best), then albums+readiness for the rest
+  const orderIds = new Set(orderRecords.map(r => r.orderId));
+  const albumRecords = buildAlbumRecords(readinessMap, albumsMap, orderIds);
+  const allRecords = [...orderRecords, ...albumRecords];
 
-  if (records.length === 0) {
-    result.errors.push('No enriched records built');
+  if (allRecords.length === 0) {
+    result.errors.push('No CRM records found');
     return result;
   }
 
@@ -348,15 +413,22 @@ export async function syncCrmEmails(): Promise<SyncResult> {
 
   // 5. Match and update
   for (const booking of bookings) {
-    const candidates = records.filter(r =>
+    const candidates = allRecords.filter(r =>
       recordMatchesBooking(r, booking.customerName, booking.eventDate, booking.eventEndDate)
     );
 
     if (candidates.length === 0) continue;
 
-    // Pick best: prefer one where borne also matches
+    // Pick best: prefer orders source, then borne match
     let best = candidates[0]!;
-    if (candidates.length > 1) {
+    const fromOrders = candidates.filter(c => c.source === 'orders');
+    if (fromOrders.length > 0) {
+      best = fromOrders[0]!;
+      if (fromOrders.length > 1) {
+        const borneMatch = fromOrders.find(c => bornesMatch(c.borne, booking.produitNom));
+        if (borneMatch) best = borneMatch;
+      }
+    } else if (candidates.length > 1) {
       const borneMatch = candidates.find(c => bornesMatch(c.borne, booking.produitNom));
       if (borneMatch) best = borneMatch;
     }
@@ -379,8 +451,8 @@ export async function syncCrmEmails(): Promise<SyncResult> {
 
       result.updated++;
       console.log(
-        `[CRM Sync] ✓ "${booking.customerName}" → ${best.email}` +
-        (best.societe ? ` (société: ${best.societe})` : '')
+        `[CRM Sync] ✓ "${booking.customerName}" → ${best.email} [${best.source}]` +
+        (best.company ? ` (company: ${best.company})` : '')
       );
     } catch (e: any) {
       result.errors.push(`Update failed for booking ${booking.id}: ${e.message}`);
@@ -407,8 +479,8 @@ export function startCrmSync(): void {
     try {
       const result = await syncCrmEmails();
       console.log(
-        `[CRM Sync] Initial: readiness=${result.scrapedReadiness}, albums=${result.scrapedAlbums}, ` +
-        `enriched=${result.enriched}, matched=${result.matched}, updated=${result.updated}`
+        `[CRM Sync] Initial: orders=${result.scrapedOrders}, readiness=${result.scrapedReadiness}, ` +
+        `albums=${result.scrapedAlbums}, matched=${result.matched}, updated=${result.updated}`
       );
       if (result.errors.length > 0) {
         console.warn('[CRM Sync] Errors:', result.errors);
@@ -423,8 +495,8 @@ export function startCrmSync(): void {
     try {
       const result = await syncCrmEmails();
       console.log(
-        `[CRM Sync] Sync: readiness=${result.scrapedReadiness}, albums=${result.scrapedAlbums}, ` +
-        `enriched=${result.enriched}, matched=${result.matched}, updated=${result.updated}`
+        `[CRM Sync] Sync: orders=${result.scrapedOrders}, readiness=${result.scrapedReadiness}, ` +
+        `albums=${result.scrapedAlbums}, matched=${result.matched}, updated=${result.updated}`
       );
       if (result.errors.length > 0) {
         console.warn('[CRM Sync] Errors:', result.errors);
