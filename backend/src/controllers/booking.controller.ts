@@ -406,7 +406,7 @@ export const createBooking = asyncHandler(async (req: Request, res: Response) =>
     },
   });
 
-  const publicUrl = `${config.reviewSystem.publicBaseUrl}/galerie/${publicToken}`;
+  const publicUrl = `${config.reviewSystem.publicBaseUrl}/${publicToken}`;
 
   return apiResponse.created(res, {
     ...booking,
@@ -434,7 +434,7 @@ export const getBookingDetail = asyncHandler(async (req: Request, res: Response)
     return apiResponse.notFound(res, 'Réservation introuvable');
   }
 
-  const publicUrl = `${config.reviewSystem.publicBaseUrl}/galerie/${booking.publicToken}`;
+  const publicUrl = `${config.reviewSystem.publicBaseUrl}/${booking.publicToken}`;
 
   return apiResponse.success(res, { ...booking, publicUrl });
 });
@@ -701,7 +701,7 @@ export const listCalendarEvents = asyncHandler(async (_req: Request, res: Respon
       booking: booking ? {
         id: booking.id,
         publicToken: booking.publicToken,
-        publicUrl: `${config.reviewSystem.publicBaseUrl}/galerie/${booking.publicToken}`,
+        publicUrl: `${config.reviewSystem.publicBaseUrl}/${booking.publicToken}`,
         customerName: booking.customerName,
         customerEmail: booking.customerEmail,
         customerPhone: booking.customerPhone,
@@ -770,7 +770,7 @@ export const createBookingFromEvent = asyncHandler(async (req: Request, res: Res
     },
   });
 
-  const publicUrl = `${config.reviewSystem.publicBaseUrl}/galerie/${publicToken}`;
+  const publicUrl = `${config.reviewSystem.publicBaseUrl}/${publicToken}`;
 
   return apiResponse.created(res, { ...booking, publicUrl });
 });
@@ -792,7 +792,7 @@ export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) =>
     return apiResponse.notFound(res, 'Réservation introuvable');
   }
 
-  const publicUrl = `${config.reviewSystem.publicBaseUrl}/galerie/${booking.publicToken}`;
+  const publicUrl = `${config.reviewSystem.publicBaseUrl}/${booking.publicToken}`;
 
   const brand = (senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
 

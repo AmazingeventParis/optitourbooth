@@ -130,7 +130,7 @@ export const config = {
     galleryDelayHours: parseInt(process.env.GALLERY_DELAY_HOURS || '2', 10),
     noReviewDelayHours: parseInt(process.env.NO_REVIEW_DELAY_HOURS || '48', 10),
     matchingWindowMinutes: parseInt(process.env.MATCHING_WINDOW_MINUTES || '60', 10),
-    publicBaseUrl: process.env.PUBLIC_BASE_URL || 'http://localhost:5173',
+    publicBaseUrl: process.env.PUBLIC_BASE_URL || 'https://shootnbox-galerie.swipego.app',
   },
 
   // Trustpilot

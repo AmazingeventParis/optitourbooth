@@ -102,6 +102,22 @@ export default function ReviewPage() {
 
   const brandName = booking?.senderBrand === 'SMAKK' ? 'Smakk' : 'Shootnbox';
 
+  // Set page title and favicon for shootnbox galerie
+  useEffect(() => {
+    document.title = 'Shootnbox - Votre galerie photos';
+    const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
+    if (link) {
+      link.href = '/favicon-shootnbox.png';
+      link.type = 'image/png';
+    } else {
+      const newLink = document.createElement('link');
+      newLink.rel = 'icon';
+      newLink.type = 'image/png';
+      newLink.href = '/favicon-shootnbox.png';
+      document.head.appendChild(newLink);
+    }
+  }, []);
+
   useEffect(() => {
     if (!token) {
       setPageState('error');

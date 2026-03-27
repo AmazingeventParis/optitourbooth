@@ -216,6 +216,7 @@ function SuperAdminRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   const { isAuthenticated, setUser } = useAuthStore();
+  const isShootnboxGalerie = window.location.hostname.includes('shootnbox-galerie');
 
   // Refresh user data on mount (picks up avatarUrl and other changes)
   useEffect(() => {
@@ -223,6 +224,17 @@ function App() {
       authService.getMe().then(setUser).catch(() => {});
     }
   }, [isAuthenticated, setUser]);
+
+  // Shootnbox galerie domain: only serve gallery page
+  if (isShootnboxGalerie) {
+    return (
+      <Routes>
+        <Route path="/:token" element={<LazyPage><ReviewPage /></LazyPage>} />
+        <Route path="/galerie/:token" element={<LazyPage><ReviewPage /></LazyPage>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
+  }
 
   return (
     <Routes>

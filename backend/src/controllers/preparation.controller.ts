@@ -635,7 +635,7 @@ async function triggerReviewEmailForPreparation(preparation: any): Promise<void>
   }
 
   // Build public URL with brand
-  const publicUrl = `${config.reviewSystem.publicBaseUrl}/galerie/${booking.publicToken}?brand=${brand}`;
+  const publicUrl = `${config.reviewSystem.publicBaseUrl}/${booking.publicToken}?brand=${brand}`;
 
   // Update booking brand if not set
   if (!booking.senderBrand) {
