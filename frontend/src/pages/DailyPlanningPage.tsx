@@ -122,10 +122,11 @@ interface TimelinePointProps {
   isSelected?: boolean;
   isHorsForfait?: boolean;
   hasHfEntry?: boolean;
+  isRecuperation?: boolean;
   onSelect?: (pointId: string) => void;
 }
 
-const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus, isOverlay, isSelected, isHorsForfait, hasHfEntry, onSelect }: TimelinePointProps) {
+const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus, isOverlay, isSelected, isHorsForfait, hasHfEntry, isRecuperation, onSelect }: TimelinePointProps) {
   const {
     attributes,
     listeners,
@@ -212,6 +213,11 @@ const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus
             HF
           </span>
         )}
+        {isRecuperation && (
+          <span className="px-1 py-0.5 text-[9px] font-bold rounded flex-shrink-0 bg-indigo-500 text-white" title="Récupération">
+            R
+          </span>
+        )}
       </div>
       {/* Ligne 2: produit + créneau */}
       <div className="flex items-center gap-1.5 mt-1 text-[11px] text-gray-600">
@@ -235,9 +241,10 @@ interface PendingPointCardProps {
   isOverlay?: boolean;
   isSelected?: boolean;
   onSelect?: (index: number) => void;
+  billingConfigs?: UserBillingConfig[];
 }
 
-const PendingPointCard = memo(function PendingPointCard({ point, index, isOverlay, isSelected, onSelect }: PendingPointCardProps) {
+const PendingPointCard = memo(function PendingPointCard({ point, index, isOverlay, isSelected, onSelect, billingConfigs }: PendingPointCardProps) {
   const {
     attributes,
     listeners,
@@ -270,6 +277,45 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
   };
 
   const productColor = point.produitCouleur;
+
+  // Detect HF/recovery based on point time vs all billing configs
+  let pendingHf = false;
+  let pendingRecup = false;
+  if (billingConfigs && point.creneauDebut) {
+    const ptMinutes = timeToMinutes(point.creneauDebut);
+    if (ptMinutes !== null) {
+      for (const uc of billingConfigs) {
+        const cfg = uc.config;
+        // HF check
+        if (!pendingHf && cfg.tarifPointHorsForfait > 0) {
+          if (cfg.isIndependent) {
+            pendingHf = true;
+          } else if (cfg.horsForfaitDebut && cfg.horsForfaitFin) {
+            const d = timeToMinutes(cfg.horsForfaitDebut);
+            const f = timeToMinutes(cfg.horsForfaitFin);
+            if (d !== null && f !== null) {
+              pendingHf = d <= f ? (ptMinutes >= d && ptMinutes <= f) : (ptMinutes >= d || ptMinutes <= f);
+            }
+          }
+        }
+        // Recovery check
+        if (!pendingRecup) {
+          const ranges: Array<{ debut: string; fin: string }> = [];
+          if (cfg.recuperationDebut && cfg.recuperationFin) ranges.push({ debut: cfg.recuperationDebut, fin: cfg.recuperationFin });
+          if (cfg.recuperationDebut2 && cfg.recuperationFin2) ranges.push({ debut: cfg.recuperationDebut2, fin: cfg.recuperationFin2 });
+          for (const r of ranges) {
+            const rd = timeToMinutes(r.debut);
+            const rf = timeToMinutes(r.fin);
+            if (rd !== null && rf !== null && ptMinutes >= rd && ptMinutes <= rf) {
+              pendingRecup = true;
+              break;
+            }
+          }
+        }
+        if (pendingHf && pendingRecup) break;
+      }
+    }
+  }
 
   return (
     <div
@@ -309,6 +355,16 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
         )}>
           <typeConfig.icon className="h-3.5 w-3.5" />
         </div>
+        {pendingHf && (
+          <span className="px-1 py-0.5 text-[9px] font-bold rounded flex-shrink-0 bg-orange-100 text-orange-700 border border-orange-300" title="Hors forfait potentiel">
+            HF
+          </span>
+        )}
+        {pendingRecup && (
+          <span className="px-1 py-0.5 text-[9px] font-bold rounded flex-shrink-0 bg-indigo-100 text-indigo-700 border border-indigo-300" title="Récupération potentielle">
+            R
+          </span>
+        )}
         {point.attachments && point.attachments.length > 0 && (
           <PaperClipIcon className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" title={`${point.attachments.length} pièce(s) jointe(s)`} />
         )}
@@ -342,6 +398,7 @@ interface PendingDropZoneProps {
   selectedPendingIndex: number | null;
   onSelectPending: (idx: number) => void;
   onClickImport: () => void;
+  billingConfigs?: UserBillingConfig[];
 }
 
 const PendingDropZone = memo(function PendingDropZone({
@@ -354,6 +411,7 @@ const PendingDropZone = memo(function PendingDropZone({
   selectedPendingIndex,
   onSelectPending,
   onClickImport,
+  billingConfigs,
 }: PendingDropZoneProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: 'pending-zone',
@@ -403,6 +461,7 @@ const PendingDropZone = memo(function PendingDropZone({
                     index={index}
                     isSelected={selectedPendingIndex === index}
                     onSelect={onSelectPending}
+                    billingConfigs={billingConfigs}
                   />
                 ))}
                 {/* Zone de drop visible quand on glisse un point de tournée */}
@@ -697,6 +756,36 @@ const isPointHorsForfait = (
   } else {
     return pointMinutes >= debutMinutes || pointMinutes <= finMinutes;
   }
+};
+
+const isPointRecuperation = (
+  point: Point,
+  chauffeurId: string,
+  billingConfigs: UserBillingConfig[]
+): boolean => {
+  const config = billingConfigs.find(c => c.userId === chauffeurId);
+  if (!config) return false;
+
+  const timeStr = point.creneauDebut || point.heureArriveeEstimee || point.creneauFin;
+  if (!timeStr) return false;
+
+  const pointMinutes = timeToMinutes(timeStr);
+  if (pointMinutes === null) return false;
+
+  const ranges: Array<{ debut: string; fin: string }> = [];
+  if (config.config.recuperationDebut && config.config.recuperationFin) {
+    ranges.push({ debut: config.config.recuperationDebut, fin: config.config.recuperationFin });
+  }
+  if (config.config.recuperationDebut2 && config.config.recuperationFin2) {
+    ranges.push({ debut: config.config.recuperationDebut2, fin: config.config.recuperationFin2 });
+  }
+
+  for (const r of ranges) {
+    const rd = timeToMinutes(r.debut);
+    const rf = timeToMinutes(r.fin);
+    if (rd !== null && rf !== null && pointMinutes >= rd && pointMinutes <= rf) return true;
+  }
+  return false;
 };
 
 // Formate l'ETA du backend en "HHhMM"
@@ -1108,6 +1197,7 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
                   point.creneauFin
                 );
                 const hf = billingConfigs ? isPointHorsForfait(point, tournee.chauffeurId, billingConfigs) : false;
+                const recup = billingConfigs ? isPointRecuperation(point, tournee.chauffeurId, billingConfigs) : false;
                 return (
                   <TimelinePoint
                     key={point.id}
@@ -1117,6 +1207,7 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
                     isSelected={selectedPointId === point.id}
                     isHorsForfait={hf}
                     hasHfEntry={!!pointHfEntries?.[point.id]}
+                    isRecuperation={recup}
                     onSelect={(id) => onSelectPoint?.(selectedPointId === id ? null : id)}
                   />
                 );
@@ -3668,6 +3759,7 @@ export default function DailyPlanningPage() {
                     setSelectedDepotId(null);
                   }}
                   onClickImport={() => fileInputRef.current?.click()}
+                  billingConfigs={billingConfigs}
                 />
               )}
 
