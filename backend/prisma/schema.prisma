@@ -815,6 +815,8 @@ model BillingConfig {
   horsForfaitFin        String?  @map("hors_forfait_fin")   // "HH:MM" ex: "07:00"
   recuperationDebut     String?  @map("recuperation_debut") // "HH:MM" ex: "20:00"
   recuperationFin       String?  @map("recuperation_fin")   // "HH:MM" ex: "06:00"
+  recuperationDebut2    String?  @map("recuperation_debut_2") // "HH:MM" 2ème plage
+  recuperationFin2      String?  @map("recuperation_fin_2")   // "HH:MM" 2ème plage
   isIndependent         Boolean  @default(false) @map("is_independent") // Chauffeur indépendant = toujours hors forfait
   customItems           Json     @default("[]")              // [{name: string, price: number}]
   createdAt             DateTime @default(now()) @map("created_at")

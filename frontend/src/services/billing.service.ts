@@ -12,6 +12,8 @@ export interface BillingConfigData {
   horsForfaitFin: string;
   recuperationDebut: string | null;
   recuperationFin: string | null;
+  recuperationDebut2: string | null;
+  recuperationFin2: string | null;
   isIndependent?: boolean;
   customItems: CustomItem[];
 }

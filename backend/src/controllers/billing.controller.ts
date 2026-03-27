@@ -38,6 +38,8 @@ export const getConfigs = asyncHandler(async (_req: Request, res: Response) => {
       horsForfaitFin: '07:00',
       recuperationDebut: null,
       recuperationFin: null,
+      recuperationDebut2: null,
+      recuperationFin2: null,
       customItems: [],
     },
   }));
@@ -51,7 +53,7 @@ export const getConfigs = asyncHandler(async (_req: Request, res: Response) => {
  */
 export const upsertConfig = asyncHandler(async (req: Request, res: Response) => {
   const { userId } = req.params;
-  const { tarifPointHorsForfait, tarifHeureSupp, horsForfaitDebut, horsForfaitFin, recuperationDebut, recuperationFin, isIndependent, customItems } = req.body;
+  const { tarifPointHorsForfait, tarifHeureSupp, horsForfaitDebut, horsForfaitFin, recuperationDebut, recuperationFin, recuperationDebut2, recuperationFin2, isIndependent, customItems } = req.body;
 
   // Validate user exists
   const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -66,6 +68,8 @@ export const upsertConfig = asyncHandler(async (req: Request, res: Response) => 
       horsForfaitFin: horsForfaitFin || '07:00',
       recuperationDebut: recuperationDebut || null,
       recuperationFin: recuperationFin || null,
+      recuperationDebut2: recuperationDebut2 || null,
+      recuperationFin2: recuperationFin2 || null,
       isIndependent: isIndependent ?? false,
       customItems: customItems || [],
     },
@@ -77,6 +81,8 @@ export const upsertConfig = asyncHandler(async (req: Request, res: Response) => 
       horsForfaitFin: horsForfaitFin || '07:00',
       recuperationDebut: recuperationDebut || null,
       recuperationFin: recuperationFin || null,
+      recuperationDebut2: recuperationDebut2 || null,
+      recuperationFin2: recuperationFin2 || null,
       isIndependent: isIndependent ?? false,
       customItems: customItems || [],
     },

@@ -157,9 +157,17 @@ function TarifsSection() {
               )}
               {uc.config.recuperationDebut && uc.config.recuperationFin && (
               <div className="flex justify-between">
-                <span className="text-gray-500">Plage récupération</span>
+                <span className="text-gray-500">Plage récup. 1</span>
                 <span className="font-medium text-indigo-600">
                   {uc.config.recuperationDebut} &rarr; {uc.config.recuperationFin}
+                </span>
+              </div>
+              )}
+              {uc.config.recuperationDebut2 && uc.config.recuperationFin2 && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Plage récup. 2</span>
+                <span className="font-medium text-indigo-600">
+                  {uc.config.recuperationDebut2} &rarr; {uc.config.recuperationFin2}
                 </span>
               </div>
               )}
@@ -202,6 +210,8 @@ function EditConfigModal({ user, onClose, onSaved }: {
   const [fin, setFin] = useState(user.config.horsForfaitFin || '07:00');
   const [recupDebut, setRecupDebut] = useState(user.config.recuperationDebut || '');
   const [recupFin, setRecupFin] = useState(user.config.recuperationFin || '');
+  const [recupDebut2, setRecupDebut2] = useState(user.config.recuperationDebut2 || '');
+  const [recupFin2, setRecupFin2] = useState(user.config.recuperationFin2 || '');
   const [isIndependent, setIsIndependent] = useState(user.config.isIndependent || false);
   const [customItems, setCustomItems] = useState<CustomItem[]>((user.config.customItems as CustomItem[]) || []);
   const [saving, setSaving] = useState(false);
@@ -216,6 +226,8 @@ function EditConfigModal({ user, onClose, onSaved }: {
         horsForfaitFin: fin,
         recuperationDebut: recupDebut || null,
         recuperationFin: recupFin || null,
+        recuperationDebut2: recupDebut2 || null,
+        recuperationFin2: recupFin2 || null,
         isIndependent,
         customItems,
       });
@@ -301,6 +313,29 @@ function EditConfigModal({ user, onClose, onSaved }: {
             </select>
           </div>
           <p className="text-xs text-gray-400 mt-1">Les heures travaillées dans cette plage ne sont pas payées mais créditent des heures de récupération</p>
+          {/* 2ème plage récupération */}
+          <div className="mt-2">
+            <label className="block text-xs font-medium text-gray-500 mb-1">2ème plage (optionnelle)</label>
+            <div className="flex items-center gap-2">
+              <select
+                value={recupDebut2}
+                onChange={(e) => setRecupDebut2(e.target.value)}
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Non défini</option>
+                {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <span className="text-gray-400 text-sm">&rarr;</span>
+              <select
+                value={recupFin2}
+                onChange={(e) => setRecupFin2(e.target.value)}
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Non défini</option>
+                {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
         </div>
 
         {/* Tarif point HF */}
