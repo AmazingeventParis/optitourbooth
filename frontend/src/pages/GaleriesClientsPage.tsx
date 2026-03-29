@@ -263,6 +263,17 @@ export default function GaleriesClientsPage() {
     }
   };
 
+  const handleSaveGalleryUrl = async (ev: CalendarEvent, url: string) => {
+    try {
+      const { id } = await ensureBooking(ev);
+      await bookingsService.update(id, { galleryUrl: url || null } as any);
+      toast.success('URL Drive sauvegardée');
+      fetchEvents();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erreur');
+    }
+  };
+
   const handleRename = async (ev: CalendarEvent, newName: string) => {
     if (!ev.booking?.id) return;
     try {
@@ -449,6 +460,7 @@ export default function GaleriesClientsPage() {
               onSendBrand={(brand, email) => handleSend(ev, brand, email)}
               onSendDrive={(brand) => handleSendDrive(ev, brand)}
               onSaveEmail={(email) => handleSaveEmail(ev, email)}
+              onSaveGalleryUrl={(url) => handleSaveGalleryUrl(ev, url)}
               sending={sending}
             />
           ))}
@@ -500,7 +512,7 @@ export default function GaleriesClientsPage() {
   );
 }
 
-function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, onSendDrive, onSaveEmail, sending }: {
+function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, onSendDrive, onSaveEmail, onSaveGalleryUrl, sending }: {
   event: CalendarEvent;
   onRename: (newName: string) => void;
   onCopyDrive: () => void;
@@ -508,6 +520,7 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
   onSendBrand: (brand: 'SHOOTNBOX' | 'SMAKK', email: string) => void;
   onSendDrive: (brand: 'SHOOTNBOX' | 'SMAKK') => void;
   onSaveEmail: (email: string) => void;
+  onSaveGalleryUrl: (url: string) => void;
   sending: boolean;
 }) {
   const booking = event.booking;
@@ -519,6 +532,9 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
   const [emailValue, setEmailValue] = useState(booking?.customerEmail || '');
   const [emailSaved, setEmailSaved] = useState(!!booking?.customerEmail);
   const [savingEmail, setSavingEmail] = useState(false);
+  const [galleryUrlValue, setGalleryUrlValue] = useState(booking?.galleryUrl || '');
+  const [, setGalleryUrlSaved] = useState(!!booking?.galleryUrl);
+  const [editingGalleryUrl, setEditingGalleryUrl] = useState(false);
 
   const handleSaveRename = () => {
     const trimmed = editName.trim();
@@ -538,6 +554,13 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
     onSaveEmail(trimmed);
     setEmailSaved(true);
     setSavingEmail(false);
+  };
+
+  const handleSaveGalleryUrl = () => {
+    const trimmed = galleryUrlValue.trim();
+    onSaveGalleryUrl(trimmed);
+    setGalleryUrlSaved(true);
+    setEditingGalleryUrl(false);
   };
 
   const handleSendBrand = (brand: 'SHOOTNBOX' | 'SMAKK') => {
@@ -706,21 +729,58 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
           </div>
         </div>
 
-        {/* Copier lien Drive (commun) */}
-        <button
-          onClick={onCopyDrive}
-          disabled={!booking?.galleryUrl}
-          className={clsx(
-            'w-full mt-2 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs border transition-colors',
-            booking?.galleryUrl
-              ? 'text-green-700 bg-green-50 hover:bg-green-100 border-green-200 cursor-pointer'
-              : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-50'
-          )}
-        >
-          <FolderOpenIcon className="h-3.5 w-3.5" />
-          Copier lien Drive
-          <ClipboardDocumentIcon className="h-3 w-3 opacity-50" />
-        </button>
+        {/* Dossier Drive — copier / éditer manuellement */}
+        {editingGalleryUrl ? (
+          <div className="mt-2 flex items-center gap-1.5">
+            <input
+              type="url"
+              value={galleryUrlValue}
+              onChange={(e) => { setGalleryUrlValue(e.target.value); setGalleryUrlSaved(false); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveGalleryUrl(); if (e.key === 'Escape') setEditingGalleryUrl(false); }}
+              placeholder="https://drive.google.com/drive/folders/..."
+              className="flex-1 border border-gray-300 rounded px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              autoFocus
+            />
+            <button
+              onClick={handleSaveGalleryUrl}
+              className="p-1.5 rounded-lg text-white bg-green-500 hover:bg-green-600 transition-colors"
+              title="Sauvegarder"
+            >
+              <CheckIcon className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => { setEditingGalleryUrl(false); setGalleryUrlValue(booking?.galleryUrl || ''); }}
+              className="p-1.5 rounded-lg text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors"
+              title="Annuler"
+            >
+              <XMarkIcon className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="mt-2 flex items-center gap-1.5">
+            <button
+              onClick={onCopyDrive}
+              disabled={!booking?.galleryUrl}
+              className={clsx(
+                'flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs border transition-colors',
+                booking?.galleryUrl
+                  ? 'text-green-700 bg-green-50 hover:bg-green-100 border-green-200 cursor-pointer'
+                  : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-50'
+              )}
+            >
+              <FolderOpenIcon className="h-3.5 w-3.5" />
+              {booking?.galleryUrl ? 'Copier lien Drive' : 'Pas de dossier Drive'}
+              {booking?.galleryUrl && <ClipboardDocumentIcon className="h-3 w-3 opacity-50" />}
+            </button>
+            <button
+              onClick={() => setEditingGalleryUrl(true)}
+              className="p-1.5 rounded-lg text-gray-500 bg-gray-100 hover:bg-gray-200 border border-gray-200 transition-colors"
+              title="Renseigner / modifier l'URL Drive manuellement"
+            >
+              <PencilIcon className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     </Card>
   );
