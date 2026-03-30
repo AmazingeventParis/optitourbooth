@@ -550,7 +550,8 @@ model Machine {
   notes       String?     @db.Text
 
   // Contrôle distant (télémaintenance)
-  remoteId    String?     @map("remote_id") // ID de contrôle distant (RustDesk/Chrome Remote Desktop)
+  remoteId       String?     @map("remote_id")       // ID de contrôle distant (RustDesk/Chrome Remote Desktop)
+  remotePassword String?     @map("remote_password") // Mot de passe de contrôle distant
 
   // Gestion des défauts
   aDefaut     Boolean     @default(false) @map("a_defaut") // Indicateur de défaut

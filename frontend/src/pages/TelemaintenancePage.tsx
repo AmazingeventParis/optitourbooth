@@ -13,6 +13,7 @@ import {
   ExclamationTriangleIcon,
   SignalIcon,
   SignalSlashIcon,
+  KeyIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
@@ -25,10 +26,11 @@ const typeConfig: Record<string, { label: string; color: string; bg: string; hea
 
 function MachineRow({ machine, onSaveRemoteId }: {
   machine: Machine;
-  onSaveRemoteId: (id: string, remoteId: string) => Promise<void>;
+  onSaveRemoteId: (id: string, remoteId: string, remotePassword?: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(machine.remoteId || '');
+  const [idValue, setIdValue] = useState(machine.remoteId || '');
+  const [pwdValue, setPwdValue] = useState(machine.remotePassword || '');
   const [saving, setSaving] = useState(false);
   const toast = useToast();
 
@@ -37,7 +39,7 @@ function MachineRow({ machine, onSaveRemoteId }: {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSaveRemoteId(machine.id, value.trim());
+      await onSaveRemoteId(machine.id, idValue.trim(), pwdValue.trim());
       setEditing(false);
     } finally {
       setSaving(false);
@@ -46,7 +48,8 @@ function MachineRow({ machine, onSaveRemoteId }: {
 
   const handleCancel = () => {
     setEditing(false);
-    setValue(machine.remoteId || '');
+    setIdValue(machine.remoteId || '');
+    setPwdValue(machine.remotePassword || '');
   };
 
   const handleConnect = () => {
@@ -58,46 +61,50 @@ function MachineRow({ machine, onSaveRemoteId }: {
     });
   };
 
-  const handleCopy = () => {
+  const handleCopyId = () => {
     if (!machine.remoteId) return;
     navigator.clipboard.writeText(machine.remoteId).then(() => {
       toast.success(`ID copie : ${machine.remoteId}`);
     });
   };
 
+  const handleCopyPassword = () => {
+    if (!machine.remotePassword) return;
+    navigator.clipboard.writeText(machine.remotePassword).then(() => {
+      toast.success('Mot de passe copie');
+    });
+  };
+
   return (
     <div className={clsx(
-      'flex items-center gap-2 px-3 py-2.5 border-b border-gray-100 last:border-b-0 transition-colors',
+      'px-3 py-2.5 border-b border-gray-100 last:border-b-0 transition-colors',
       machine.aDefaut ? 'bg-red-50/50' : 'hover:bg-gray-50'
     )}>
-      {/* Status dot + Numero */}
-      <div className="flex items-center gap-2 w-16 flex-shrink-0">
-        <div className={clsx(
-          'w-2 h-2 rounded-full flex-shrink-0',
-          hasRemoteId ? 'bg-green-500' : 'bg-gray-300'
-        )} />
-        <span className="font-mono font-bold text-sm text-gray-900">{machine.numero}</span>
-      </div>
-
-      {/* Defaut badge */}
-      {machine.aDefaut && (
-        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-semibold flex-shrink-0">
-          <ExclamationTriangleIcon className="h-3 w-3" />
-        </span>
-      )}
-
-      {/* Remote ID — display or edit */}
-      <div className="flex-1 min-w-0">
-        {editing ? (
-          <div className="flex items-center gap-1">
+      {editing ? (
+        /* Mode edition */
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="font-mono font-bold text-sm text-gray-900 w-12">{machine.numero}</span>
             <input
               type="text"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') handleCancel(); }}
+              value={idValue}
+              onChange={(e) => setIdValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') handleCancel(); }}
               placeholder="ID distant (ex: 847 293 102)"
               className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
+              disabled={saving}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-12 text-[10px] text-gray-400 text-right">MDP</span>
+            <input
+              type="text"
+              value={pwdValue}
+              onChange={(e) => setPwdValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') handleCancel(); }}
+              placeholder="Mot de passe"
+              className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={saving}
             />
             <button onClick={handleSave} disabled={saving} className="p-1 rounded text-white bg-blue-500 hover:bg-blue-600 transition-colors disabled:opacity-50" title="Sauvegarder">
@@ -107,34 +114,61 @@ function MachineRow({ machine, onSaveRemoteId }: {
               <XMarkIcon className="h-3.5 w-3.5" />
             </button>
           </div>
-        ) : (
-          <div className="flex items-center gap-1.5">
+        </div>
+      ) : (
+        /* Mode affichage */
+        <div className="flex items-center gap-2">
+          {/* Status dot + Numero */}
+          <div className="flex items-center gap-2 w-14 flex-shrink-0">
+            <div className={clsx('w-2 h-2 rounded-full flex-shrink-0', hasRemoteId ? 'bg-green-500' : 'bg-gray-300')} />
+            <span className="font-mono font-bold text-sm text-gray-900">{machine.numero}</span>
+          </div>
+
+          {/* Defaut badge */}
+          {machine.aDefaut && (
+            <span className="flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-semibold flex-shrink-0">
+              <ExclamationTriangleIcon className="h-3 w-3" />
+            </span>
+          )}
+
+          {/* Remote ID + password */}
+          <div className="flex-1 min-w-0 flex items-center gap-1.5">
             {hasRemoteId ? (
-              <span className="font-mono text-xs text-gray-700">{machine.remoteId}</span>
+              <>
+                <span className="font-mono text-xs text-gray-700">{machine.remoteId}</span>
+                {machine.remotePassword && (
+                  <span className="text-[10px] text-gray-400">| ******</span>
+                )}
+              </>
             ) : (
               <span className="text-xs text-gray-400 italic">Non configure</span>
             )}
-            <button onClick={() => setEditing(true)} className="p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors" title="Modifier l'ID distant">
+            <button onClick={() => setEditing(true)} className="p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors" title="Modifier">
               <PencilIcon className="h-3 w-3" />
             </button>
           </div>
-        )}
-      </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-1 flex-shrink-0">
-        {hasRemoteId && (
-          <>
-            <button onClick={handleCopy} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors" title="Copier l'ID">
-              <ClipboardDocumentIcon className="h-3.5 w-3.5" />
-            </button>
-            <button onClick={handleConnect} className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors" title="Prendre le controle">
-              <ComputerDesktopIcon className="h-3.5 w-3.5" />
-              Connecter
-            </button>
-          </>
-        )}
-      </div>
+          {/* Actions */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {hasRemoteId && (
+              <>
+                <button onClick={handleCopyId} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors" title="Copier l'ID">
+                  <ClipboardDocumentIcon className="h-3.5 w-3.5" />
+                </button>
+                {machine.remotePassword && (
+                  <button onClick={handleCopyPassword} className="p-1 rounded text-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-colors" title="Copier le mot de passe">
+                    <KeyIcon className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button onClick={handleConnect} className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors" title="Prendre le controle">
+                  <ComputerDesktopIcon className="h-3.5 w-3.5" />
+                  Connecter
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -143,7 +177,7 @@ function MachineColumn({ type, machines, filter, onSaveRemoteId }: {
   type: MachineType;
   machines: Machine[];
   filter: 'all' | 'online' | 'offline';
-  onSaveRemoteId: (id: string, remoteId: string) => Promise<void>;
+  onSaveRemoteId: (id: string, remoteId: string, remotePassword?: string) => Promise<void>;
 }) {
   const cfg = typeConfig[type]!;
 
@@ -215,9 +249,9 @@ export default function TelemaintenancePage() {
 
   useEffect(() => { fetchMachines(); }, [fetchMachines]);
 
-  const handleSaveRemoteId = async (machineId: string, remoteId: string) => {
+  const handleSaveRemoteId = async (machineId: string, remoteId: string, remotePassword?: string) => {
     try {
-      await machinesService.updateRemoteId(machineId, remoteId);
+      await machinesService.updateRemoteId(machineId, remoteId, remotePassword);
       toast.success('ID distant sauvegarde');
       fetchMachines();
     } catch {

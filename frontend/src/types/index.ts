@@ -271,6 +271,7 @@ export interface Machine {
   actif: boolean;
   notes?: string;
   remoteId?: string; // ID de contrôle distant (RustDesk/Chrome Remote Desktop)
+  remotePassword?: string; // Mot de passe de contrôle distant
   aDefaut: boolean; // Indicateur de défaut
   defaut?: string; // Description du défaut
   createdAt: string;

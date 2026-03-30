@@ -82,8 +82,8 @@ export const machinesService = {
   /**
    * Met à jour l'ID de contrôle distant d'une machine
    */
-  async updateRemoteId(id: string, remoteId: string): Promise<Machine> {
-    const { data } = await api.patch<Machine>(`/machines/${id}/remote-id`, { remoteId });
+  async updateRemoteId(id: string, remoteId: string, remotePassword?: string): Promise<Machine> {
+    const { data } = await api.patch<Machine>(`/machines/${id}/remote-id`, { remoteId, remotePassword });
     return data;
   },
 

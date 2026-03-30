@@ -364,16 +364,20 @@ export const restoreMachineToService = async (req: Request, res: Response) => {
 };
 
 /**
- * Met à jour l'ID de contrôle distant d'une machine
+ * Met à jour l'ID et/ou le mot de passe de contrôle distant d'une machine
  */
 export const updateRemoteId = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { remoteId } = req.body;
+    const { remoteId, remotePassword } = req.body;
+
+    const data: any = {};
+    if (remoteId !== undefined) data.remoteId = remoteId || null;
+    if (remotePassword !== undefined) data.remotePassword = remotePassword || null;
 
     const machine = await prisma.machine.update({
       where: { id },
-      data: { remoteId: remoteId || null },
+      data,
     });
 
     return res.json(machine);
