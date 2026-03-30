@@ -54,11 +54,20 @@ function MachineRow({ machine, onSaveRemoteId }: {
 
   const handleConnect = () => {
     if (!machine.remoteId) return;
-    const rustdeskUrl = `rustdesk://connection/new/${machine.remoteId}`;
+    // RustDesk URI with password auto-fill
+    const pwd = machine.remotePassword ? `?password=${encodeURIComponent(machine.remotePassword)}` : '';
+    const rustdeskUrl = `rustdesk://connection/new/${machine.remoteId}${pwd}`;
     window.open(rustdeskUrl, '_blank');
-    navigator.clipboard.writeText(machine.remoteId).then(() => {
-      toast.success(`ID ${machine.remoteId} copie — ouvrez RustDesk si la fenetre ne s'est pas lancee`);
-    });
+    // Fallback: copy password to clipboard for manual paste
+    if (machine.remotePassword) {
+      navigator.clipboard.writeText(machine.remotePassword).then(() => {
+        toast.success(`Connexion lancee — mot de passe copie au cas ou`);
+      });
+    } else {
+      navigator.clipboard.writeText(machine.remoteId).then(() => {
+        toast.success(`ID ${machine.remoteId} copie — ouvrez RustDesk`);
+      });
+    }
   };
 
   const handleCopyId = () => {
