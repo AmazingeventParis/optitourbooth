@@ -270,6 +270,7 @@ export interface Machine {
   imageUrl?: string; // URL de l'image du type de machine
   actif: boolean;
   notes?: string;
+  remoteId?: string; // ID de contrôle distant (RustDesk/Chrome Remote Desktop)
   aDefaut: boolean; // Indicateur de défaut
   defaut?: string; // Description du défaut
   createdAt: string;

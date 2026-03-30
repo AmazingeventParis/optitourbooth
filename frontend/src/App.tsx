@@ -52,6 +52,8 @@ const ChauffeurAgendaPage = lazy(() =>
 const BookingsPage = lazy(() => import('@/pages/BookingsPage'));
 const GaleriesClientsPage = lazy(() => import('@/pages/GaleriesClientsPage'));
 
+const TelemaintenancePage = lazy(() => import('@/pages/TelemaintenancePage'));
+
 // ============================================
 // LAZY LOADING - Page publique (review/galerie)
 // ============================================
@@ -298,6 +300,7 @@ function App() {
         <Route path="rapports" element={<Navigate to="/parametres" replace />} />
         <Route path="reservations" element={<LazyPage><BookingsPage /></LazyPage>} />
         <Route path="galeries" element={<LazyPage><GaleriesClientsPage /></LazyPage>} />
+        <Route path="telemaintenance" element={<LazyPage><TelemaintenancePage /></LazyPage>} />
         <Route path="parametres" element={<LazyPage><SettingsPage /></LazyPage>} />
       </Route>
 

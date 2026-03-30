@@ -362,3 +362,23 @@ export const restoreMachineToService = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+/**
+ * Met à jour l'ID de contrôle distant d'une machine
+ */
+export const updateRemoteId = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { remoteId } = req.body;
+
+    const machine = await prisma.machine.update({
+      where: { id },
+      data: { remoteId: remoteId || null },
+    });
+
+    return res.json(machine);
+  } catch (error) {
+    console.error('Error updating remote ID:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};

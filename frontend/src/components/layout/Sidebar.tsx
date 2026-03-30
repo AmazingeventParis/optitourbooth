@@ -13,6 +13,7 @@ import {
   ArrowDownTrayIcon,
   Cog6ToothIcon,
   PhotoIcon,
+  ComputerDesktopIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore, User } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
@@ -41,6 +42,7 @@ const navigation: Array<{
   { name: 'Agenda', href: '/agenda', icon: CalendarDaysIcon, roles: ['admin', 'chauffeur', 'preparateur', 'warehouse'] },
   { name: 'Préparations', href: '/preparations', icon: WrenchScrewdriverIcon, roles: ['admin', 'preparateur', 'warehouse'] },
   { name: 'Galeries Clients', href: '/galeries', icon: PhotoIcon, roles: ['admin'] },
+  { name: 'Telemaintenance', href: '/telemaintenance', icon: ComputerDesktopIcon, roles: ['admin'] },
   { name: 'Paramètres', href: '/parametres', icon: Cog6ToothIcon, roles: ['admin'] },
   { name: 'Historique', href: '/historique', icon: ClockIcon, roles: ['admin'] },
 ];
