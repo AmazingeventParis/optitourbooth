@@ -62,11 +62,11 @@ function MachineRow({ machine, onSaveRemoteId }: {
     // Fallback: copy password to clipboard for manual paste
     if (machine.remotePassword) {
       navigator.clipboard.writeText(machine.remotePassword).then(() => {
-        toast.success(`Connexion lancee — mot de passe copie au cas ou`);
+        toast.success(`Connexion lancée — mot de passe copié au cas où`);
       });
     } else {
       navigator.clipboard.writeText(machine.remoteId).then(() => {
-        toast.success(`ID ${machine.remoteId} copie — ouvrez RustDesk`);
+        toast.success(`ID ${machine.remoteId} copié — ouvrez RustDesk`);
       });
     }
   };
@@ -74,14 +74,14 @@ function MachineRow({ machine, onSaveRemoteId }: {
   const handleCopyId = () => {
     if (!machine.remoteId) return;
     navigator.clipboard.writeText(machine.remoteId).then(() => {
-      toast.success(`ID copie : ${machine.remoteId}`);
+      toast.success(`ID copié : ${machine.remoteId}`);
     });
   };
 
   const handleCopyPassword = () => {
     if (!machine.remotePassword) return;
     navigator.clipboard.writeText(machine.remotePassword).then(() => {
-      toast.success('Mot de passe copie');
+      toast.success('Mot de passe copié');
     });
   };
 
@@ -151,7 +151,7 @@ function MachineRow({ machine, onSaveRemoteId }: {
                 )}
               </>
             ) : (
-              <span className="text-xs text-gray-400 italic">Non configure</span>
+              <span className="text-xs text-gray-400 italic">Non configuré</span>
             )}
             <button onClick={() => setEditing(true)} className="p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors" title="Modifier">
               <PencilIcon className="h-3 w-3" />
@@ -170,7 +170,7 @@ function MachineRow({ machine, onSaveRemoteId }: {
                     <KeyIcon className="h-3.5 w-3.5" />
                   </button>
                 )}
-                <button onClick={handleConnect} className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors" title="Prendre le controle">
+                <button onClick={handleConnect} className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors" title="Prendre le contrôle">
                   <ComputerDesktopIcon className="h-3.5 w-3.5" />
                   Connecter
                 </button>
@@ -262,7 +262,7 @@ export default function TelemaintenancePage() {
   const handleSaveRemoteId = async (machineId: string, remoteId: string, remotePassword?: string) => {
     try {
       await machinesService.updateRemoteId(machineId, remoteId, remotePassword);
-      toast.success('ID distant sauvegarde');
+      toast.success('ID distant sauvegardé');
       fetchMachines();
     } catch {
       toast.error('Erreur lors de la sauvegarde');
@@ -283,10 +283,10 @@ export default function TelemaintenancePage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <ComputerDesktopIcon className="h-7 w-7 text-blue-600" />
-            Telemaintenance
+            Télémaintenance
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Controle a distance des bornes Vegas et Smakk
+            Contrôle à distance des bornes Vegas, Vegas Slim et Smakk
           </p>
         </div>
         <button
@@ -295,7 +295,7 @@ export default function TelemaintenancePage() {
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
           <ArrowPathIcon className={clsx('h-4 w-4', loading && 'animate-spin')} />
-          Rafraichir
+          Rafraîchir
         </button>
       </div>
 
