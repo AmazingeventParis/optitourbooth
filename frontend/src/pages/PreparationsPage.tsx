@@ -41,6 +41,11 @@ const machineTypeBaseConfig: Record<MachineType, {
     icon: CameraIcon,
     count: 35,
   },
+  VegasSlim: {
+    label: 'Vegas Slim',
+    icon: CameraIcon,
+    count: 20,
+  },
   Smakk: {
     label: 'Smakk',
     icon: CpuChipIcon,

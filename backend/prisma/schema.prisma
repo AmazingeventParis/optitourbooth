@@ -69,6 +69,7 @@ enum IncidentStatut {
 
 enum MachineType {
   Vegas
+  VegasSlim
   Smakk
   Ring
   Miroir

@@ -68,6 +68,28 @@ curl -s -X GET "https://coolify.swipego.app/api/v1/deploy?uuid=hooooowo888gwocok
 - **Quantites** : toujours entieres, Math.ceil sur toute unite entamee (1.4 → 2)
 - **Heures supp** : calculees a partir des horaires reels des points (pas heureFinReelle de la tournee)
 
+## RustDesk (Telemaintenance)
+- **Serveur** : auto-heberge sur 217.182.89.133 (meme serveur qu'OptiTour)
+- **Image** : `rustdesk/rustdesk-server-s6:latest` (hbbs + hbbr dans un seul container)
+- **UUID Coolify** : `x8wod0q6y4rim13oxyefnlcx`
+- **Container** : `x8wod0q6y4rim13oxyefnlcx-152219957358`
+- **Volume** : `rustdesk-data:/data`
+- **Ports** : 21115/tcp, 21116/tcp+udp, 21117/tcp, 21118/tcp, 21119/tcp
+- **Cle publique** : `7B7IEnlStsJzsT8xF6KzMyh+HB2UiFtLRpXPJsHMBRo=`
+- **Config borne** : ID Server = `217.182.89.133`, Relay Server = `217.182.89.133`, Key = cle ci-dessus
+- **Mot de passe par defaut** : `Laurytal2` (pre-rempli sur les 55 machines Vegas+Smakk)
+- **Page OptiTour** : `/telemaintenance` (admin only)
+- **IMPORTANT** : Le container a ete recree manuellement avec `-p 21116:21116/udp` car Coolify ne mappait pas l'UDP. Si Coolify redeploy, il faut re-ajouter le mapping UDP.
+
+## CRM Shootnbox (scraping)
+- **URL CRM** : `https://www.shootnbox.fr/manager2/`
+- **Login** : `d26386b04e.php` (POST event=login)
+- **DB CRM** : MySQL `shoot2` (CRM) + `shoot` (WordPress)
+- **Env vars** : `CRM_SHOOTNBOX_EMAIL`, `CRM_SHOOTNBOX_PASSWORD` (dans Coolify)
+- **Cron email sync** (`crmSync.service.ts`) : toutes les heures, scrape 3 sources (orders_ajax status=2 + archives, readiness_ajax, albums_list), match par date + fuzzy nom (societe/contact), met a jour customerEmail + customerPhone sur les bookings
+- **Cron photos sync** (`ringPhotosSync.service.ts`) : toutes les heures, scrape albums_list pour Ring+Vegas, telecharge photos depuis `shootnbox.fr/uploads/FAxxxxx/`, upload vers Google Drive via OAuth (pas service account — pas de quota). Matching Drive folders par date + nom.
+- **OAuth Drive** : utilise `GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN` (le service account n'a pas de quota d'upload)
+
 ## Problemes connus resolus
 - Timezone UTC: `new Date("YYYY-MM-DD")` en France donne jour precedent → `ensureDateUTC()`
 - Auto-dispatch: spread operator copiait objet → retourner reference

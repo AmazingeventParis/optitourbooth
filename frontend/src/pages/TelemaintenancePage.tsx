@@ -17,10 +17,11 @@ import {
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
-const BORNE_TYPES: MachineType[] = ['Vegas', 'Smakk'];
+const BORNE_TYPES: MachineType[] = ['Vegas', 'VegasSlim', 'Smakk'];
 
 const typeConfig: Record<string, { label: string; color: string; bg: string; headerColor: string }> = {
   Vegas: { label: 'Vegas', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', headerColor: 'border-amber-300' },
+  VegasSlim: { label: 'Vegas Slim', color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200', headerColor: 'border-orange-300' },
   Smakk: { label: 'Smakk', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200', headerColor: 'border-purple-300' },
 };
 
@@ -272,6 +273,7 @@ export default function TelemaintenancePage() {
   const offlineCount = machines.length - onlineCount;
 
   const vegasMachines = machines.filter(m => m.type === 'Vegas');
+  const vegasSlimMachines = machines.filter(m => m.type === 'VegasSlim');
   const smakkMachines = machines.filter(m => m.type === 'Smakk');
 
   return (
@@ -324,8 +326,9 @@ export default function TelemaintenancePage() {
       {loading ? (
         <div className="text-center py-12 text-gray-500">Chargement...</div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <MachineColumn type="Vegas" machines={vegasMachines} filter={filter} onSaveRemoteId={handleSaveRemoteId} />
+          <MachineColumn type="VegasSlim" machines={vegasSlimMachines} filter={filter} onSaveRemoteId={handleSaveRemoteId} />
           <MachineColumn type="Smakk" machines={smakkMachines} filter={filter} onSaveRemoteId={handleSaveRemoteId} />
         </div>
       )}
