@@ -119,6 +119,7 @@ async function main() {
   // Couleurs par type (alignées sur les produits dans Paramètres)
   const MACHINE_COLORS: Record<string, string> = {
     Vegas: '#616161',   // Graphite
+    VegasSlim: '#FF6D00', // Orange
     Smakk: '#F6BF26',   // Banane
     Ring: '#8E24AA',     // Raisin
     Miroir: '#F4511E',   // Mandarine
@@ -129,6 +130,7 @@ async function main() {
 
   const machineConfigs: Array<{ type: MachineType; prefix: string; count: number }> = [
     { type: MachineType.Vegas, prefix: 'V', count: 35 },
+    { type: MachineType.VegasSlim, prefix: 'VS', count: 20 },
     { type: MachineType.Smakk, prefix: 'SK', count: 20 },
     { type: MachineType.Ring, prefix: 'R', count: 10 },
     { type: MachineType.Miroir, prefix: 'MI', count: 5 },
