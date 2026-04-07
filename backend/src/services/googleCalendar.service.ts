@@ -789,7 +789,9 @@ export async function syncGoogleCalendarEvents(): Promise<{
           notes,
           calendarId,
           attachments,
-          ...(!isLivraison && { dispatched: true }),
+          // Recalculer dispatched : non-LIR toujours dispatché, LIR selon présence réelle en tournée
+          dispatched: !isLivraison || livAlreadyInTournee,
+          // Forcer undispatch si date changée (point orphelin supprimé)
           ...(livDispatchOverride === false && { dispatched: false }),
         },
         create: {
@@ -885,7 +887,9 @@ export async function syncGoogleCalendarEvents(): Promise<{
           notes,
           calendarId,
           attachments,
-          ...(!isLivraison && { dispatched: true }),
+          // Recalculer dispatched : non-LIR toujours dispatché, LIR selon présence réelle en tournée
+          dispatched: !isLivraison || recAlreadyInTournee,
+          // Forcer undispatch si date changée (point orphelin supprimé)
           ...(recDispatchOverride === false && { dispatched: false }),
         },
         create: {
