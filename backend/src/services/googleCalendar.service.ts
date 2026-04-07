@@ -598,7 +598,8 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Extraire le contenu du tag : "(LIR MIROIR)" → "MIROIR", "(R VEGAS newww)" → "R VEGAS NEWWW"
     const tagInner = fullTag.replace(/^\(/, '').replace(/\)$/, '').trim().toUpperCase();
     // Enlever le préfixe LIR/L/R/LR s'il est seul au début pour extraire le nom produit
-    const tagContent = tagInner.replace(/^(?:LIR|LR|L|R)\s+/i, '').trim();
+    // (?:\s+|$) : espace obligatoire OU fin de chaîne (pour "(LIR)" seul sans produit)
+    const tagContent = tagInner.replace(/^(?:LIR|LR|L|R)(?:\s+|$)/i, '').trim();
 
     // (LIR...) = livraison → visible dans points à dispatcher
     // Autres tags = retrait/autre → visible uniquement dans préparations et galeries
