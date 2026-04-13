@@ -12,6 +12,16 @@ import { isDriveConfigured } from './googleDrive.service.js';
 // (LIR), (LIR MIROIR), (R VEGAS newww), (L RING), (SMAKK), () etc.
 const EVENT_TAG_REGEX = /^\([^)]*\)/;
 
+// Normalisation robuste des noms pour la déduplication (accents, apostrophes, casse, espaces)
+function normalizeForMatch(name: string): string {
+  return name
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Ancien format LIR uniquement (pour compatibilité dans l'extraction du contenu)
 const LIR_PREFIX_REGEX = /^\(LIR\s*/i;
 
@@ -574,11 +584,11 @@ export async function syncGoogleCalendarEvents(): Promise<{
     },
   });
 
-  // Créer un Set pour lookup rapide : "date|clientName|type" (en lowercase)
+  // Créer un Set pour lookup rapide : "date|clientName|type" (normalisé)
   const existingPointsSet = new Set<string>();
   for (const pt of existingTourneePoints) {
     const dateStr = pt.tournee.date.toISOString().substring(0, 10);
-    const clientNom = (pt.client.societe || pt.client.nom || '').toLowerCase().trim();
+    const clientNom = normalizeForMatch(pt.client.societe || pt.client.nom || '');
     existingPointsSet.add(`${dateStr}|${clientNom}|${pt.type}`);
     // Ajouter aussi juste par date + client (sans type) pour un matching plus large
     existingPointsSet.add(`${dateStr}|${clientNom}`);
@@ -731,9 +741,9 @@ export async function syncGoogleCalendarEvents(): Promise<{
     }
 
     // Vérifier si ce client a déjà un point livraison à cette date dans une tournée
-    const clientNameLower = clientName.toLowerCase().trim();
-    const livAlreadyInTournee = existingPointsSet.has(`${startDate}|${clientNameLower}|livraison`)
-      || existingPointsSet.has(`${startDate}|${clientNameLower}`);
+    const clientNameNorm = normalizeForMatch(clientName);
+    const livAlreadyInTournee = existingPointsSet.has(`${startDate}|${clientNameNorm}|livraison`)
+      || existingPointsSet.has(`${startDate}|${clientNameNorm}`);
 
     // Point livraison (date de début)
     // Détecter changement de date sur un point déjà dispatché → re-dispatcher
@@ -789,9 +799,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           notes,
           calendarId,
           attachments,
-          // Recalculer dispatched : non-LIR toujours dispatché, LIR selon présence réelle en tournée
-          dispatched: !isLivraison || livAlreadyInTournee,
-          // Forcer undispatch si date changée (point orphelin supprimé)
+          ...(!isLivraison && { dispatched: true }),
           ...(livDispatchOverride === false && { dispatched: false }),
         },
         create: {
@@ -830,8 +838,8 @@ export async function syncGoogleCalendarEvents(): Promise<{
     }
 
     // Vérifier si ce client a déjà un point ramassage à cette date dans une tournée
-    const recAlreadyInTournee = existingPointsSet.has(`${endDate}|${clientNameLower}|ramassage`)
-      || existingPointsSet.has(`${endDate}|${clientNameLower}`);
+    const recAlreadyInTournee = existingPointsSet.has(`${endDate}|${clientNameNorm}|ramassage`)
+      || existingPointsSet.has(`${endDate}|${clientNameNorm}`);
 
     // Point ramassage (date de fin)
     // Détecter changement de date sur un point ramassage déjà dispatché → re-dispatcher
@@ -887,9 +895,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           notes,
           calendarId,
           attachments,
-          // Recalculer dispatched : non-LIR toujours dispatché, LIR selon présence réelle en tournée
-          dispatched: !isLivraison || recAlreadyInTournee,
-          // Forcer undispatch si date changée (point orphelin supprimé)
+          ...(!isLivraison && { dispatched: true }),
           ...(recDispatchOverride === false && { dispatched: false }),
         },
         create: {
