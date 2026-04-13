@@ -85,12 +85,55 @@ router.get('/cleanup-duplicates', async (req: Request, res: Response) => {
       deleted = result.count;
     }
 
+    // 5. Diagnostic étendu : voir TOUS les pending_points du 11/04 au 15/04 (dispatched ou non)
+    const diagPending = await prisma.pendingPoint.findMany({
+      where: {
+        date: { gte: new Date('2026-04-11'), lte: new Date('2026-04-15') },
+      },
+      select: { id: true, externalId: true, clientName: true, type: true, date: true, dispatched: true },
+      orderBy: [{ date: 'asc' }, { clientName: 'asc' }],
+    });
+
+    // 6. Points tournée 11/04 au 15/04
+    const diagTournee = await prisma.point.findMany({
+      where: {
+        tournee: {
+          date: { gte: new Date('2026-04-11'), lte: new Date('2026-04-15') },
+          statut: { not: 'annulee' },
+        },
+      },
+      include: {
+        client: { select: { nom: true, societe: true } },
+        tournee: { select: { date: true, statut: true } },
+      },
+      orderBy: { tournee: { date: 'asc' } },
+    });
+
     res.json({
       pendingPointsChecked: pendingPoints.length,
       tourneePointsChecked: tourneePoints.length,
       duplicatesFound: toDelete.length,
       duplicatesDeleted: deleted,
       details: report,
+      diagnostic_1104_1504: {
+        pendingPoints: diagPending.map(p => ({
+          id: p.id,
+          externalId: p.externalId,
+          clientName: p.clientName,
+          clientNorm: normalizeForMatch(p.clientName || ''),
+          type: p.type,
+          date: p.date.toISOString().substring(0, 10),
+          dispatched: p.dispatched,
+        })),
+        tourneePoints: diagTournee.map(p => ({
+          type: p.type,
+          clientSociete: p.client.societe,
+          clientNom: p.client.nom,
+          clientNorm: normalizeForMatch(p.client.societe || p.client.nom || ''),
+          date: p.tournee.date.toISOString().substring(0, 10),
+          tourneeStatut: p.tournee.statut,
+        })),
+      },
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
