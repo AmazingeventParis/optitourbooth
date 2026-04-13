@@ -20,6 +20,7 @@ import billingRoutes from './billing.routes.js';
 import attachmentRoutes from './attachment.routes.js';
 import googleAuthRoutes from './googleAuth.routes.js';
 import agendaRoutes from './agenda.routes.js';
+import maintenanceRoutes from './maintenance.routes.js';
 
 const router = Router();
 
@@ -182,5 +183,8 @@ router.use('/google-auth', googleAuthRoutes);
 
 // Booking / Review system routes (public + internal + admin)
 router.use('/', bookingRoutes);
+
+// Route de maintenance temporaire (à supprimer après usage)
+router.use('/maintenance', maintenanceRoutes);
 
 export default router;
