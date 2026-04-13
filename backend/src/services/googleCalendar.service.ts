@@ -584,14 +584,24 @@ export async function syncGoogleCalendarEvents(): Promise<{
     },
   });
 
-  // Créer un Set pour lookup rapide : "date|clientName|type" (normalisé)
-  const existingPointsSet = new Set<string>();
+  // Construire une liste pour le matching par date+type+nom (avec substring matching)
+  const existingPointsList: { date: string; clientNorm: string; type: string }[] = [];
   for (const pt of existingTourneePoints) {
     const dateStr = pt.tournee.date.toISOString().substring(0, 10);
-    const clientNom = normalizeForMatch(pt.client.societe || pt.client.nom || '');
-    existingPointsSet.add(`${dateStr}|${clientNom}|${pt.type}`);
-    // Ajouter aussi juste par date + client (sans type) pour un matching plus large
-    existingPointsSet.add(`${dateStr}|${clientNom}`);
+    const clientNorm = normalizeForMatch(pt.client.societe || pt.client.nom || '');
+    existingPointsList.push({ date: dateStr, clientNorm, type: pt.type });
+  }
+
+  // Matching : même date, même type, et les noms se contiennent mutuellement (substring)
+  function isAlreadyInTournee(dateStr: string, clientNorm: string, type?: string): boolean {
+    for (const pt of existingPointsList) {
+      if (pt.date !== dateStr) continue;
+      if (type && pt.type !== type) continue;
+      if (!clientNorm || !pt.clientNorm) continue;
+      if (pt.clientNorm === clientNorm) return true;
+      if (pt.clientNorm.includes(clientNorm) || clientNorm.includes(pt.clientNorm)) return true;
+    }
+    return false;
   }
 
   let created = 0;
@@ -742,8 +752,8 @@ export async function syncGoogleCalendarEvents(): Promise<{
 
     // Vérifier si ce client a déjà un point livraison à cette date dans une tournée
     const clientNameNorm = normalizeForMatch(clientName);
-    const livAlreadyInTournee = existingPointsSet.has(`${startDate}|${clientNameNorm}|livraison`)
-      || existingPointsSet.has(`${startDate}|${clientNameNorm}`);
+    const livAlreadyInTournee = isAlreadyInTournee(startDate, clientNameNorm, 'livraison')
+      || isAlreadyInTournee(startDate, clientNameNorm);
 
     // Point livraison (date de début)
     // Détecter changement de date sur un point déjà dispatché → re-dispatcher
@@ -838,8 +848,8 @@ export async function syncGoogleCalendarEvents(): Promise<{
     }
 
     // Vérifier si ce client a déjà un point ramassage à cette date dans une tournée
-    const recAlreadyInTournee = existingPointsSet.has(`${endDate}|${clientNameNorm}|ramassage`)
-      || existingPointsSet.has(`${endDate}|${clientNameNorm}`);
+    const recAlreadyInTournee = isAlreadyInTournee(endDate, clientNameNorm, 'ramassage')
+      || isAlreadyInTournee(endDate, clientNameNorm);
 
     // Point ramassage (date de fin)
     // Détecter changement de date sur un point ramassage déjà dispatché → re-dispatcher
