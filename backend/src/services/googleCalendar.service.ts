@@ -651,17 +651,16 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Adresse : priorité au champ location de l'événement, sinon celle de la description
     const adresse = location || parsed?.adresse || null;
 
-    // Produit : détection par tag (prioritaire) et calendrier source (fallback)
+    // Produit : détection par calendrier source (prioritaire), puis tag, puis fallback
     let produitNom: string | null = null;
 
-    // 0. Si le tag est juste un préfixe sans nom de produit, déduire le type
-    // "(R)" seul → Ring, "(LIR)" seul → Vegas (défaut)
-    const TAG_PREFIX_TO_PRODUIT: Record<string, string> = { 'R': 'Ring', 'LR': 'Ring', 'LIR': 'Vegas', 'L': 'Vegas' };
-    if (!tagContent && tagInner && TAG_PREFIX_TO_PRODUIT[tagInner]) {
-      produitNom = TAG_PREFIX_TO_PRODUIT[tagInner];
+    // 0. Calendrier Smakk → produit Smakk (prioritaire sur tout le reste)
+    // Tous les événements de l'agenda Smakk sont des bornes Smakk, quel que soit le tag
+    if (calendarId === SMAKK_CALENDAR_ID) {
+      produitNom = 'Smakk';
     }
 
-    // 1. Chercher le nom de produit dans le tag
+    // 1. Chercher le nom de produit explicite dans le tag
     // Essai exact d'abord: "(LIR MIROIR)" → tagContent="MIROIR" → match
     // Puis premier mot: "(R VEGAS newww)" → tagContent="VEGAS NEWWW" → premier mot "VEGAS" → match
     if (!produitNom && tagContent && LIR_TAG_TO_PRODUIT[tagContent]) {
@@ -692,9 +691,11 @@ export async function syncGoogleCalendarEvents(): Promise<{
       }
     }
 
-    // 3. Fallback : calendrier Smakk → produit Smakk
-    if (!produitNom && calendarId === SMAKK_CALENDAR_ID) {
-      produitNom = 'Smakk';
+    // 3. Si le tag est juste un préfixe sans nom de produit, déduire le type par défaut
+    // "(R)" seul → Ring, "(LIR)" seul → Vegas (défaut)
+    const TAG_PREFIX_TO_PRODUIT: Record<string, string> = { 'R': 'Ring', 'LR': 'Ring', 'LIR': 'Vegas', 'L': 'Vegas' };
+    if (!produitNom && !tagContent && tagInner && TAG_PREFIX_TO_PRODUIT[tagInner]) {
+      produitNom = TAG_PREFIX_TO_PRODUIT[tagInner];
     }
 
     console.log(`[Google Calendar] ${clientName} → tag="${fullTag}" produit="${tagContent}" cal="${calendarId === SMAKK_CALENDAR_ID ? 'smakk' : 'main'}" attachments=${event.attachments?.length || 0} → ${produitNom || 'aucun produit'}`);
