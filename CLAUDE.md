@@ -8,27 +8,50 @@
 - **Routing** : OSRM + VROOM (optimisation) + Nominatim (geocodage) + TomTom (trafic optionnel)
 
 ## Deploiement
-- **API** : https://optitourbooth-api.swipego.app (UUID: `kgsgo448os84csgso4o88cwo`)
-- **Web** : https://optitourbooth.swipego.app (UUID: `hooooowo888gwocoksc8c4gk`)
-- **Repo (unique pour API+Web)** : github.com/AmazingeventParis/optitourbooth (remote `fork`)
-- **Note** : Le remote `origin` (Pixoupix) n'a plus les droits push. Coolify API et Web pointent tous deux vers `AmazingeventParis/optitourbooth`.
 
-## Commandes
+### URLs et UUIDs
+- **API** : https://optitourbooth-api.swipego.app (UUID Coolify: `kgsgo448os84csgso4o88cwo`)
+- **Web** : https://optitourbooth.swipego.app (UUID Coolify: `hooooowo888gwocoksc8c4gk`)
+- **Coolify** : https://coolify.swipego.app (heberge sur 217.182.89.133)
+- **Repo GitHub** : github.com/AmazingeventParis/optitourbooth (branche `master`)
+
+### Git - Push et credentials
+Les remotes `origin` et `fork` pointent tous les deux vers `AmazingeventParis/optitourbooth` avec le token configure.
 ```bash
-# Dev
-pnpm install && pnpm dev
+# Remote origin configure avec token (pret a l'emploi)
+git remote set-url origin https://AmazingeventParis:GITHUB_TOKEN@github.com/AmazingeventParis/optitourbooth.git
+```
+**Push** : `git push origin master` fonctionne directement.
 
-# Deploy API + Frontend
-git push fork master
+### Commandes de deploiement
+```bash
+# 1. Push le code
+git push origin master
+
+# 2. Deployer l'API
 curl -s -X GET "https://coolify.swipego.app/api/v1/deploy?uuid=kgsgo448os84csgso4o88cwo&force=true" \
   -H "Authorization: Bearer 1|FNcssp3CipkrPNVSQyv3IboYwGsP8sjPskoBG3ux98e5a576"
+
+# 3. Deployer le Frontend
 curl -s -X GET "https://coolify.swipego.app/api/v1/deploy?uuid=hooooowo888gwocoksc8c4gk&force=true" \
   -H "Authorization: Bearer 1|FNcssp3CipkrPNVSQyv3IboYwGsP8sjPskoBG3ux98e5a576"
 ```
+Les 3 commandes peuvent etre chainees : `git push origin master && curl ... && curl ...`
+Le build prend environ 2-3 minutes par app.
+
+### Commandes dev local
+```bash
+pnpm install && pnpm dev
+```
+
+## Serveur de production (217.182.89.133)
+- **OS** : Linux (Coolify self-hosted)
+- **Coolify API Token** : `1|FNcssp3CipkrPNVSQyv3IboYwGsP8sjPskoBG3ux98e5a576`
+- **Services heberges** : OptiTour API, OptiTour Web, RustDesk, Redis, etc.
 
 ## Comptes
 - **Super Admin** : superadmin@optitour.fr / SuperAdmin1! → /super-admin
-- Les autres comptes (admin, chauffeur, etc.) doivent être créés manuellement via l'interface
+- Les autres comptes (admin, chauffeur, preparateur) doivent etre crees via l'interface
 
 ## Architecture multi-tenant
 - **Modele Tenant** : name, slug (unique), plan (STARTER/PRO/ENTERPRISE), config JSON, active
@@ -44,13 +67,74 @@ curl -s -X GET "https://coolify.swipego.app/api/v1/deploy?uuid=hooooowo888gwocok
 - **Build** : `NODE_ENV=development` dans le builder Docker (sinon pnpm skip devDeps)
 - **Prisma** : `prisma db push` (pas migrate deploy), installer `prisma@5` explicitement
 - **Tests** : exclus du build prod via tsconfig.json exclude
-- **Deploy** : push vers `fork` (pas `origin`), puis trigger Coolify pour les deux apps
+- **Deploy** : push vers `origin` puis trigger Coolify pour les deux apps (API + Web)
 
 ## Base de donnees
 - **Provider** : Neon (PostgreSQL serverless)
 - **Host** : `ep-divine-tree-abtk5ljg-pooler.eu-west-2.aws.neon.tech`
 - **DB** : `neondb` / **User** : `neondb_owner`
-- **28 tables** dont : users, tenants, tournees, points, clients, produits, vehicules, billing_configs, billing_entries, preparations, machines, pending_points, etc.
+- **28 tables** dont : users, tenants, tournees, points, clients, produits, vehicules, billing_configs, billing_entries, preparations, machines, pending_points, bookings, etc.
+
+## Google Calendar Sync (moteur d'import automatique)
+
+### Fonctionnement
+- **Service** : `backend/src/services/googleCalendar.service.ts`
+- **Demarrage** : `startGoogleCalendarSync()` appele dans `backend/src/app.ts:143`
+- **Frequence** : toutes les 15 min (configurable via `GOOGLE_CALENDAR_SYNC_INTERVAL`)
+- **Horizon** : aujourd'hui → +30 jours (configurable via `GOOGLE_CALENDAR_SYNC_DAYS_AHEAD`)
+- **Auth** : Service Account Google (`GOOGLE_SERVICE_ACCOUNT_BASE64`)
+
+### Calendriers sources
+- **Shootnbox (principal)** : `aureliedumas75@gmail.com`
+- **Smakk** : `faa39fa21157c487ef3a5007739b04b69a9309cffee9d8bfc4ff09c75958bbd1@group.calendar.google.com`
+
+### Detection des evenements
+- Filtre : titre commence par un tag entre parentheses → regex `^\([^)]*\)`
+- Exemples : `(LIR) Client X`, `(LIR MIROIR) Client Y`, `(R VEGAS) Client Z`, `(SMAKK) Client W`
+- Tags ignores (exact) : `TNT`, `SLIM` (pas de points crees)
+- Tags ignores (prefixe) : `CHRONO` → ignore tout tag contenant un mot commençant par CHRONO : `(LIR CHRONO)`, `(CHRONOPOST)`, `(LIR CHRONOPOST)`, etc.
+
+### Detection du produit (ordre de priorite)
+1. **Calendrier Smakk** → toujours produit Smakk (prioritaire sur tout)
+2. **Tag explicite** : `(LIR MIROIR)`→Miroir, `(LIR VEGAS)`→Vegas, `(R RING)`→Ring, etc.
+3. **Pieces jointes** : nom du fichier contient le produit
+4. **Prefixe par defaut** : `(LIR)` seul→Vegas, `(R)` seul→Ring (dernier recours)
+
+### Parsing de la description Google Calendar
+Fonction `parseDescription()` extrait automatiquement :
+- **Adresse** : detection par type de voie (rue, avenue, bd...) + code postal
+- **Contact** : nom + telephone (regex francais)
+- **Creneaux horaires** : livraison et recuperation (`10h-17h`, `de 9h30 a 11h`, etc.)
+- **Notes** : tout le reste
+
+### Table `pending_points` (PendingPoint)
+Chaque evenement Google Calendar genere 2 pending points :
+- Un de type `livraison` (date de debut) avec `externalId = {googleEventId}_livraison`
+- Un de type `ramassage` (date de fin) avec `externalId = {googleEventId}_ramassage`
+
+Champs cles :
+- `dispatched` : true = deja dans une tournee (recalcule a chaque sync)
+- `usedInPreparation` : true = utilise pour creer une preparation de borne
+- `produitNom` : Vegas, Ring, Smakk, Miroir, Spinner, Aircam, Playbox
+
+### Routes API pending points
+| Methode | Route | Auth | Role |
+|---------|-------|------|------|
+| POST | `/api/pending-points` | API Key | Creation externe (legacy Google Apps Script) |
+| POST | `/api/pending-points/manual` | JWT | admin+ : creation manuelle |
+| GET | `/api/pending-points?date=YYYY-MM-DD` | JWT | Liste points non-dispatched pour une date |
+| GET | `/api/pending-points?search=xxx` | JWT | Recherche par nom client |
+| GET | `/api/pending-points/calendar-events?calendarType=shootnbox\|smakk` | JWT | Evenements pour preparations |
+| PATCH | `/api/pending-points/:id` | JWT | admin+ : mise a jour |
+| PATCH | `/api/pending-points/:id/dispatch` | JWT | admin+ : marquer dispatche |
+| DELETE | `/api/pending-points/:id` | JWT | admin+ : suppression |
+| POST | `/api/pending-points/sync-google-calendar` | JWT | admin+ : sync manuelle |
+
+### Frontend
+- **Service** : `frontend/src/services/pendingPoints.service.ts`
+- **Planning** : `frontend/src/pages/DailyPlanningPage.tsx` — points a dispatcher
+- **Preparations** : `frontend/src/pages/PreparationsPage.tsx` — calendar events pour prep bornes
+- **Agenda** : `frontend/src/pages/AgendaPage.tsx` — vue calendrier allocations machines
 
 ## Systeme de facturation (billing)
 - **Grille tarifaire** : `/parametres` > Compta chauffeurs > Grille tarifaire
@@ -100,3 +184,18 @@ curl -s -X GET "https://coolify.swipego.app/api/v1/deploy?uuid=hooooowo888gwocok
 - Frontend repo Coolify: change de Pixoupix vers AmazingeventParis (pas de droits push sur Pixoupix)
 - Login superadmin: LoginPage faisait navigate('/') en dur → redirection par role
 - Seed non execute sur DB existante: start.sh modifie pour toujours lancer seed (upsert idempotent)
+- Google Calendar Smakk→Vegas: evenements (LIR) sur agenda Smakk detectes comme Vegas au lieu de Smakk → calendrier Smakk rendu prioritaire sur le mapping tag par defaut
+- Google Calendar dispatched fantome: points marques dispatched a tort lors du re-sync → update recalcule dispatched selon presence reelle en tournee
+
+## Ameliorations a implementer (backlog)
+
+### Google Calendar : suppression durable des pending_points (manuallyDeleted)
+**Probleme** : supprimer un pending_point dans OptiTour n'empeche pas la sync de le recreer si l'evenement Google Calendar existe encore (ou a un delai de propagation).
+**Solution proposee** :
+1. Ajouter champ `manuallyDeleted: Boolean @default(false)` sur le modele `PendingPoint` dans Prisma
+2. Le endpoint DELETE (si le point a un `externalId`) fait un soft-delete : `manuallyDeleted: true` + `dispatched: true` au lieu de supprimer la ligne
+3. Dans `syncGoogleCalendarEvents()`, avant chaque upsert, verifier si le record existant a `manuallyDeleted: true` → skip complet (ne pas toucher la ligne)
+**Comportement attendu** :
+- Point supprime manuellement → jamais recrée, meme si l'agenda Google le retourne encore
+- Recréer l'evenement dans Google Calendar → nouvel Event ID → non bloque → importe normalement
+- Le bloc est par Google Event ID (externalId), pas par nom client → pas de faux positifs si orthographe differente

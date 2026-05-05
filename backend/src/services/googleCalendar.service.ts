@@ -25,8 +25,11 @@ function normalizeForMatch(name: string): string {
 // Ancien format LIR uniquement (pour compatibilité dans l'extraction du contenu)
 const LIR_PREFIX_REGEX = /^\(LIR\s*/i;
 
-// Tags à ignorer (pas de points à créer)
+// Tags à ignorer (pas de points à créer) — correspondance exacte sur un mot du tag
 const TAGS_IGNORED = ['TNT', 'SLIM'];
+// Préfixes à ignorer — tout mot du tag commençant par ce préfixe est ignoré
+// Ex : CHRONO → ignore (CHRONO), (LIR CHRONO), (CHRONOPOST), (LIR CHRONOPOST)
+const TAGS_IGNORED_PREFIXES = ['CHRONO'];
 
 // Mapping LIR tag → nom du produit OptiTour
 // Note: colorId n'est pas accessible via service account (c'est une préférence utilisateur)
@@ -631,9 +634,11 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Autres tags = retrait/autre → visible uniquement dans préparations et galeries
     const isLivraison = /^LIR\b/i.test(tagInner);
 
-    // Vérifier si le tag est dans la liste des tags ignorés (ex: TNT, LIR TNT, LIV TNT)
+    // Vérifier si le tag est dans la liste des tags ignorés (ex: TNT, LIR TNT, LIR CHRONO, CHRONOPOST)
     const tagWords = tagInner.split(/\s+/);
-    if (TAGS_IGNORED.some(ignored => tagWords.includes(ignored)) || TAGS_IGNORED.includes(tagContent)) {
+    const isIgnoredExact = TAGS_IGNORED.some(ignored => tagWords.includes(ignored)) || TAGS_IGNORED.includes(tagContent);
+    const isIgnoredPrefix = TAGS_IGNORED_PREFIXES.some(prefix => tagWords.some(w => w.startsWith(prefix)));
+    if (isIgnoredExact || isIgnoredPrefix) {
       // Supprimer les points déjà créés pour cet événement ignoré
       const eventId = event.id || '';
       if (eventId) {
