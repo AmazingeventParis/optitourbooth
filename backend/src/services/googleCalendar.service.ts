@@ -637,7 +637,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Vérifier si le tag est dans la liste des tags ignorés (ex: TNT, LIR TNT, LIR CHRONO, CHRONOPOST)
     const tagWords = tagInner.split(/\s+/);
     const isIgnoredExact = TAGS_IGNORED.some(ignored => tagWords.includes(ignored)) || TAGS_IGNORED.includes(tagContent);
-    const isIgnoredPrefix = TAGS_IGNORED_PREFIXES.some(prefix => tagWords.some(w => w.startsWith(prefix)));
+    const isIgnoredPrefix = TAGS_IGNORED_PREFIXES.some(prefix => tagWords.some((w: string) => w.startsWith(prefix)));
     if (isIgnoredExact || isIgnoredPrefix) {
       // Supprimer les points déjà créés pour cet événement ignoré
       const eventId = event.id || '';
