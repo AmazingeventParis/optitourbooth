@@ -69,7 +69,7 @@ export const geocodingService = {
     const strategies: Array<{ name: string; params: URLSearchParams }> = [];
 
     // Extract postal code from address if present (e.g. "lieu 75016")
-    const postalMatch = adresse.match(/\b(\d{5})\b/);
+    const postalMatch = adresse.match(/(?<!\d)(\d{5})(?!\d)/);
     const extractedPostal = postalMatch?.[1];
     const effectivePostal = codePostal || extractedPostal;
     // Address without the postal code for cleaner searches

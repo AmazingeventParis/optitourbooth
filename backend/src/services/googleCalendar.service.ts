@@ -316,17 +316,17 @@ function parseDescription(rawDescription: string): ParsedDescription {
       adresse = normalizeSpaces(streetMatch[1]!);
       // Ajouter le code postal + ville s'il est dans une autre partie
       if (!/\d{5}/.test(adresse)) {
-        const postalMatch = raw.match(/(\d{5}\s+[A-ZÀ-Üa-zà-ü][a-zA-ZÀ-ü\s-]*)/);
+        const postalMatch = raw.match(/(\d{5}\s*[A-ZÀ-Üa-zà-ü][a-zA-ZÀ-ü\s-]*)/);
         if (postalMatch) adresse += ', ' + normalizeSpaces(postalMatch[1]!);
       }
     } else {
       // Pas de numéro+voie trouvé, utiliser le code postal + ville comme adresse
-      const postalMatch = raw.match(/(\d{5}\s+[A-ZÀ-Üa-zà-ü][a-zA-ZÀ-ü\s-]*)/);
+      const postalMatch = raw.match(/(\d{5}\s*[A-ZÀ-Üa-zà-ü][a-zA-ZÀ-ü\s-]*)/);
       adresse = postalMatch ? normalizeSpaces(postalMatch[1]!) : normalizeSpaces(raw);
     }
   }
-  // Normaliser l'adresse finale
-  if (adresse) adresse = normalizeSpaces(adresse);
+  // Normaliser l'adresse finale — s'assurer qu'il y a un espace entre le CP et la ville
+  if (adresse) adresse = normalizeSpaces(adresse.replace(/(\d{5})([A-ZÀ-Üa-z])/g, '$1 $2'));
 
   // === ATTRIBUTION DES CRÉNEAUX ===
   // 1. Créneaux avec contexte explicite (mot-clé livraison/récup)
