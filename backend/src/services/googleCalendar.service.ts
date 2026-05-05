@@ -129,8 +129,14 @@ function containsDate(line: string): boolean {
   return false;
 }
 
+// Normalise les confusions lettre/chiffre fréquentes dans les horaires saisis à la main
+// Ex : "23HOO" → "23H00", "9hOO" → "9h00"
+function normalizeTimeTypos(line: string): string {
+  return line.replace(/([hH])([Oo]+)/g, (_, h, oos) => h + oos.replace(/[Oo]/g, '0'));
+}
+
 function containsTimeSlot(line: string): boolean {
-  return TIME_SLOT_REGEX.test(line);
+  return TIME_SLOT_REGEX.test(normalizeTimeTypos(line));
 }
 
 function containsPhone(line: string): boolean {
@@ -155,7 +161,7 @@ function isPostalCodeLine(line: string): boolean {
 }
 
 function extractTimeSlotFromLine(line: string): string | null {
-  const match = line.match(TIME_SLOT_REGEX);
+  const match = normalizeTimeTypos(line).match(TIME_SLOT_REGEX);
   return match ? formatTimeSlot(match) : null;
 }
 
