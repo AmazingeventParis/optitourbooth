@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
-import { searchByAccount, trackParcel, inferStatutFromSignificantEvent } from '../services/chronopost.service.js';
+import { trackParcel, inferStatutFromSignificantEvent } from '../services/chronopost.service.js';
 import { ChronopostStatut } from '@prisma/client';
 
 export async function listExpeditions(req: Request, res: Response): Promise<void> {
@@ -18,74 +18,46 @@ export async function getExpedition(req: Request, res: Response): Promise<void> 
   apiResponse.success(res, exp);
 }
 
-// Import all parcels from Chronopost account for a date range
-export async function syncFromAccount(req: Request, res: Response): Promise<void> {
-  const { dateDebut, dateFin } = req.body;
+// Add a single parcel by tracking number
+export async function addExpedition(req: Request, res: Response): Promise<void> {
+  const { numeroColis, clientNom } = req.body;
 
-  const end = dateFin ? new Date(dateFin) : new Date();
-  const start = dateDebut ? new Date(dateDebut) : new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
-
-  // Chronopost expects YYYY-MM-DDTHH:mm:ss
-  const toChronoDate = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, '');
-
-  const result = await searchByAccount(toChronoDate(start), toChronoDate(end));
-
-  if (result.errorCode !== '0' && result.errorCode !== '000') {
-    apiResponse.badRequest(res, `Erreur Chronopost (${result.errorCode}): ${result.errorMessage}`);
+  if (!numeroColis?.trim()) {
+    apiResponse.badRequest(res, 'Numéro de colis requis');
     return;
   }
 
-  let created = 0;
-  let updated = 0;
+  const num = (numeroColis as string).trim().toUpperCase();
 
-  for (const parcel of result.parcels) {
-    const statut = inferStatutFromSignificantEvent(parcel.significantEvent) as ChronopostStatut;
-    const dateDepart = parcel.dateDeposit ? new Date(parcel.dateDeposit) : null;
-
-    const existing = await prisma.chronopostExpedition.findUnique({
-      where: { numeroColis: parcel.skybillNumber },
-    });
-
-    if (existing) {
-      await prisma.chronopostExpedition.update({
-        where: { numeroColis: parcel.skybillNumber },
-        data: {
-          clientNom: parcel.recipientName || existing.clientNom,
-          clientVille: parcel.recipientCity || existing.clientVille,
-          dateDepart: dateDepart || existing.dateDepart,
-          // Never overwrite manual "rentré" status
-          statut: existing.statut === 'rentre' ? 'rentre' : statut,
-          trackingData: { significantEvent: parcel.significantEvent } as any,
-        },
-      });
-      updated++;
-    } else {
-      await prisma.chronopostExpedition.create({
-        data: {
-          numeroColis: parcel.skybillNumber,
-          clientNom: parcel.recipientName || 'Inconnu',
-          clientVille: parcel.recipientCity || null,
-          clientAdresse: parcel.recipientZipCode ? `CP ${parcel.recipientZipCode}` : null,
-          dateDepart,
-          statut,
-          trackingData: { significantEvent: parcel.significantEvent } as any,
-        },
-      });
-      created++;
-    }
+  const existing = await prisma.chronopostExpedition.findUnique({ where: { numeroColis: num } });
+  if (existing) {
+    apiResponse.badRequest(res, 'Ce numéro de colis est déjà enregistré');
+    return;
   }
 
-  const expeditions = await prisma.chronopostExpedition.findMany({
-    orderBy: { dateDepart: 'desc' },
+  const result = await trackParcel(num);
+
+  const lastEvent = result.events[result.events.length - 1];
+  const statut = inferStatutFromSignificantEvent(
+    lastEvent ? { code: lastEvent.code, eventDate: lastEvent.date, eventLabel: lastEvent.libelle } : undefined,
+  ) as ChronopostStatut;
+
+  // Earliest event = depot date
+  const sortedDates = result.events.map(e => e.date).filter(Boolean).sort();
+  const dateDepart = sortedDates[0] ? new Date(sortedDates[0]) : null;
+
+  const expedition = await prisma.chronopostExpedition.create({
+    data: {
+      numeroColis: num,
+      clientNom: clientNom?.trim() || result.recipientName || 'Inconnu',
+      clientVille: result.recipientCity || null,
+      dateDepart,
+      statut,
+      trackingData: result as any,
+    },
   });
 
-  apiResponse.success(res, {
-    message: `Synchronisé : ${created} nouveau(x), ${updated} mis à jour`,
-    total: result.parcels.length,
-    created,
-    updated,
-    expeditions,
-  });
+  apiResponse.success(res, expedition);
 }
 
 export async function updateExpedition(req: Request, res: Response): Promise<void> {

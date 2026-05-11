@@ -48,14 +48,8 @@ export const chronopostService = {
     return res.data.data;
   },
 
-  async syncAccount(dateDebut?: string, dateFin?: string): Promise<{
-    message: string;
-    total: number;
-    created: number;
-    updated: number;
-    expeditions: ChronopostExpedition[];
-  }> {
-    const res = await api.post('/chronopost/sync-account', { dateDebut, dateFin });
+  async add(numeroColis: string, clientNom?: string): Promise<ChronopostExpedition> {
+    const res = await api.post('/chronopost/add', { numeroColis, clientNom });
     return res.data.data;
   },
 
