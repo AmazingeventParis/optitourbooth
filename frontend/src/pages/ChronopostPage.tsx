@@ -7,7 +7,6 @@ import {
   CheckCircleIcon,
   ArrowTopRightOnSquareIcon,
   PlusIcon,
-  CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
 import { chronopostService, ChronopostExpedition, ChronopostStatut } from '@/services/chronopost.service';
 import { useToast } from '@/hooks/useToast';
