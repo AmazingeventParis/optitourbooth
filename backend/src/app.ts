@@ -26,6 +26,7 @@ import { startGalleryWorker, stopGalleryWorker } from './workers/galleryWorker.j
 import { startCrmSync, stopCrmSync } from './services/crmSync.service.js';
 import { startRingPhotosSync, stopRingPhotosSync } from './services/ringPhotosSync.service.js';
 import { syncChronopostAuto } from './services/chronopostSync.service.js';
+import { runChronopostBulkImport } from './scripts/chronopostBulkImport.js';
 
 // Créer l'application Express
 const app = express();
@@ -191,7 +192,10 @@ async function startServer(): Promise<void> {
       // CRON: Ring photos sync (CRM → Google Drive) every hour
       startRingPhotosSync();
 
-      // CRON: Sync Chronopost account every 15 minutes
+      // One-time import of existing Chronopost parcels (no-op if already done)
+      runChronopostBulkImport().catch(console.error);
+
+      // CRON: Refresh Chronopost active parcels every 15 minutes
       syncChronopostAuto().catch(console.error); // run once at startup
       setInterval(() => syncChronopostAuto().catch(console.error), 15 * 60 * 1000);
       console.log('⏰ CRON: Chronopost sync every 15 min');
