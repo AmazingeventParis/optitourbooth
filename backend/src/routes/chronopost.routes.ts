@@ -1,0 +1,18 @@
+import { Router } from 'express';
+import * as chronopostController from '../controllers/chronopost.controller.js';
+import { authenticate, requireRole } from '../middlewares/auth.middleware.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+
+const router = Router();
+
+router.use(authenticate, requireRole('admin', 'superadmin'));
+
+router.get('/', asyncHandler(chronopostController.listExpeditions));
+router.post('/', asyncHandler(chronopostController.createExpedition));
+router.get('/:id', asyncHandler(chronopostController.getExpedition));
+router.patch('/:id', asyncHandler(chronopostController.updateExpedition));
+router.delete('/:id', asyncHandler(chronopostController.deleteExpedition));
+router.post('/:id/sync', asyncHandler(chronopostController.syncExpedition));
+router.post('/:id/return', asyncHandler(chronopostController.markAsReturned));
+
+export default router;

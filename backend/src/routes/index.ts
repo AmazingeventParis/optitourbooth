@@ -20,6 +20,7 @@ import billingRoutes from './billing.routes.js';
 import attachmentRoutes from './attachment.routes.js';
 import googleAuthRoutes from './googleAuth.routes.js';
 import agendaRoutes from './agenda.routes.js';
+import chronopostRoutes from './chronopost.routes.js';
 
 const router = Router();
 
@@ -179,6 +180,7 @@ router.use('/billing', billingRoutes);
 router.use('/agenda', agendaRoutes);
 router.use('/attachments', attachmentRoutes);
 router.use('/google-auth', googleAuthRoutes);
+router.use('/chronopost', chronopostRoutes);
 
 // Booking / Review system routes (public + internal + admin)
 router.use('/', bookingRoutes);

@@ -854,3 +854,39 @@ model BillingEntry {
   @@index([tourneeId])
   @@map("billing_entries")
 }
+
+// ----- CHRONOPOST -----
+
+enum ChronopostStatut {
+  en_preparation
+  expedie
+  livre
+  en_retour
+  rentre
+  probleme
+}
+
+model ChronopostExpedition {
+  id                  String           @id @default(uuid())
+  numeroColis         String           @unique @map("numero_colis")
+  clientNom           String           @map("client_nom")
+  clientAdresse       String?          @map("client_adresse")
+  clientVille         String?          @map("client_ville")
+  produitNom          String?          @map("produit_nom")
+  notes               String?          @db.Text
+  dateDepart          DateTime?        @map("date_depart")
+  dateLivraisonPrevue DateTime?        @map("date_livraison_prevue")
+  dateLivraisonReelle DateTime?        @map("date_livraison_reelle")
+  dateRetourPrevu     DateTime?        @map("date_retour_prevu")
+  dateRetourReel      DateTime?        @map("date_retour_reel")
+  numeroColisRetour   String?          @map("numero_colis_retour")
+  statut              ChronopostStatut @default(en_preparation)
+  trackingData        Json?            @map("tracking_data")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  @@index([dateDepart])
+  @@index([dateRetourPrevu])
+  @@index([statut])
+  @@map("chronopost_expeditions")
+}
