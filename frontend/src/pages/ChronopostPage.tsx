@@ -7,6 +7,7 @@ import {
   CheckCircleIcon,
   ArrowTopRightOnSquareIcon,
   PlusIcon,
+  CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
 import { chronopostService, ChronopostExpedition, ChronopostStatut } from '@/services/chronopost.service';
 import { useToast } from '@/hooks/useToast';
@@ -59,6 +60,8 @@ export default function ChronopostPage() {
   const [syncingOne, setSyncingOne] = useState(false);
   const [savingStatut, setSavingStatut] = useState(false);
   const [selected, setSelected] = useState<ChronopostExpedition | null>(null);
+  const [dayExpeditions, setDayExpeditions] = useState<ChronopostExpedition[] | null>(null);
+  const [dayLabel, setDayLabel] = useState('');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -140,10 +143,18 @@ export default function ChronopostPage() {
 
   function handleDayClick(day: number) {
     const { departures, normalReturns, overdueReturns } = getEventsForDay(day);
-    const all = [...departures, ...normalReturns, ...overdueReturns];
+    const all = [...departures, ...overdueReturns, ...normalReturns];
     if (all.length === 0) return;
-    const pick = departures[0] ?? normalReturns[0] ?? overdueReturns[0]!;
-    setSelected(pick);
+    const date = new Date(year, month, day);
+    const label = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    if (all.length === 1) {
+      setSelected(all[0]!);
+      setDayExpeditions(null);
+    } else {
+      setDayExpeditions(all);
+      setDayLabel(label);
+      setSelected(null);
+    }
   }
 
   async function handleAdd() {
@@ -343,10 +354,16 @@ export default function ChronopostPage() {
                 const { departures, normalReturns, overdueReturns } = getEventsForDay(day);
                 const hasEvents = departures.length + normalReturns.length + overdueReturns.length > 0;
                 const isToday = isSameDay(new Date(year, month, day), today);
-                const isSelected = selected && (
-                  (selected.dateDepart && isSameDay(new Date(selected.dateDepart), new Date(year, month, day))) ||
-                  ((selected.dateRetourReel ?? selected.dateRetourPrevu) &&
-                    isSameDay(new Date((selected.dateRetourReel ?? selected.dateRetourPrevu)!), new Date(year, month, day)))
+                const cellDate = new Date(year, month, day);
+                const isSelected = (
+                  (selected && selected.dateDepart && isSameDay(new Date(selected.dateDepart), cellDate)) ||
+                  (selected && (selected.dateRetourReel ?? selected.dateRetourPrevu) &&
+                    isSameDay(new Date((selected.dateRetourReel ?? selected.dateRetourPrevu)!), cellDate)) ||
+                  (dayExpeditions && dayExpeditions.length > 0 && (
+                    dayExpeditions.some(e => e.dateDepart && isSameDay(new Date(e.dateDepart), cellDate)) ||
+                    dayExpeditions.some(e => (e.dateRetourReel ?? e.dateRetourPrevu) &&
+                      isSameDay(new Date((e.dateRetourReel ?? e.dateRetourPrevu)!), cellDate))
+                  ))
                 );
 
                 return (
@@ -366,7 +383,7 @@ export default function ChronopostPage() {
                       {day}
                     </span>
                     <div className="flex flex-col gap-0.5 flex-1 overflow-hidden">
-                      {departures.slice(0, 2).map(e => (
+                      {departures.slice(0, 3).map(e => (
                         <div key={e.id} className="text-[9px] bg-blue-100 text-blue-700 rounded px-1 py-0.5 truncate font-medium leading-tight">
                           ✈ {e.clientNom}
                         </div>
@@ -381,9 +398,13 @@ export default function ChronopostPage() {
                           ↩ {e.clientNom}
                         </div>
                       ))}
-                      {departures.length + normalReturns.length + overdueReturns.length > 3 && (
-                        <div className="text-[9px] text-gray-400 px-1">+{departures.length + normalReturns.length + overdueReturns.length - 3}</div>
-                      )}
+                      {(() => {
+                        const total = departures.length + normalReturns.length + overdueReturns.length;
+                        const shown = Math.min(departures.length, 3) + Math.min(overdueReturns.length, 1) + Math.min(normalReturns.length, 1);
+                        return total > shown ? (
+                          <div className="text-[9px] font-semibold text-blue-500 px-1">+{total - shown} autres</div>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                 );
@@ -400,15 +421,65 @@ export default function ChronopostPage() {
         )}
       </div>
 
+      {/* Day list panel — shown when multiple events on a day */}
+      {dayExpeditions && !selected && (
+        <div className="flex-shrink-0 bg-white rounded-2xl border border-gray-200 flex flex-col overflow-hidden shadow-sm" style={{ width: '360px' }}>
+          <div className="flex items-center justify-between p-4 border-b border-gray-100">
+            <div className="min-w-0">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-0.5">Journée du</p>
+              <h3 className="font-semibold text-gray-900 capitalize">{dayLabel}</h3>
+            </div>
+            <button onClick={() => setDayExpeditions(null)} className="ml-2 p-1.5 hover:bg-gray-100 rounded-lg flex-shrink-0">
+              <XMarkIcon className="h-5 w-5 text-gray-400" />
+            </button>
+          </div>
+          <div className="overflow-y-auto flex-1 divide-y divide-gray-50">
+            {dayExpeditions.map(e => (
+              <button
+                key={e.id}
+                onClick={() => setSelected(e)}
+                className="w-full text-left p-4 hover:bg-gray-50 transition-colors flex items-center gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-medium', STATUT_COLORS[e.statut])}>
+                      {STATUT_LABELS[e.statut]}
+                    </span>
+                  </div>
+                  <p className="font-medium text-gray-900 text-sm truncate">{e.clientNom}</p>
+                  <p className="text-xs text-gray-400 font-mono mt-0.5">{e.numeroColis}</p>
+                  {e.clientVille && <p className="text-xs text-gray-400 mt-0.5">{e.clientVille}</p>}
+                </div>
+                <ChevronRightIcon className="h-4 w-4 text-gray-300 flex-shrink-0" />
+              </button>
+            ))}
+          </div>
+          <div className="p-3 border-t border-gray-100 text-center text-xs text-gray-400">
+            {dayExpeditions.length} colis ce jour
+          </div>
+        </div>
+      )}
+
       {/* Detail Panel */}
       {selected && (
         <div className="w-88 flex-shrink-0 bg-white rounded-2xl border border-gray-200 flex flex-col overflow-hidden shadow-sm" style={{ width: '360px' }}>
           <div className="flex items-center justify-between p-4 border-b border-gray-100">
-            <div className="min-w-0">
-              <p className="text-xs text-gray-400 font-mono truncate">{selected.numeroColis}</p>
-              <h3 className="font-semibold text-gray-900 mt-0.5 truncate">{selected.clientNom}</h3>
+            <div className="flex items-center gap-2 min-w-0">
+              {dayExpeditions && (
+                <button
+                  onClick={() => setSelected(null)}
+                  className="p-1.5 hover:bg-gray-100 rounded-lg flex-shrink-0 text-gray-400"
+                  title="Retour à la liste du jour"
+                >
+                  <ChevronLeftIcon className="h-4 w-4" />
+                </button>
+              )}
+              <div className="min-w-0">
+                <p className="text-xs text-gray-400 font-mono truncate">{selected.numeroColis}</p>
+                <h3 className="font-semibold text-gray-900 mt-0.5 truncate">{selected.clientNom}</h3>
+              </div>
             </div>
-            <button onClick={() => setSelected(null)} className="ml-2 p-1.5 hover:bg-gray-100 rounded-lg flex-shrink-0">
+            <button onClick={() => { setSelected(null); setDayExpeditions(null); }} className="ml-2 p-1.5 hover:bg-gray-100 rounded-lg flex-shrink-0">
               <XMarkIcon className="h-5 w-5 text-gray-400" />
             </button>
           </div>
