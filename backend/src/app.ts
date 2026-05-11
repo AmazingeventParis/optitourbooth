@@ -25,6 +25,7 @@ import { checkAndPoll, isReviewPollingConfigured } from './services/reviewPollin
 import { startGalleryWorker, stopGalleryWorker } from './workers/galleryWorker.js';
 import { startCrmSync, stopCrmSync } from './services/crmSync.service.js';
 import { startRingPhotosSync, stopRingPhotosSync } from './services/ringPhotosSync.service.js';
+import { syncChronopostAuto } from './services/chronopostSync.service.js';
 
 // Créer l'application Express
 const app = express();
@@ -189,6 +190,11 @@ async function startServer(): Promise<void> {
 
       // CRON: Ring photos sync (CRM → Google Drive) every hour
       startRingPhotosSync();
+
+      // CRON: Sync Chronopost account every 15 minutes
+      syncChronopostAuto().catch(console.error); // run once at startup
+      setInterval(() => syncChronopostAuto().catch(console.error), 15 * 60 * 1000);
+      console.log('⏰ CRON: Chronopost sync every 15 min');
 
       // CRON: Auto-update preparation statuses every 5 minutes
       setInterval(async () => {

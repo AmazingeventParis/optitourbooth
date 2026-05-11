@@ -1,19 +1,45 @@
-import axios from 'axios';
+import { request } from 'https';
 
-const CHRONOPOST_ENDPOINT = 'https://ws.chronopost.fr/tracking-cxf/TrackingServiceWS';
+const CHRONOPOST_HOST = 'ws.chronopost.fr';
+const CHRONOPOST_PATH = '/tracking-cxf/TrackingServiceWS';
 const CHRONOPOST_ACCOUNT = '15450704';
 const CHRONOPOST_PASSWORD = 'Laurytal2!';
+
+function soapPost(body: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const buf = Buffer.from(body, 'utf-8');
+    const options = {
+      hostname: CHRONOPOST_HOST,
+      path: CHRONOPOST_PATH,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml;charset=UTF-8',
+        'SOAPAction': '""',
+        'Content-Length': buf.byteLength,
+      },
+    };
+    const req = request(options, res => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => resolve(data));
+    });
+    req.on('error', reject);
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error('Chronopost timeout')); });
+    req.write(buf);
+    req.end();
+  });
+}
 
 function extractTag(xml: string, tag: string): string | null {
   const re = new RegExp(`<(?:[^:>]+:)?${tag}[^>]*>([^<]*)</(?:[^:>]+:)?${tag}>`, 'i');
   const m = xml.match(re);
-  return m && m[1] !== undefined ? m[1].trim() : null;
+  return (m && m[1] !== undefined) ? m[1].trim() : null;
 }
 
 function extractBlock(xml: string, tag: string): string | null {
   const re = new RegExp(`<(?:[^:>]+:)?${tag}[^>]*>(.*?)</(?:[^:>]+:)?${tag}>`, 'is');
   const m = xml.match(re);
-  return m ? m[1] : null;
+  return (m && m[1] !== undefined) ? m[1] : null;
 }
 
 function extractAllBlocks(xml: string, tag: string): string[] {
@@ -37,7 +63,6 @@ export interface ChronopostSearchParcel {
   recipientZipCode?: string;
   recipientCountry?: string;
   shipperRef?: string;
-  objectType?: string;
   significantEvent?: ChronopostSignificantEvent;
 }
 
@@ -46,7 +71,6 @@ export interface ChronopostEvent {
   libelle: string;
   date: string;
   site: string;
-  dest?: string;
 }
 
 export interface ChronopostTrackingResult {
@@ -58,12 +82,12 @@ export interface ChronopostTrackingResult {
   events: ChronopostEvent[];
 }
 
-// Search all parcels for the account within a date range
+// Fetch all parcels for the account within a date range
 export async function searchByAccount(
   dateDeposit: string,
   dateEndDeposit: string,
 ): Promise<{ errorCode: string; errorMessage: string; parcels: ChronopostSearchParcel[] }> {
-  const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:cxf="http://cxf.tracking.soap.chronopost.fr/">
   <soapenv:Header/>
   <soapenv:Body>
@@ -77,29 +101,23 @@ export async function searchByAccount(
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-  const response = await axios.post(CHRONOPOST_ENDPOINT, soapBody, {
-    headers: { 'Content-Type': 'text/xml;charset=UTF-8', 'SOAPAction': '""' },
-    timeout: 30000,
-  });
-
-  const xml: string = response.data;
+  const xml = await soapPost(body);
   const errorCode = extractTag(xml, 'errorCode') ?? '0';
   const errorMessage = extractTag(xml, 'errorMessage') ?? '';
 
   const parcels: ChronopostSearchParcel[] = [];
-  const blocks = extractAllBlocks(xml, 'listInfosPOD');
 
-  for (const block of blocks) {
+  for (const block of extractAllBlocks(xml, 'listInfosPOD')) {
     const skybillNumber = extractTag(block, 'skybillNumber');
     if (!skybillNumber) continue;
 
-    const eventBlock = extractBlock(block, 'significantEvent');
-    const significantEvent: ChronopostSignificantEvent | undefined = eventBlock ? {
-      code: extractTag(eventBlock, 'code') ?? '',
-      eventDate: extractTag(eventBlock, 'eventDate') ?? '',
-      eventLabel: extractTag(eventBlock, 'eventLabel') ?? '',
-      officeLabel: extractTag(eventBlock, 'officeLabel') ?? undefined,
-      zipCode: extractTag(eventBlock, 'zipCode') ?? undefined,
+    const evBlock = extractBlock(block, 'significantEvent');
+    const significantEvent: ChronopostSignificantEvent | undefined = evBlock ? {
+      code: extractTag(evBlock, 'code') ?? '',
+      eventDate: extractTag(evBlock, 'eventDate') ?? '',
+      eventLabel: extractTag(evBlock, 'eventLabel') ?? '',
+      officeLabel: extractTag(evBlock, 'officeLabel') ?? undefined,
+      zipCode: extractTag(evBlock, 'zipCode') ?? undefined,
     } : undefined;
 
     parcels.push({
@@ -110,7 +128,6 @@ export async function searchByAccount(
       recipientZipCode: extractTag(block, 'recipientZipCode') ?? undefined,
       recipientCountry: extractTag(block, 'recipientCountry') ?? undefined,
       shipperRef: extractTag(block, 'shipperRef') ?? undefined,
-      objectType: extractTag(block, 'objectType') ?? undefined,
       significantEvent,
     });
   }
@@ -120,7 +137,7 @@ export async function searchByAccount(
 
 // Get full tracking history for a single parcel
 export async function trackParcel(numeroColis: string): Promise<ChronopostTrackingResult> {
-  const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:cxf="http://cxf.tracking.soap.chronopost.fr/">
   <soapenv:Header/>
   <soapenv:Body>
@@ -131,22 +148,15 @@ export async function trackParcel(numeroColis: string): Promise<ChronopostTracki
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-  const response = await axios.post(CHRONOPOST_ENDPOINT, soapBody, {
-    headers: { 'Content-Type': 'text/xml;charset=UTF-8', 'SOAPAction': '""' },
-    timeout: 15000,
-  });
-
-  const xml: string = response.data;
+  const xml = await soapPost(body);
   const errorCode = extractTag(xml, 'errorCode') ?? '0';
   const errorMessage = extractTag(xml, 'errorMessage') ?? '';
 
-  const eventBlocks = extractAllBlocks(xml, 'listEventInfoComp');
-  const events: ChronopostEvent[] = eventBlocks.map(block => ({
+  const events: ChronopostEvent[] = extractAllBlocks(xml, 'listEventInfoComp').map(block => ({
     code: extractTag(block, 'code') ?? '',
-    libelle: extractTag(block, 'eventLabel') ?? extractTag(block, 'libelle') ?? '',
-    date: extractTag(block, 'eventDate') ?? extractTag(block, 'date') ?? '',
-    site: extractTag(block, 'officeLabel') ?? extractTag(block, 'site') ?? '',
-    dest: extractTag(block, 'dest') ?? undefined,
+    libelle: extractTag(block, 'eventLabel') ?? '',
+    date: extractTag(block, 'eventDate') ?? '',
+    site: extractTag(block, 'officeLabel') ?? '',
   }));
 
   return {
@@ -161,8 +171,8 @@ export async function trackParcel(numeroColis: string): Promise<ChronopostTracki
 
 export function inferStatutFromSignificantEvent(event?: ChronopostSignificantEvent): string {
   if (!event) return 'expedie';
-  const label = event.eventLabel?.toLowerCase() ?? '';
-  const code = event.code?.toUpperCase() ?? '';
+  const label = (event.eventLabel ?? '').toLowerCase();
+  const code = (event.code ?? '').toUpperCase();
   if (label.includes('livr') || code === 'LD' || code === 'D1') return 'livre';
   if (label.includes('retour') || code === 'RI' || code === 'RET') return 'en_retour';
   if (label.includes('absent') || label.includes('avis de passage') || code === 'AM') return 'probleme';

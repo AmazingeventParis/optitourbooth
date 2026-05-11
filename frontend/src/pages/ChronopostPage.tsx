@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -6,7 +6,6 @@ import {
   ArrowPathIcon,
   CheckCircleIcon,
   ArrowTopRightOnSquareIcon,
-  CloudArrowDownIcon,
 } from '@heroicons/react/24/outline';
 import { chronopostService, ChronopostExpedition, ChronopostStatut } from '@/services/chronopost.service';
 import { useToast } from '@/hooks/useToast';
@@ -55,19 +54,14 @@ function isSameDay(d1: Date, d2: Date): boolean {
 export default function ChronopostPage() {
   const [expeditions, setExpeditions] = useState<ChronopostExpedition[]>([]);
   const [loading, setLoading] = useState(true);
-  const [importing, setImporting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [syncingOne, setSyncingOne] = useState(false);
   const [savingStatut, setSavingStatut] = useState(false);
   const [selected, setSelected] = useState<ChronopostExpedition | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [showImportModal, setShowImportModal] = useState(false);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
   const { success, error: showError } = useToast();
-
-  // Import form
-  const defaultEnd = new Date();
-  const defaultStart = new Date(defaultEnd.getTime() - 90 * 24 * 60 * 60 * 1000);
-  const [importStart, setImportStart] = useState(toInputDate(defaultStart));
-  const [importEnd, setImportEnd] = useState(toInputDate(defaultEnd));
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Edit state in detail panel
   const [editProduit, setEditProduit] = useState('');
@@ -75,18 +69,29 @@ export default function ChronopostPage() {
   const [editNotes, setEditNotes] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await chronopostService.list();
       setExpeditions(data);
+      setLastSync(new Date());
+      if (selected) {
+        const refreshed = data.find(e => e.id === selected.id);
+        if (refreshed) setSelected(refreshed);
+      }
     } catch {
-      showError('Erreur', 'Impossible de charger les expéditions');
+      if (!silent) showError('Erreur', 'Impossible de charger les expéditions');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selected]);
 
-  useEffect(() => { load(); }, [load]);
+  // Load on mount + auto-refresh every 5 min
+  useEffect(() => {
+    load();
+    intervalRef.current = setInterval(() => load(true), 5 * 60 * 1000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, []);
 
   // Sync edit fields when selection changes
   useEffect(() => {
@@ -136,17 +141,12 @@ export default function ChronopostPage() {
     setSelected(pick);
   }
 
-  async function handleImport() {
-    setImporting(true);
+  async function handleRefresh() {
+    setRefreshing(true);
     try {
-      const result = await chronopostService.syncAccount(importStart, importEnd);
-      setExpeditions(result.expeditions);
-      setShowImportModal(false);
-      success(result.message);
-    } catch (e: any) {
-      showError('Erreur', e?.response?.data?.message ?? 'Échec de l\'importation');
+      await load(true);
     } finally {
-      setImporting(false);
+      setRefreshing(false);
     }
   }
 
@@ -249,27 +249,29 @@ export default function ChronopostPage() {
                 : 'Aucun colis importé'}
             </p>
           </div>
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-          >
-            <CloudArrowDownIcon className="h-4 w-4" />
-            Importer depuis Chronopost
-          </button>
+          <div className="flex items-center gap-3">
+            {lastSync && (
+              <span className="text-xs text-gray-400">
+                Sync {lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              <ArrowPathIcon className={clsx('h-4 w-4', refreshing && 'animate-spin')} />
+              {refreshing ? 'Actualisation...' : 'Actualiser'}
+            </button>
+          </div>
         </div>
 
         {/* Empty state */}
         {expeditions.length === 0 && (
           <div className="flex-1 flex flex-col items-center justify-center text-center py-16">
-            <CloudArrowDownIcon className="h-16 w-16 text-gray-200 mb-4" />
-            <p className="text-gray-500 text-lg font-medium mb-1">Aucun colis importé</p>
-            <p className="text-gray-400 text-sm mb-6">Importez vos expéditions depuis votre compte Chronopost</p>
-            <button
-              onClick={() => setShowImportModal(true)}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-            >
-              Importer maintenant
-            </button>
+            <ArrowPathIcon className="h-16 w-16 text-gray-200 mb-4" />
+            <p className="text-gray-500 text-lg font-medium mb-1">Aucun colis pour le moment</p>
+            <p className="text-gray-400 text-sm">La synchronisation avec Chronopost est automatique (toutes les 15 min)</p>
           </div>
         )}
 
@@ -523,66 +525,6 @@ export default function ChronopostPage() {
         </div>
       )}
 
-      {/* Import Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Importer depuis Chronopost</h2>
-                <p className="text-sm text-gray-400 mt-0.5">Compte 15450704</p>
-              </div>
-              <button onClick={() => setShowImportModal(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
-                <XMarkIcon className="h-5 w-5 text-gray-400" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Du</label>
-                <input
-                  type="date"
-                  value={importStart}
-                  onChange={e => setImportStart(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Au</label>
-                <input
-                  type="date"
-                  value={importEnd}
-                  onChange={e => setImportEnd(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <p className="text-xs text-gray-400">
-                Tous les colis déposés sur cette période seront importés. Les expéditions déjà présentes seront mises à jour.
-              </p>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowImportModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleImport}
-                disabled={importing}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-              >
-                {importing ? (
-                  <><ArrowPathIcon className="h-4 w-4 animate-spin" /> Importation...</>
-                ) : (
-                  <><CloudArrowDownIcon className="h-4 w-4" /> Importer</>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
