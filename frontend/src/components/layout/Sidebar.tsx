@@ -14,6 +14,7 @@ import {
   Cog6ToothIcon,
   PhotoIcon,
   ComputerDesktopIcon,
+  ArchiveBoxIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore, User } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
@@ -45,6 +46,7 @@ const navigation: Array<{
   { name: 'Télémaintenance', href: '/telemaintenance', icon: ComputerDesktopIcon, roles: ['admin'] },
   { name: 'Paramètres', href: '/parametres', icon: Cog6ToothIcon, roles: ['admin'] },
   { name: 'Historique', href: '/historique', icon: ClockIcon, roles: ['admin'] },
+  { name: 'Chronopost', href: '/chronopost', icon: ArchiveBoxIcon, roles: ['admin'] },
 ];
 
 function SidebarContent({ collapsed, onToggleCollapse }: { collapsed?: boolean; onToggleCollapse?: () => void }) {

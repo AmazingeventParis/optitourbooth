@@ -53,6 +53,7 @@ const BookingsPage = lazy(() => import('@/pages/BookingsPage'));
 const GaleriesClientsPage = lazy(() => import('@/pages/GaleriesClientsPage'));
 
 const TelemaintenancePage = lazy(() => import('@/pages/TelemaintenancePage'));
+const ChronopostPage = lazy(() => import('@/pages/ChronopostPage'));
 
 // ============================================
 // LAZY LOADING - Page publique (review/galerie)
@@ -297,6 +298,7 @@ function App() {
         <Route path="planning" element={<LazyPage><DailyPlanningPage /></LazyPage>} />
         <Route path="agenda" element={<LazyPage><AgendaPage /></LazyPage>} />
         <Route path="historique" element={<LazyPage><TourneesPage /></LazyPage>} />
+        <Route path="chronopost" element={<LazyPage><ChronopostPage /></LazyPage>} />
         <Route path="rapports" element={<Navigate to="/parametres" replace />} />
         <Route path="reservations" element={<LazyPage><BookingsPage /></LazyPage>} />
         <Route path="galeries" element={<LazyPage><GaleriesClientsPage /></LazyPage>} />
