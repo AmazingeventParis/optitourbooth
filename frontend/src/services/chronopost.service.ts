@@ -80,4 +80,9 @@ export const chronopostService = {
   async updateSession(cookies: string): Promise<void> {
     await api.post('/chronopost/session', { cookies });
   },
+
+  async syncAll(): Promise<ChronopostExpedition[]> {
+    const res = await api.post('/chronopost/sync-all');
+    return res.data.data;
+  },
 };

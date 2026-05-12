@@ -9,6 +9,7 @@ router.use(authenticate, requireRole('admin', 'superadmin'));
 
 router.get('/', asyncHandler(chronopostController.listExpeditions));
 router.post('/add', asyncHandler(chronopostController.addExpedition));
+router.post('/sync-all', asyncHandler(chronopostController.syncAll));
 router.get('/session', asyncHandler(chronopostController.getChronotraceSessionStatus));
 router.post('/session', asyncHandler(chronopostController.updateChronotraceSession));
 router.patch('/:id', asyncHandler(chronopostController.updateExpedition));

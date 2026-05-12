@@ -205,6 +205,24 @@ export default function ChronopostPage() {
     }
   }
 
+  async function handleSyncAll() {
+    setRefreshing(true);
+    try {
+      const data = await chronopostService.syncAll();
+      setExpeditions(data);
+      setLastSync(new Date());
+      setSelected(prev => {
+        if (!prev) return prev;
+        return data.find(e => e.id === prev.id) ?? null;
+      });
+      success('Synchronisation complète effectuée');
+    } catch {
+      showError('Erreur', 'Synchronisation échouée');
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   async function handleSyncOne() {
     if (!selected) return;
     setSyncingOne(true);
@@ -331,9 +349,18 @@ export default function ChronopostPage() {
               onClick={handleRefresh}
               disabled={refreshing}
               className="p-2 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors"
-              title="Actualiser"
+              title="Recharger la liste"
             >
               <ArrowPathIcon className={clsx('h-4 w-4', refreshing && 'animate-spin')} />
+            </button>
+            <button
+              onClick={handleSyncAll}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              title="Synchroniser tous les colis via Chronotrace"
+            >
+              <ArrowPathIcon className={clsx('h-4 w-4', refreshing && 'animate-spin')} />
+              Sync
             </button>
             <button
               onClick={() => setShowSessionModal(true)}
