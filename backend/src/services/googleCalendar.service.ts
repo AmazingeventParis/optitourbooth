@@ -622,7 +622,17 @@ export async function syncGoogleCalendarEvents(): Promise<{
     const rawTitle = (event.summary || '').trim();
     const tagMatch = rawTitle.match(EVENT_TAG_REGEX);
     const fullTag = tagMatch ? tagMatch[0] : '';
-    const clientName = rawTitle.substring(fullTag.length).trim() || 'Client inconnu';
+    // Normaliser la casse : "sncf DRANCY" → "Sncf Drancy", "MARIAGE DUPONT" → "Mariage Dupont"
+    // Préserve les sigles tout-caps connus : SNCF, VIP, SAS, SARL, SCI, SA, EURL
+    const KNOWN_ACRONYMS = new Set(['SNCF', 'VIP', 'SAS', 'SARL', 'SCI', 'SA', 'EURL', 'EARL', 'TGI', 'CHU', 'CHR', 'EHPAD', 'HLM', 'ZAC', 'ZA', 'ZI']);
+    const rawClientName = rawTitle.substring(fullTag.length).trim();
+    const clientName = rawClientName
+      ? rawClientName.replace(/\S+/g, w =>
+          KNOWN_ACRONYMS.has(w.toUpperCase())
+            ? w.toUpperCase()
+            : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+        )
+      : 'Client inconnu';
 
     // Extraire le contenu du tag : "(LIR MIROIR)" → "MIROIR", "(R VEGAS newww)" → "R VEGAS NEWWW"
     const tagInner = fullTag.replace(/^\(/, '').replace(/\)$/, '').trim().toUpperCase();
