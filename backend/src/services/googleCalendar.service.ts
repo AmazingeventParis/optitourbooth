@@ -355,6 +355,16 @@ function parseDescription(rawDescription: string): ParsedDescription {
   if (!creneauLivraison && unknownSlots.length > 0) creneauLivraison = unknownSlots[0]!.slot;
   if (!creneauRecuperation && unknownSlots.length > 1) creneauRecuperation = unknownSlots[1]!.slot;
 
+  // 3. Warning si plusieurs créneaux sans contexte explicite (planning multi-dates dans la description)
+  //    On ne peut pas mapper chaque créneau à sa date → on prend le premier mais on signale l'ambiguïté
+  if (unknownSlots.length > 2) {
+    console.warn(
+      `[ParseDescription] ⚠ ${unknownSlots.length} créneaux sans contexte trouvés — seuls les 2 premiers retenus. ` +
+      `Slots: ${unknownSlots.map(s => s.slot).join(', ')}. ` +
+      `Précisez "Livraison:" et "Récupération:" dans la description pour éviter l'ambiguïté.`
+    );
+  }
+
   // === CONTACT : dernier recours dans les notes ===
   if (!contactTelephone) {
     for (const note of notesLines) {
