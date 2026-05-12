@@ -728,9 +728,19 @@ export async function syncGoogleCalendarEvents(): Promise<{
       endDate = endDateObj.toISOString().substring(0, 10);
     }
 
-    // Créneaux : extraits de la description
-    const creneauLivDebut = parsed?.creneauLivraison?.split('-')[0] || null;
-    const creneauLivFin = parsed?.creneauLivraison?.split('-')[1] || null;
+    // Extraire l'heure locale directement depuis la chaîne ISO (pas de conversion timezone)
+    // "2026-05-18T09:00:00+02:00" → "09:00"
+    function extractLocalTime(dateTimeStr: string | null | undefined): string | null {
+      if (!dateTimeStr) return null;
+      const m = dateTimeStr.match(/T(\d{2}):(\d{2})/);
+      return m ? `${m[1]}:${m[2]}` : null;
+    }
+    const eventStartTime = extractLocalTime(event.start?.dateTime);
+    const eventEndTime = extractLocalTime(event.end?.dateTime);
+
+    // Créneaux : description en priorité, puis heure Google Calendar de l'événement
+    const creneauLivDebut = parsed?.creneauLivraison?.split('-')[0] || eventStartTime || null;
+    const creneauLivFin = parsed?.creneauLivraison?.split('-')[1] || eventEndTime || null;
     const creneauRecDebut = parsed?.creneauRecuperation?.split('-')[0] || null;
     const creneauRecFin = parsed?.creneauRecuperation?.split('-')[1] || null;
 
