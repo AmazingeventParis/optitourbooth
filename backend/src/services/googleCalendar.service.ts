@@ -681,8 +681,17 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Parser la description
     const parsed = description ? parseDescription(description) : null;
 
-    // Adresse : priorité au champ location de l'événement, sinon celle de la description
-    const adresse = location || parsed?.adresse || null;
+    // Adresse : location Google Calendar en priorité, SAUF si trop court/vague (< 8 chars
+    // ou sans chiffre ni type de voie ni CP) — dans ce cas la description peut être plus précise
+    const locationIsVague = !location || location.trim().length < 8 || (
+      !/\d/.test(location) &&
+      !POSTAL_CODE_REGEX.test(location) &&
+      !ADDRESS_REGEX.test(location) &&
+      !VENUE_KEYWORDS.test(location)
+    );
+    const adresse = locationIsVague
+      ? (parsed?.adresse || (location.trim() || null))
+      : location.trim();
 
     // Produit : détection par calendrier source (prioritaire), puis tag, puis fallback
     let produitNom: string | null = null;
