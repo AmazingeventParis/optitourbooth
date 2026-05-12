@@ -64,8 +64,10 @@ interface ParsedDescription {
 const PHONE_REGEX = /(?:\+33\s?[1-9]|0[1-9])[\s.\-]?(?:\d{2}[\s.\-]?){4}/g;
 
 // Créneau horaire : "10h-17h", "10H00-12H00", "10h à 14h", "entre 14h et 18h",
-// "10:00-14:00", "de 9h30 à 11h", "9h - 12h", "10h>14h"
-const TIME_SLOT_REGEX = /(\d{1,2})\s*[hH:]\s*(\d{0,2})\s*(?:-|–|—|à|a|et|>)\s*(\d{1,2})\s*[hH:]\s*(\d{0,2})/i;
+// "10:00-14:00", "de 9h30 à 11h", "9h - 12h", "10h>14h", "9h 16h" (espace seul)
+// Le séparateur \s (espace) est en dernier pour éviter les faux positifs :
+// la regex backtracke le \s* précédent pour l'offrir au séparateur uniquement si nécessaire.
+const TIME_SLOT_REGEX = /(\d{1,2})\s*[hH:]\s*(\d{0,2})\s*(?:-|–|—|à|a|et|>|\s)\s*(\d{1,2})\s*[hH:]\s*(\d{0,2})/i;
 
 // Heure simple : "10h", "14h30", "9H00" (sans plage, pour cas isolés)
 const SINGLE_TIME_REGEX = /\b(\d{1,2})\s*[hH:]\s*(\d{0,2})\b/;
@@ -74,8 +76,9 @@ const SINGLE_TIME_REGEX = /\b(\d{1,2})\s*[hH:]\s*(\d{0,2})\b/;
 const STREET_TYPES = 'rue|avenue|av\\.?|bd\\.?|boulevard|place|pl\\.?|allée|all\\.?|chemin|ch\\.?|impasse|imp\\.?|passage|pass\\.?|quai|cours|route|rte\\.?|voie|square|sq\\.?|résidence|rés\\.?|cité|lot\\.?|lotissement|parvis|esplanade|promenade|rond[- ]?point|carrefour|hameau|lieu[- ]?dit|zone|za|zi|sentier|sente|villa|cour|galerie|mail|terre[- ]?plein|montée|rampe|traverse|ruelle|venelle|drève|chemin de|faubourg|fg\\.?';
 const ADDRESS_REGEX = new RegExp(`\\d+\\s*[,.]?\\s*(?:${STREET_TYPES})\\b`, 'i');
 
-// Code postal français : 75002 PARIS, 92100 Boulogne-Billancourt
-const POSTAL_CODE_REGEX = /\b\d{5}\s+[A-ZÀ-Ü][a-zA-ZÀ-ü\s-]+/;
+// Code postal français : 75002 PARIS, 92100 Boulogne-Billancourt, 93210 – Saint-Denis
+// Accepte tiret long (–) ou tiret cadratin (—) entre le CP et la ville (format courant)
+const POSTAL_CODE_REGEX = /\b\d{5}[\s–—]+[A-ZÀ-Ü][a-zA-ZÀ-ü\s-]+/;
 
 // Date française longue : "Vendredi 13 mars 2026", "lundi 5 janvier 2025", "Le 20 mars 2026", "Le 21 mars"
 const MONTH_NAMES = 'janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[ûu]t|septembre|octobre|novembre|d[ée]cembre';
@@ -167,7 +170,7 @@ function isAddressLine(line: string): boolean {
 }
 
 function isPostalCodeLine(line: string): boolean {
-  return /^\d{5}\s+[A-ZÀ-Üa-zà-ü]/.test(line) && !containsPhone(line);
+  return /^\d{5}[\s–—]+[A-ZÀ-Üa-zà-ü]/.test(line) && !containsPhone(line);
 }
 
 function extractTimeSlotFromLine(line: string): string | null {
@@ -332,17 +335,17 @@ function parseDescription(rawDescription: string): ParsedDescription {
       adresse = normalizeSpaces(streetMatch[1]!);
       // Ajouter le code postal + ville s'il est dans une autre partie
       if (!/\d{5}/.test(adresse)) {
-        const postalMatch = raw.match(/(\d{5}\s*[A-ZÀ-Üa-zà-ü][a-zA-ZÀ-ü\s-]*)/);
+        const postalMatch = raw.match(/(\d{5}[\s–—]*[A-ZÀ-Üa-zà-ü][a-zA-ZÀ-ü\s-]*)/);
         if (postalMatch) adresse += ', ' + normalizeSpaces(postalMatch[1]!);
       }
     } else {
       // Pas de numéro+voie trouvé, utiliser le code postal + ville comme adresse
-      const postalMatch = raw.match(/(\d{5}\s*[A-ZÀ-Üa-zà-ü][a-zA-ZÀ-ü\s-]*)/);
+      const postalMatch = raw.match(/(\d{5}[\s–—]*[A-ZÀ-Üa-zà-ü][a-zA-ZÀ-ü\s-]*)/);
       adresse = postalMatch ? normalizeSpaces(postalMatch[1]!) : normalizeSpaces(raw);
     }
   }
-  // Normaliser l'adresse finale — s'assurer qu'il y a un espace entre le CP et la ville
-  if (adresse) adresse = normalizeSpaces(adresse.replace(/(\d{5})([A-ZÀ-Üa-z])/g, '$1 $2'));
+  // Normaliser l'adresse finale — remplacer tirets longs et coller CP+ville avec un espace
+  if (adresse) adresse = normalizeSpaces(adresse.replace(/(\d{5})\s*[–—]\s*/g, '$1 ').replace(/(\d{5})([A-ZÀ-Üa-z])/g, '$1 $2'));
 
   // === ATTRIBUTION DES CRÉNEAUX ===
   // 1. Créneaux avec contexte explicite (mot-clé livraison/récup)
