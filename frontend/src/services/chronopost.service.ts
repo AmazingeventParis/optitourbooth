@@ -71,4 +71,13 @@ export const chronopostService = {
     const res = await api.post(`/chronopost/${id}/return`);
     return res.data.data;
   },
+
+  async getSessionStatus(): Promise<{ configured: boolean; updatedAt: string | null }> {
+    const res = await api.get('/chronopost/session');
+    return res.data.data;
+  },
+
+  async updateSession(cookies: string): Promise<void> {
+    await api.post('/chronopost/session', { cookies });
+  },
 };

@@ -890,3 +890,12 @@ model ChronopostExpedition {
   @@index([statut])
   @@map("chronopost_expeditions")
 }
+
+/// Session Chronotrace (cookies d'authentification, singleton)
+model ChronotraceSession {
+  id        String   @id @default("singleton")
+  cookies   String   @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("chronotrace_session")
+}

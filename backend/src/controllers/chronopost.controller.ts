@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
 import { trackParcel, inferStatutFromSignificantEvent } from '../services/chronopost.service.js';
+import { saveSession, getSessionStatus } from '../services/chronotraceApi.service.js';
 import { ChronopostStatut } from '@prisma/client';
 
 export async function listExpeditions(req: Request, res: Response): Promise<void> {
@@ -129,4 +130,19 @@ export async function markAsReturned(req: Request, res: Response): Promise<void>
     data: { statut: 'rentre', dateRetourReel: new Date() },
   });
   apiResponse.success(res, updated);
+}
+
+export async function updateChronotraceSession(req: Request, res: Response): Promise<void> {
+  const { cookies } = req.body;
+  if (!cookies?.trim()) {
+    apiResponse.badRequest(res, 'Cookies requis');
+    return;
+  }
+  await saveSession(cookies.trim());
+  apiResponse.success(res, { message: 'Session Chronotrace mise à jour' });
+}
+
+export async function getChronotraceSessionStatus(req: Request, res: Response): Promise<void> {
+  const status = await getSessionStatus();
+  apiResponse.success(res, status);
 }

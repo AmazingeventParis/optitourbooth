@@ -7,6 +7,8 @@ import {
   CheckCircleIcon,
   ArrowTopRightOnSquareIcon,
   PlusIcon,
+  KeyIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import { chronopostService, ChronopostExpedition, ChronopostStatut } from '@/services/chronopost.service';
 import { useToast } from '@/hooks/useToast';
@@ -67,6 +69,11 @@ export default function ChronopostPage() {
   const [addNumeroColis, setAddNumeroColis] = useState('');
   const [addClientNom, setAddClientNom] = useState('');
   const [adding, setAdding] = useState(false);
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [sessionConfigured, setSessionConfigured] = useState<boolean | null>(null);
+  const [sessionUpdatedAt, setSessionUpdatedAt] = useState<string | null>(null);
+  const [newCookies, setNewCookies] = useState('');
+  const [savingSession, setSavingSession] = useState(false);
   const { success, error: showError } = useToast();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -75,6 +82,16 @@ export default function ChronopostPage() {
   const [editDateRetour, setEditDateRetour] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  const loadSession = useCallback(async () => {
+    try {
+      const status = await chronopostService.getSessionStatus();
+      setSessionConfigured(status.configured);
+      setSessionUpdatedAt(status.updatedAt);
+    } catch {
+      // non-critical
+    }
+  }, []);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -96,6 +113,7 @@ export default function ChronopostPage() {
   // Load on mount + auto-refresh every 5 min
   useEffect(() => {
     load();
+    loadSession();
     intervalRef.current = setInterval(() => load(true), 5 * 60 * 1000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
@@ -256,6 +274,23 @@ export default function ChronopostPage() {
     }
   }
 
+  async function handleSaveSession() {
+    if (!newCookies.trim()) return;
+    setSavingSession(true);
+    try {
+      await chronopostService.updateSession(newCookies.trim());
+      setSessionConfigured(true);
+      setSessionUpdatedAt(new Date().toISOString());
+      setShowSessionModal(false);
+      setNewCookies('');
+      success('Session Chronotrace mise à jour — la sync démarrera dans 15 min');
+    } catch {
+      showError('Erreur', 'Impossible de sauvegarder la session');
+    } finally {
+      setSavingSession(false);
+    }
+  }
+
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
   const monthLabel = currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
@@ -295,6 +330,21 @@ export default function ChronopostPage() {
               title="Actualiser"
             >
               <ArrowPathIcon className={clsx('h-4 w-4', refreshing && 'animate-spin')} />
+            </button>
+            <button
+              onClick={() => setShowSessionModal(true)}
+              className={clsx(
+                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors',
+                sessionConfigured === false
+                  ? 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                  : 'border-gray-200 text-gray-500 hover:bg-gray-50',
+              )}
+              title="Configuration sync automatique"
+            >
+              {sessionConfigured === false
+                ? <ExclamationTriangleIcon className="h-4 w-4" />
+                : <KeyIcon className="h-4 w-4" />}
+              Session
             </button>
             <button
               onClick={() => setShowAddModal(true)}
@@ -630,6 +680,71 @@ export default function ChronopostPage() {
                 className="px-3 py-2 border border-red-200 text-red-600 rounded-lg text-xs hover:bg-red-50 transition-colors"
               >
                 Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Session modal */}
+      {showSessionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={e => { if (e.target === e.currentTarget) setShowSessionModal(false); }}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Sync automatique Chronotrace</h2>
+                <p className="text-sm text-gray-400 mt-0.5">
+                  {sessionConfigured
+                    ? `Session active · mise à jour ${sessionUpdatedAt ? new Date(sessionUpdatedAt).toLocaleDateString('fr-FR') : '—'}`
+                    : 'Aucune session configurée — les nouveaux colis ne se détectent pas'}
+                </p>
+              </div>
+              <button onClick={() => setShowSessionModal(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <XMarkIcon className="h-5 w-5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="bg-blue-50 rounded-lg p-3 mb-4 text-sm text-blue-800">
+              <p className="font-medium mb-1">Comment récupérer les cookies ?</p>
+              <ol className="list-decimal list-inside space-y-1 text-xs text-blue-700">
+                <li>Allez sur <strong>chronotrace.chronopost.fr</strong> et connectez-vous</li>
+                <li>Ouvrez DevTools → Réseau (F12)</li>
+                <li>Rechargez la page ou faites une action</li>
+                <li>Cliquez sur une requête vers <strong>predefinedSearch</strong></li>
+                <li>Dans En-têtes → Copiez la valeur du header <strong>Cookie</strong></li>
+                <li>Collez-la ci-dessous</li>
+              </ol>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Valeur du header Cookie
+              </label>
+              <textarea
+                value={newCookies}
+                onChange={e => setNewCookies(e.target.value)}
+                rows={4}
+                placeholder="cv4Auth=...; CHRONOTRACESESSIONID=...; cf_clearance=..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Ces cookies expirent après quelques semaines — revenez ici pour les renouveler si la sync ne fonctionne plus.
+              </p>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => setShowSessionModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSaveSession}
+                disabled={savingSession || !newCookies.trim()}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+              >
+                {savingSession ? <><ArrowPathIcon className="h-4 w-4 animate-spin" /> Sauvegarde...</> : 'Enregistrer la session'}
               </button>
             </div>
           </div>
