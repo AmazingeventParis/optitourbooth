@@ -49,10 +49,14 @@ export async function reconcileReturnParcels(): Promise<void> {
     );
 
     if (!match) {
-      console.log(`[Reconcile] No outbound match for return ${ret.numeroColis} (${ret.clientNom} → "${normalizedRet}")`);
-      // Debug: show what outbounds are available
-      for (const o of outbounds) {
-        console.log(`  candidate: ${o.numeroColis} "${o.clientNom}" → "${normalizeClientNom(o.clientNom)}"`);
+      const isAmazingEvent = /amazing\s*event/i.test(ret.clientNom);
+      if (isAmazingEvent) {
+        console.warn(`[Reconcile] Return ${ret.numeroColis} has clientNom="${ret.clientNom}" (AMAZING EVENT = wrong name from SOAP). Fix manually via UI: open the outbound → set "N° colis retour" = ${ret.numeroColis}`);
+      } else {
+        console.log(`[Reconcile] No outbound match for return ${ret.numeroColis} (${ret.clientNom} → "${normalizedRet}")`);
+        for (const o of outbounds) {
+          console.log(`  candidate: ${o.numeroColis} "${o.clientNom}" → "${normalizeClientNom(o.clientNom)}"`);
+        }
       }
       continue;
     }

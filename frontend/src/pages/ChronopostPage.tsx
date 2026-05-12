@@ -77,6 +77,8 @@ export default function ChronopostPage() {
 
   // Edit state in detail panel
   const [editProduit, setEditProduit] = useState('');
+  const [editClientNom, setEditClientNom] = useState('');
+  const [editNumeroRetour, setEditNumeroRetour] = useState('');
   const [editDateRetour, setEditDateRetour] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
@@ -120,6 +122,8 @@ export default function ChronopostPage() {
   useEffect(() => {
     if (selected) {
       setEditProduit(selected.produitNom ?? '');
+      setEditClientNom(selected.clientNom ?? '');
+      setEditNumeroRetour(selected.numeroColisRetour ?? '');
       setEditDateRetour(selected.dateRetourPrevu ? toInputDate(new Date(selected.dateRetourPrevu)) : '');
       setEditNotes(selected.notes ?? '');
     }
@@ -268,13 +272,21 @@ export default function ChronopostPage() {
     if (!selected) return;
     setSavingEdit(true);
     try {
+      const isLinkingReturn = editNumeroRetour && editNumeroRetour !== selected.numeroColisRetour;
       const updated = await chronopostService.update(selected.id, {
+        clientNom: editClientNom || undefined,
         produitNom: editProduit || undefined,
+        numeroColisRetour: editNumeroRetour || undefined,
         dateRetourPrevu: editDateRetour || undefined,
         notes: editNotes || undefined,
       });
       setSelected(updated);
-      setExpeditions(prev => prev.map(e => e.id === updated.id ? updated : e));
+      // Reload all expeditions in case the backend merged/deleted a standalone return record
+      if (isLinkingReturn) {
+        await load(true);
+      } else {
+        setExpeditions(prev => prev.map(e => e.id === updated.id ? updated : e));
+      }
       success('Sauvegardé');
     } catch {
       showError('Erreur', 'Impossible de sauvegarder');
@@ -573,6 +585,12 @@ export default function ChronopostPage() {
                   <p className="font-semibold text-emerald-800 text-sm">{formatDate(selected.dateRetourReel)}</p>
                 </div>
               )}
+              {selected.numeroColisRetour && (
+                <div className="bg-gray-50 rounded-lg p-2.5 mt-2">
+                  <p className="text-xs text-gray-400">N° colis retour</p>
+                  <p className="font-mono text-xs text-gray-700 mt-0.5">{selected.numeroColisRetour}</p>
+                </div>
+              )}
             </div>
 
             {/* Full tracking history (when synced individually) */}
@@ -597,6 +615,15 @@ export default function ChronopostPage() {
             <div className="border-t border-gray-100 pt-4 space-y-3">
               <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Informations logistiques</p>
               <div>
+                <label className="text-xs text-gray-500 mb-1 block">Nom du client</label>
+                <input
+                  type="text"
+                  value={editClientNom}
+                  onChange={e => setEditClientNom(e.target.value)}
+                  className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
                 <label className="text-xs text-gray-500 mb-1 block">Type de borne</label>
                 <select
                   value={editProduit}
@@ -606,6 +633,19 @@ export default function ChronopostPage() {
                   <option value="">— Non défini —</option>
                   {PRODUITS.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">N° colis retour</label>
+                <input
+                  type="text"
+                  value={editNumeroRetour}
+                  onChange={e => setEditNumeroRetour(e.target.value.toUpperCase())}
+                  placeholder="ex: XN255109731FR"
+                  className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg font-mono focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  Si un enregistrement avec ce n° existe, il sera fusionné automatiquement.
+                </p>
               </div>
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">Date de retour prévue</label>

@@ -69,17 +69,42 @@ export async function updateExpedition(req: Request, res: Response): Promise<voi
   const exp = await prisma.chronopostExpedition.findUnique({ where: { id } });
   if (!exp) { apiResponse.notFound(res, 'Expédition non trouvée'); return; }
 
+  const updateData: Record<string, any> = {
+    ...(produitNom !== undefined && { produitNom }),
+    ...(clientNom !== undefined && { clientNom }),
+    ...(dateRetourPrevu !== undefined && { dateRetourPrevu: dateRetourPrevu ? new Date(dateRetourPrevu) : null }),
+    ...(dateRetourReel !== undefined && { dateRetourReel: dateRetourReel ? new Date(dateRetourReel) : null }),
+    ...(numeroColisRetour !== undefined && { numeroColisRetour }),
+    ...(statut !== undefined && { statut: statut as ChronopostStatut }),
+    ...(notes !== undefined && { notes }),
+  };
+
+  // When a return tracking number is being linked for the first time, auto-merge the standalone return record
+  if (numeroColisRetour && numeroColisRetour !== exp.numeroColisRetour) {
+    const returnRecord = await prisma.chronopostExpedition.findUnique({
+      where: { numeroColis: numeroColisRetour },
+    });
+    if (returnRecord) {
+      // Copy return pickup date from return parcel's departure (client handed it over)
+      if (!updateData.dateRetourPrevu && !exp.dateRetourPrevu && returnRecord.dateDepart) {
+        updateData.dateRetourPrevu = returnRecord.dateDepart;
+      }
+      // If return parcel is already delivered back to us, set real return date
+      if (returnRecord.statut === 'rentre') {
+        if (!updateData.dateRetourReel && !exp.dateRetourReel) {
+          updateData.dateRetourReel = (returnRecord as any).dateLivraisonReelle || returnRecord.dateRetourReel || null;
+        }
+        if (!updateData.statut) updateData.statut = 'rentre' as ChronopostStatut;
+      }
+      // Remove the now-linked standalone return record
+      await prisma.chronopostExpedition.delete({ where: { id: returnRecord.id } });
+      console.log(`[Chronopost] Merged return ${numeroColisRetour} into outbound ${exp.numeroColis}`);
+    }
+  }
+
   const updated = await prisma.chronopostExpedition.update({
     where: { id },
-    data: {
-      ...(produitNom !== undefined && { produitNom }),
-      ...(clientNom !== undefined && { clientNom }),
-      ...(dateRetourPrevu !== undefined && { dateRetourPrevu: dateRetourPrevu ? new Date(dateRetourPrevu) : null }),
-      ...(dateRetourReel !== undefined && { dateRetourReel: dateRetourReel ? new Date(dateRetourReel) : null }),
-      ...(numeroColisRetour !== undefined && { numeroColisRetour }),
-      ...(statut !== undefined && { statut: statut as ChronopostStatut }),
-      ...(notes !== undefined && { notes }),
-    },
+    data: updateData,
   });
 
   apiResponse.success(res, updated);
