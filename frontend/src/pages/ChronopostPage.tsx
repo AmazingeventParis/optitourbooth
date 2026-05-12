@@ -137,23 +137,45 @@ export default function ChronopostPage() {
 
   const today = new Date();
 
-  function getEventsForDay(day: number) {
-    const date = new Date(year, month, day);
-    const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+  // Normalise a date to noon UTC to avoid DST edge-cases when comparing days
+  function noon(d: Date): Date {
+    const c = new Date(d); c.setHours(12, 0, 0, 0); return c;
+  }
 
-    const departures = expeditions.filter(e => e.dateDepart && isSameDay(new Date(e.dateDepart), date));
-    const returns = expeditions.filter(e => {
-      const d = e.dateRetourReel || e.dateRetourPrevu;
-      return d && isSameDay(new Date(d), date);
-    });
-    const overdueReturns = returns.filter(e => {
-      if (e.statut === 'rentre') return false;
-      if (!e.dateRetourPrevu) return false;
-      const d = new Date(e.dateRetourPrevu); d.setHours(0, 0, 0, 0);
-      return d < todayMidnight;
-    });
-    const normalReturns = returns.filter(e => !overdueReturns.includes(e));
-    return { departures, normalReturns, overdueReturns };
+  interface DayEvent {
+    expedition: ChronopostExpedition;
+    /** start = departure day, middle = in-transit, end = return day */
+    type: 'start' | 'middle' | 'end';
+    isOverdue: boolean;
+  }
+
+  function getEventsForDay(day: number): DayEvent[] {
+    const cellDate = noon(new Date(year, month, day));
+    const todayNoon = noon(new Date());
+    const result: DayEvent[] = [];
+
+    for (const e of expeditions) {
+      if (!e.dateDepart) continue;
+      const dep = noon(new Date(e.dateDepart));
+      const returnRaw = e.dateRetourReel || e.dateRetourPrevu;
+
+      if (returnRaw) {
+        const ret = noon(new Date(returnRaw));
+        if (cellDate < dep || cellDate > ret) continue;
+        const isOverdue = e.statut !== 'rentre' && !!e.dateRetourPrevu && noon(new Date(e.dateRetourPrevu)) < todayNoon;
+        let type: DayEvent['type'];
+        if (isSameDay(cellDate, dep)) type = 'start';
+        else if (isSameDay(cellDate, ret)) type = 'end';
+        else type = 'middle';
+        result.push({ expedition: e, type, isOverdue });
+      } else {
+        // No return date known → only show on departure day
+        if (isSameDay(cellDate, dep)) {
+          result.push({ expedition: e, type: 'start', isOverdue: false });
+        }
+      }
+    }
+    return result;
   }
 
   async function handleAdd() {
@@ -382,66 +404,69 @@ export default function ChronopostPage() {
             <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-xl overflow-hidden flex-1">
               {days.map((day, i) => {
                 if (!day) return <div key={i} className="bg-gray-50" />;
-                const { departures, normalReturns, overdueReturns } = getEventsForDay(day);
+                const events = getEventsForDay(day);
                 const isToday = isSameDay(new Date(year, month, day), today);
-                const cellDate = new Date(year, month, day);
-                const isSelected = selected && (
-                  (selected.dateDepart && isSameDay(new Date(selected.dateDepart), cellDate)) ||
-                  ((selected.dateRetourReel ?? selected.dateRetourPrevu) &&
-                    isSameDay(new Date((selected.dateRetourReel ?? selected.dateRetourPrevu)!), cellDate))
-                );
+                // Cell is highlighted if the selected expedition spans this day
+                const cellSpanned = selected && (() => {
+                  if (!selected.dateDepart) return false;
+                  const cellNoon = noon(new Date(year, month, day));
+                  const dep = noon(new Date(selected.dateDepart));
+                  const returnRaw = selected.dateRetourReel || selected.dateRetourPrevu;
+                  if (returnRaw) {
+                    const ret = noon(new Date(returnRaw));
+                    return cellNoon >= dep && cellNoon <= ret;
+                  }
+                  return isSameDay(cellNoon, dep);
+                })();
 
                 return (
                   <div
                     key={i}
                     className={clsx(
                       'bg-white min-h-[72px] p-1.5 flex flex-col',
-                      isSelected ? '!bg-blue-50' : '',
+                      cellSpanned ? '!bg-blue-50' : '',
                     )}
                   >
                     <span className={clsx(
-                      'text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full mb-1 self-end',
+                      'text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full mb-1 self-end flex-shrink-0',
                       isToday ? 'bg-blue-600 text-white' : 'text-gray-500',
                     )}>
                       {day}
                     </span>
                     <div className="flex flex-col gap-0.5 flex-1">
-                      {departures.map(e => (
-                        <button
-                          key={e.id}
-                          onClick={() => setSelected(e)}
-                          className={clsx(
-                            'text-[10px] rounded px-1 py-0.5 truncate font-medium leading-tight text-left transition-opacity hover:opacity-75',
-                            selected?.id === e.id ? 'bg-blue-300 text-blue-900' : 'bg-blue-100 text-blue-700',
-                          )}
-                        >
-                          ✈ {e.clientNom}
-                        </button>
-                      ))}
-                      {overdueReturns.map(e => (
-                        <button
-                          key={e.id}
-                          onClick={() => setSelected(e)}
-                          className={clsx(
-                            'text-[10px] rounded px-1 py-0.5 truncate font-medium leading-tight text-left transition-opacity hover:opacity-75',
-                            selected?.id === e.id ? 'bg-orange-300 text-orange-900' : 'bg-orange-100 text-orange-700',
-                          )}
-                        >
-                          ⚠ {e.clientNom}
-                        </button>
-                      ))}
-                      {normalReturns.map(e => (
-                        <button
-                          key={e.id}
-                          onClick={() => setSelected(e)}
-                          className={clsx(
-                            'text-[10px] rounded px-1 py-0.5 truncate font-medium leading-tight text-left transition-opacity hover:opacity-75',
-                            selected?.id === e.id ? 'bg-green-300 text-green-900' : 'bg-green-100 text-green-700',
-                          )}
-                        >
-                          ↩ {e.clientNom}
-                        </button>
-                      ))}
+                      {events.map(({ expedition: e, type, isOverdue }) => {
+                        const isActive = selected?.id === e.id;
+                        let bg: string;
+                        let label: string;
+                        if (type === 'start') {
+                          bg = isActive ? 'bg-blue-300 text-blue-900' : 'bg-blue-100 text-blue-700';
+                          label = `✈ ${e.clientNom}`;
+                        } else if (type === 'end') {
+                          if (isOverdue) {
+                            bg = isActive ? 'bg-orange-300 text-orange-900' : 'bg-orange-100 text-orange-700';
+                            label = `⚠ ${e.clientNom}`;
+                          } else {
+                            bg = isActive ? 'bg-emerald-300 text-emerald-900' : 'bg-emerald-100 text-emerald-700';
+                            label = `↩ ${e.clientNom}`;
+                          }
+                        } else {
+                          // middle — in transit
+                          bg = isActive ? 'bg-blue-200 text-blue-800' : 'bg-blue-50 text-blue-500';
+                          label = `· ${e.clientNom}`;
+                        }
+                        return (
+                          <button
+                            key={e.id}
+                            onClick={() => setSelected(e)}
+                            className={clsx(
+                              'text-[10px] rounded px-1 py-0.5 truncate font-medium leading-tight text-left transition-opacity hover:opacity-75',
+                              bg,
+                            )}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -450,9 +475,10 @@ export default function ChronopostPage() {
 
             {/* Legend */}
             <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-blue-100 rounded" /> Départ</span>
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-green-100 rounded" /> Retour prévu</span>
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-orange-100 rounded" /> En retard</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-blue-100 rounded" /> ✈ Départ</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-blue-50 rounded" /> · En transit</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-emerald-100 rounded" /> ↩ Retour</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-orange-100 rounded" /> ⚠ En retard</span>
             </div>
           </>
         )}
