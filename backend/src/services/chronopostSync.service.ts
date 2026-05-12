@@ -17,6 +17,67 @@ export async function syncChronopostAuto(): Promise<void> {
   } else {
     await syncViaTrackingApi();
   }
+
+  // Always run reconciliation after any sync: links return parcels to their
+  // outbound based on matching clientNom, independently of Chronotrace session.
+  await reconcileReturnParcels();
+}
+
+// Scans all expeditions in DB and links standalone return parcels (en_retour/rentre)
+// to their matching outbound (expedie/livre) by normalized clientNom.
+export async function reconcileReturnParcels(): Promise<void> {
+  // Return parcels: en_retour or rentre, with no outbound linking them
+  // (i.e. they are themselves return parcels, not outbound parcels that were returned)
+  const allExpeditions = await prisma.chronopostExpedition.findMany();
+
+  const outbounds = allExpeditions.filter(e =>
+    (e.statut === 'expedie' || e.statut === 'livre') && !e.numeroColisRetour
+  );
+  const standaloneReturns = allExpeditions.filter(e =>
+    e.statut === 'en_retour' || (e.statut === 'rentre' && !outbounds.some(o => o.numeroColisRetour === e.numeroColis))
+  );
+
+  let linked = 0;
+
+  for (const ret of standaloneReturns) {
+    const normalizedRet = normalizeClientNom(ret.clientNom);
+    if (!normalizedRet) continue;
+
+    const match = outbounds.find(o =>
+      normalizeClientNom(o.clientNom) === normalizedRet &&
+      o.numeroColis !== ret.numeroColis
+    );
+
+    if (!match) {
+      console.log(`[Reconcile] No outbound match for return ${ret.numeroColis} (${ret.clientNom} → "${normalizedRet}")`);
+      // Debug: show what outbounds are available
+      for (const o of outbounds) {
+        console.log(`  candidate: ${o.numeroColis} "${o.clientNom}" → "${normalizeClientNom(o.clientNom)}"`);
+      }
+      continue;
+    }
+
+    console.log(`[Reconcile] Linking return ${ret.numeroColis} → outbound ${match.numeroColis} (${match.clientNom})`);
+
+    await prisma.chronopostExpedition.update({
+      where: { id: match.id },
+      data: {
+        numeroColisRetour: ret.numeroColis,
+        ...(!match.dateRetourPrevu && ret.dateDepart ? { dateRetourPrevu: ret.dateDepart } : {}),
+        ...(ret.statut === 'rentre' && ret.dateLivraisonReelle ? { dateRetourReel: ret.dateLivraisonReelle, statut: 'rentre' as ChronopostStatut } : {}),
+      },
+    });
+
+    await prisma.chronopostExpedition.delete({ where: { id: ret.id } });
+
+    // Remove from outbounds so it's not matched again
+    outbounds.splice(outbounds.indexOf(match), 1);
+    linked++;
+  }
+
+  if (linked > 0) {
+    console.log(`[Reconcile] Done — ${linked} return(s) linked to outbound`);
+  }
 }
 
 // Normalize a client name for fuzzy matching: remove accents, lowercase, sort words.

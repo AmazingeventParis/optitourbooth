@@ -3,7 +3,7 @@ import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
 import { trackParcel, inferStatutFromSignificantEvent } from '../services/chronopost.service.js';
 import { saveSession, getSessionStatus } from '../services/chronotraceApi.service.js';
-import { syncChronopostAuto } from '../services/chronopostSync.service.js';
+import { syncChronopostAuto, reconcileReturnParcels } from '../services/chronopostSync.service.js';
 import { ChronopostStatut } from '@prisma/client';
 
 export async function listExpeditions(req: Request, res: Response): Promise<void> {
@@ -149,7 +149,13 @@ export async function getChronotraceSessionStatus(req: Request, res: Response): 
 }
 
 export async function syncAll(req: Request, res: Response): Promise<void> {
-  await syncChronopostAuto();
+  await syncChronopostAuto(); // includes reconcileReturnParcels() at the end
+  const expeditions = await prisma.chronopostExpedition.findMany({ orderBy: { dateDepart: 'desc' } });
+  apiResponse.success(res, expeditions);
+}
+
+export async function reconcile(req: Request, res: Response): Promise<void> {
+  await reconcileReturnParcels();
   const expeditions = await prisma.chronopostExpedition.findMany({ orderBy: { dateDepart: 'desc' } });
   apiResponse.success(res, expeditions);
 }
