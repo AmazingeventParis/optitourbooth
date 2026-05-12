@@ -19,21 +19,54 @@ export async function syncChronopostAuto(): Promise<void> {
   }
 }
 
+// Normalize a client name for fuzzy matching: remove accents, lowercase, sort words.
+// "LAINÉ Inès" and "ines lainé" both normalize to "ines laine".
+function normalizeClientNom(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(/\s+/)
+    .filter(w => w.length > 1)
+    .sort()
+    .join(' ');
+}
+
+async function findMatchingOutbound(clientNom: string, returnNumeroColis: string) {
+  const normalized = normalizeClientNom(clientNom);
+  if (!normalized) return null;
+
+  // Fetch active outbound expeditions (not yet returned, not already linked to a return)
+  const candidates = await prisma.chronopostExpedition.findMany({
+    where: {
+      statut: { in: ['expedie', 'livre'] },
+      numeroColisRetour: null,
+      // Exclude the return parcel itself if it was previously stored as outbound
+      numeroColis: { not: returnNumeroColis },
+    },
+  });
+
+  for (const c of candidates) {
+    if (normalizeClientNom(c.clientNom) === normalized) return c;
+  }
+  return null;
+}
+
 async function syncViaChronotrace(): Promise<void> {
   console.log('[Chronopost CRON] Syncing via Chronotrace REST API...');
   let created = 0;
   let updated = 0;
+  let linked = 0;
   let errors = 0;
 
   try {
     const parcels = await fetchAllParcels();
 
-    for (const p of parcels) {
+    // Pass 1: upsert outbound parcels so they exist before return linking
+    for (const p of parcels.filter(p => !p.isRetour)) {
       try {
-        const existing = await prisma.chronopostExpedition.findUnique({
-          where: { numeroColis: p.numeroColis },
-        });
-
+        const existing = await prisma.chronopostExpedition.findUnique({ where: { numeroColis: p.numeroColis } });
         if (!existing) {
           await prisma.chronopostExpedition.create({
             data: {
@@ -67,7 +100,67 @@ async function syncViaChronotrace(): Promise<void> {
       }
     }
 
-    console.log(`[Chronopost CRON] Done — ${created} new, ${updated} updated${errors ? `, ${errors} errors` : ''}`);
+    // Pass 2: process return parcels — link to their outbound instead of creating standalone records
+    for (const p of parcels.filter(p => p.isRetour)) {
+      try {
+        const outbound = await findMatchingOutbound(p.clientNom, p.numeroColis);
+
+        if (outbound) {
+          // Link return data to the outbound expedition
+          const isDeliveredBack = p.statut === 'rentre';
+          await prisma.chronopostExpedition.update({
+            where: { id: outbound.id },
+            data: {
+              numeroColisRetour: p.numeroColis,
+              // dateRetourPrevu = pickup date from client (return parcel departure)
+              ...(p.dateDepart && !outbound.dateRetourPrevu && { dateRetourPrevu: p.dateDepart }),
+              // dateRetourReel = when it's actually delivered back to us
+              ...(isDeliveredBack && p.dateLivraisonReelle && { dateRetourReel: p.dateLivraisonReelle, statut: 'rentre' }),
+            },
+          });
+          // Remove any standalone return record that may have been created in a previous sync
+          const standaloneReturn = await prisma.chronopostExpedition.findUnique({ where: { numeroColis: p.numeroColis } });
+          if (standaloneReturn) {
+            await prisma.chronopostExpedition.delete({ where: { id: standaloneReturn.id } });
+          }
+          linked++;
+          console.log(`[Chronopost CRON] Linked return ${p.numeroColis} → outbound ${outbound.numeroColis} (${outbound.clientNom})`);
+        } else {
+          // No matching outbound found — keep as standalone for visibility
+          const existing = await prisma.chronopostExpedition.findUnique({ where: { numeroColis: p.numeroColis } });
+          if (!existing) {
+            await prisma.chronopostExpedition.create({
+              data: {
+                numeroColis: p.numeroColis,
+                clientNom: p.clientNom,
+                clientVille: p.clientVille || null,
+                clientAdresse: p.clientAdresse || null,
+                dateDepart: p.dateDepart,
+                dateLivraisonReelle: p.dateLivraisonReelle,
+                statut: p.statut,
+              },
+            });
+            created++;
+          } else {
+            const newStatut = existing.statut === 'rentre' ? 'rentre' : p.statut;
+            await prisma.chronopostExpedition.update({
+              where: { id: existing.id },
+              data: {
+                statut: newStatut,
+                ...(p.dateDepart && !existing.dateDepart && { dateDepart: p.dateDepart }),
+                ...(p.dateLivraisonReelle && !existing.dateLivraisonReelle && { dateLivraisonReelle: p.dateLivraisonReelle }),
+              },
+            });
+            updated++;
+          }
+        }
+      } catch (err) {
+        console.error(`[Chronopost CRON] Error on return ${p.numeroColis}:`, err);
+        errors++;
+      }
+    }
+
+    console.log(`[Chronopost CRON] Done — ${created} new, ${updated} updated, ${linked} return linked${errors ? `, ${errors} errors` : ''}`);
   } catch (err: any) {
     if (err.message?.includes('session') || err.message?.includes('401') || err.message?.includes('403')) {
       console.warn('[Chronopost CRON] Session expired — cookies need refresh. Falling back to SOAP.');

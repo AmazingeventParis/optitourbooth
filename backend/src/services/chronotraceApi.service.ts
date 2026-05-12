@@ -61,13 +61,13 @@ function parseDate(val: string | number | null | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function extractClientNom(lt: any): string {
-  return (
-    lt.sender?.reference ||
-    lt.receiver?.name ||
-    lt.sender?.name ||
-    'Inconnu'
-  );
+function extractClientNom(lt: any, isRetour: boolean): string {
+  if (isRetour) {
+    // Return parcel: Amazing Event is the receiver, client is the sender
+    return lt.sender?.reference || lt.sender?.name || 'Inconnu';
+  }
+  // Outbound parcel: Amazing Event is the sender, client is the receiver
+  return lt.sender?.reference || lt.receiver?.name || lt.sender?.name || 'Inconnu';
 }
 
 function parseLt(lt: any): ChronotraceParcel {
@@ -75,7 +75,7 @@ function parseLt(lt: any): ChronotraceParcel {
   const isRetour = AMAZING_EVENT_PATTERN.test(receiverName);
   const statut = inferStatut(lt);
 
-  const clientNom = extractClientNom(lt);
+  const clientNom = extractClientNom(lt, isRetour);
   const clientVille = isRetour
     ? (lt.sender?.city || '')
     : (lt.receiver?.city || '');
