@@ -1,5 +1,135 @@
 # Historique des sessions Claude - OptiTourBooth
 
+## Session du 12 mai 2026 (suite)
+
+### Refonte calendrier Chronopost + liaison retour manuel
+
+#### Problèmes résolus
+
+**1. Calendrier Chronopost — événements individuels cliquables**
+
+- Suppression du panneau intermédiaire "liste du jour" (click sur une case → liste sur le côté)
+- Chaque événement dans la case de date est maintenant un `<button>` cliquable directement
+- Le panneau de détail s'ouvre uniquement quand un événement spécifique est cliqué
+- Chip actif mis en évidence (teinte plus sombre : `bg-blue-300`, `bg-orange-300`, etc.)
+
+**2. Événements sur toute la durée (aller → retour)**
+
+- Interface `DayEvent` avec `type: 'start' | 'middle' | 'end'`
+- `getEventsForDay()` couvre chaque jour du calendrier entre `dateDepart` et `dateRetourReel || dateRetourPrevu`
+- `start` = jour de départ (✈ bleu), `middle` = en transit (· bleu clair), `end` = retour (↩ emeraude ou ⚠ orange si retard)
+- Sans date retour → affiché uniquement sur le jour de départ
+
+**3. Bouton Sync manuel**
+
+- `POST /chronopost/sync-all` → `syncChronopostAuto()` + retourne la liste mise à jour
+- `POST /chronopost/reconcile` → `reconcileReturnParcels()` uniquement
+- Bouton "Sync" dans le header de la page (à côté du bouton rafraîchir)
+
+**4. Fix linkage automatique des colis retour — `reconcileReturnParcels()`**
+
+- Fonction exportée depuis `chronopostSync.service.ts`
+- Lit TOUS les enregistrements DB, trouve les retours standalone (`en_retour` ou `rentre` sans outbound lié)
+- Normalisation des noms : NFD + remove accents + lowercase + alphanum + tri alphabétique des mots → "LAINÉ Inès" = "ines laine"
+- Appelée en fin de chaque `syncChronopostAuto()` (après SOAP fallback aussi)
+- Limitation identifiée : si `clientNom` = "AMAZING EVENT..." (SOAP ne donne que le destinataire, pas l'expéditeur pour les colis retour), la correspondance par nom échoue → fix UI ci-dessous
+
+**5. Fix cause racine — clientNom "AMAZING EVENT" pour les colis retour**
+
+- Problème : quand un colis retour est ajouté manuellement via "Ajouter un colis", l'API SOAP retourne `recipientName = "AMAZING EVENT, ELKAYAM JEREMIE"` → stocké en `clientNom`, impossible à matcher avec "LAINÉ Inès"
+- Solution backend (`chronopost.controller.ts`) : dans `updateExpedition`, quand `numeroColisRetour` est défini pour la première fois, cherche l'enregistrement standalone correspondant et **fusionne automatiquement** :
+  - Copie `dateDepart` du retour → `dateRetourPrevu` de l'aller
+  - Si retour `rentre` : copie `dateLivraisonReelle` → `dateRetourReel`, met statut `rentre`
+  - Supprime l'enregistrement standalone du retour
+- Solution frontend (`ChronopostPage.tsx`) : deux nouveaux champs dans le panneau de détail :
+  - **Nom du client** (corrigeable si "AMAZING EVENT...")
+  - **N° colis retour** (avec note : "si un enregistrement avec ce n° existe, il sera fusionné")
+  - Après save avec `numeroColisRetour`, reload complet de la liste pour refléter la suppression du doublon
+- Affichage du `numeroColisRetour` dans la section Dates si déjà lié
+
+#### Procédure pour lier Inès Lainé manuellement
+
+- Colis aller : `XN255109745FR`
+- Colis retour : `XN255109731FR`
+- Dans OptiTour → Chronopost → cliquer sur XN255109745FR → "N° colis retour" → `XN255109731FR` → Sauvegarder
+- Le backend fusionne automatiquement et le calendrier affiche la plage complète
+
+#### Fichiers modifiés
+
+- `backend/src/controllers/chronopost.controller.ts` : auto-merge au PATCH quand `numeroColisRetour` est posé
+- `backend/src/routes/chronopost.routes.ts` : ajout `POST /sync-all` + `POST /reconcile`
+- `backend/src/services/chronopostSync.service.ts` : `reconcileReturnParcels()` exportée, normalisation, logs améliorés
+- `frontend/src/pages/ChronopostPage.tsx` : refonte calendrier (chips cliquables, spanning), sync button, champs editables clientNom + numeroColisRetour
+- `frontend/src/services/chronopost.service.ts` : `syncAll()`
+
+#### Commits
+
+- `feat: manual return linking in Chronopost UI with auto-merge` (e41743b)
+
+---
+
+## Session du 12 mai 2026
+
+### Sync automatique Chronopost via Chronotrace REST API
+
+**Objectif** : Les colis Chronopost apparaissent automatiquement dans OptiTour sans saisie manuelle, dès qu'un nouveau colis est détecté dans l'espace Chronotrace.
+
+---
+
+#### Fichiers créés/modifiés
+
+- `backend/prisma/schema.prisma` : Ajout modèle `ChronotraceSession` (singleton, stocke les cookies)
+- `backend/src/services/chronotraceApi.service.ts` : Appelle `predefinedSearch` REST, parse tous les colis, infère le statut depuis `chronotraceStatus` + détection direction via "AMAZING EVENT" dans le nom du destinataire
+- `backend/src/services/chronopostSync.service.ts` : Refonte — path principal via Chronotrace REST (crée les nouveaux colis automatiquement), fallback SOAP `trackSkybillV2` si pas de session ou erreur auth
+- `backend/src/controllers/chronopost.controller.ts` : Ajout `updateChronotraceSession` + `getChronotraceSessionStatus`
+- `backend/src/routes/chronopost.routes.ts` : Ajout `POST/GET /chronopost/session`
+- `frontend/src/services/chronopost.service.ts` : Ajout `updateSession()` + `getSessionStatus()`
+- `frontend/src/pages/ChronopostPage.tsx` : Bouton "Session" dans le header (orange ⚠ si non configurée), modal avec instructions + textarea pour coller les cookies
+
+#### Endpoint Chronotrace
+
+```
+POST https://chronotrace.chronopost.fr/chronotrace/api/services/v2/predefinedSearch?language=fr_FR
+Body: {"accounts":[{"subAccounts":[],"id":"75190903","label":""}],"pageNumber":0,"pageSize":50,"searchName":"TOUS","sensDuTri":"desc","triePar":"date_evt"}
+Auth: Cookie header (cv4Auth + CHRONOTRACESESSIONID + cf_clearance)
+```
+
+Numéro de compte : `75190903`
+
+#### Durée de vie des cookies (⚠ À RENOUVELER)
+
+Les cookies Chronotrace expirent — **renouvellement nécessaire environ 1 fois par mois** :
+- `CHRONOTRACESESSIONID` : quelques heures à quelques jours
+- `cf_clearance` (Cloudflare) : ~30 jours
+- `cv4Auth` : plusieurs semaines
+
+**Quand c'est expiré** : le bouton "Session" devient orange ⚠ dans l'interface, et les nouveaux colis ne sont plus détectés automatiquement (les colis existants continuent d'être mis à jour via SOAP).
+
+**Pour renouveler** :
+1. Aller sur chronotrace.chronopost.fr, se connecter
+2. DevTools → Réseau → cliquer sur une requête `predefinedSearch`
+3. Copier la valeur du header `Cookie`
+4. Dans OptiTour → page Chronopost → bouton "Session" → coller → Enregistrer
+
+#### Détection de la direction (aller/retour)
+
+- Destinataire contient "AMAZING EVENT" → colis retour (→ `en_retour` ou `rentre`)
+- Expéditeur contient "AMAZING EVENT" → colis aller (→ `expedie` ou `livre`)
+
+#### Mapping `chronotraceStatus` → `ChronopostStatut`
+
+| chronotraceStatus | Direction | Statut OptiTour |
+|---|---|---|
+| LIVRE | retour (receiver=Amazing Event) | `rentre` |
+| LIVRE | aller | `livre` |
+| NON_LIVRE | retour | `en_retour` |
+| NON_LIVRE | aller | `expedie` |
+| EN_COURS | retour | `en_retour` |
+| EN_COURS | aller | `expedie` |
+| LIVRAISON_DIFFEREE | — | `probleme` |
+
+---
+
 ## Session du 19 février 2026
 
 ### Déploiement sur Coolify (swipego.app)
