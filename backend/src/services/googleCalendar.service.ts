@@ -728,21 +728,42 @@ export async function syncGoogleCalendarEvents(): Promise<{
       endDate = endDateObj.toISOString().substring(0, 10);
     }
 
-    // Extraire l'heure locale directement depuis la chaîne ISO (pas de conversion timezone)
-    // "2026-05-18T09:00:00+02:00" → "09:00"
+    // Extraire l'heure locale depuis une chaîne ISO 8601, en tenant compte du timezone offset
+    // "+02:00" → extrait T avant l'offset (heure locale déjà correcte)
+    // "Z" (UTC) → convertit en heure Europe/Paris via Intl
     function extractLocalTime(dateTimeStr: string | null | undefined): string | null {
       if (!dateTimeStr) return null;
+      // Cas 1 : offset explicite "+02:00" ou "-05:00" → le T*time* avant l'offset est l'heure locale
+      const withOffset = dateTimeStr.match(/T(\d{2}):(\d{2})(?::\d{2})?[+-]\d{2}:\d{2}$/);
+      if (withOffset) return `${withOffset[1]}:${withOffset[2]}`;
+      // Cas 2 : UTC "Z" → convertir en Europe/Paris
+      if (dateTimeStr.endsWith('Z')) {
+        try {
+          const d = new Date(dateTimeStr);
+          const parts = new Intl.DateTimeFormat('fr-FR', {
+            timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hour12: false,
+          }).formatToParts(d);
+          const h = parts.find(p => p.type === 'hour')?.value ?? null;
+          const m = parts.find(p => p.type === 'minute')?.value ?? null;
+          return h && m ? `${h.padStart(2, '0')}:${m.padStart(2, '0')}` : null;
+        } catch { return null; }
+      }
+      // Fallback : extraire le T*time* tel quel
       const m = dateTimeStr.match(/T(\d{2}):(\d{2})/);
       return m ? `${m[1]}:${m[2]}` : null;
     }
+
     const eventStartTime = extractLocalTime(event.start?.dateTime);
     const eventEndTime = extractLocalTime(event.end?.dateTime);
+    const isSameDayEvent = startDate === endDate;
 
     // Créneaux : description en priorité, puis heure Google Calendar de l'événement
+    // Pour le ramassage, utiliser l'heure Calendar uniquement si livraison et ramassage
+    // sont le même jour (événement mono-journée) — sinon l'heure de récup est inconnue
     const creneauLivDebut = parsed?.creneauLivraison?.split('-')[0] || eventStartTime || null;
     const creneauLivFin = parsed?.creneauLivraison?.split('-')[1] || eventEndTime || null;
-    const creneauRecDebut = parsed?.creneauRecuperation?.split('-')[0] || null;
-    const creneauRecFin = parsed?.creneauRecuperation?.split('-')[1] || null;
+    const creneauRecDebut = parsed?.creneauRecuperation?.split('-')[0] || (isSameDayEvent ? eventStartTime : null) || null;
+    const creneauRecFin = parsed?.creneauRecuperation?.split('-')[1] || (isSameDayEvent ? eventEndTime : null) || null;
 
     // Notes : infos restantes de la description
     const notes = parsed?.notes || (description ? `Google Calendar: ${cleanHtml(description)}` : 'Import Google Calendar (LIR)');
