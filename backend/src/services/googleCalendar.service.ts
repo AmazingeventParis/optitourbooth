@@ -652,7 +652,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
     const KNOWN_ACRONYMS = new Set(['SNCF', 'VIP', 'SAS', 'SARL', 'SCI', 'SA', 'EURL', 'EARL', 'TGI', 'CHU', 'CHR', 'EHPAD', 'HLM', 'ZAC', 'ZA', 'ZI']);
     const rawClientName = rawTitle.substring(fullTag.length).trim();
     const clientName = rawClientName
-      ? rawClientName.replace(/\S+/g, w =>
+      ? rawClientName.replace(/\S+/g, (w: string) =>
           KNOWN_ACRONYMS.has(w.toUpperCase())
             ? w.toUpperCase()
             : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
