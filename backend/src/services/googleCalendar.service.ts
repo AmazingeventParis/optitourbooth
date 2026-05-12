@@ -147,6 +147,9 @@ function containsPhone(line: string): boolean {
   return PHONE_REGEX.test(line);
 }
 
+// Lieux non-standard sans numéro de voie : gares, espaces événementiels, bâtiments, zones
+const VENUE_KEYWORDS = /\b(?:gare|aéroport|aeroport|hall|espace|palais|salle|château|chateau|domaine|manoir|abbaye|parc|centre(?:\s+(?:commercial|culturel|de\s+congrès|de\s+congres|sportif))?|hôtel|hotel|stade|zénith|zenith|zac|za|zi|zone(?:\s+(?:industrielle|commerciale|artisanale))?|bâtiment|batiment|bat\.?|immeuble|tour\s+\w+|campus|école|ecole|université|universite|mairie|préfecture|prefecture|église|eglise|hôpital|hopital|clinique|ehpad)\b/i;
+
 function isAddressLine(line: string): boolean {
   // Détection par type de voie (numéro + rue/avenue/imp./etc.)
   if (ADDRESS_REGEX.test(line)) return true;
@@ -154,6 +157,10 @@ function isAddressLine(line: string): boolean {
   if (POSTAL_CODE_REGEX.test(line)) return true;
   // Code postal seul avec un nom de ville (pas un téléphone)
   if (/\b\d{5}\b/.test(line) && /[A-ZÀ-Ü]/.test(line) && !containsPhone(line) && !containsDate(line)) {
+    return true;
+  }
+  // Lieux non-standard sans numéro : "Gare de Drancy", "Espace Confluences", "Hôtel Ibis"
+  if (VENUE_KEYWORDS.test(line) && !containsPhone(line) && !containsDate(line)) {
     return true;
   }
   return false;
