@@ -390,9 +390,14 @@ function parseDescription(rawDescription: string): ParsedDescription {
     PHONE_REGEX.lastIndex = 0;
     const nameText = text.replace(PHONE_REGEX, '').replace(/[/,;:()]/g, '').trim();
     if (nameText && nameText.length > 2 && !contactNom) {
-      // Filtrer les mots-clés qui ne sont pas des noms de personnes
-      if (!NOT_CONTACT_KEYWORDS.test(nameText)) {
-        contactNom = normalizeSpaces(nameText);
+      // Filtrer mot par mot : exclure seulement les mots qui sont des labels (code, parking…)
+      // mais conserver le reste comme nom de contact
+      // Ex: "M. Dupont - code 1234B" → retire "code" → "M. Dupont - 1234B" → contactNom = "M. Dupont 1234B"
+      const cleanedName = normalizeSpaces(
+        nameText.split(/\s+/).filter(w => !NOT_CONTACT_KEYWORDS.test(w)).join(' ')
+      );
+      if (cleanedName.length > 2) {
+        contactNom = cleanedName;
       }
     }
   }
