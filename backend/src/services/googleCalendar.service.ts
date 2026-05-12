@@ -724,9 +724,10 @@ export async function syncGoogleCalendarEvents(): Promise<{
       }
     }
 
-    // 3. Si le tag est juste un préfixe sans nom de produit, déduire le type par défaut
-    // "(R)" seul → Ring, "(LIR)" seul → Vegas (défaut)
-    const TAG_PREFIX_TO_PRODUIT: Record<string, string> = { 'R': 'Ring', 'LR': 'Ring', 'LIR': 'Vegas', 'L': 'Vegas' };
+    // 3. Seuls les préfixes de type retour/ring ont un fallback explicite
+    // "(R)" ou "(LR)" → Ring (logique car R = Ring retour)
+    // "(LIR)" ou "(L)" seuls → null (pas de fallback Vegas : le produit doit être précisé dans le tag)
+    const TAG_PREFIX_TO_PRODUIT: Record<string, string> = { 'R': 'Ring', 'LR': 'Ring' };
     if (!produitNom && !tagContent && tagInner && TAG_PREFIX_TO_PRODUIT[tagInner]) {
       produitNom = TAG_PREFIX_TO_PRODUIT[tagInner];
     }
