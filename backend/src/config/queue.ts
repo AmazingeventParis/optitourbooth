@@ -1,11 +1,25 @@
 import { Queue, Worker, Job } from 'bullmq';
 
-// Redis connection for BullMQ (reuses same Redis instance config)
-const getRedisConnection = () => ({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
-  maxRetriesPerRequest: null,
-});
+// Redis connection for BullMQ — supports REDIS_URL or REDIS_HOST/PORT
+const getRedisConnection = () => {
+  const redisUrl = process.env.REDIS_URL;
+  if (redisUrl) {
+    const u = new URL(redisUrl);
+    return {
+      host: u.hostname,
+      port: parseInt(u.port || '6379', 10),
+      password: u.password || undefined,
+      username: (u.username && u.username !== 'default') ? u.username : undefined,
+      db: parseInt(u.pathname.slice(1) || '0', 10),
+      maxRetriesPerRequest: null,
+    };
+  }
+  return {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    maxRetriesPerRequest: null,
+  };
+};
 
 // Track if queues are available
 let queuesAvailable = false;
