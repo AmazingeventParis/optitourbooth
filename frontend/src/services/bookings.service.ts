@@ -147,7 +147,11 @@ export const bookingsService = {
   },
 
   async sendGallery(id: string, brand?: 'SHOOTNBOX' | 'SMAKK') {
-    const response = await api.post<ApiResponse<{ message: string }>>(`/bookings/${id}/send-gallery`, brand ? { brand } : {});
+    const response = await api.post<ApiResponse<{ message: string }>>(
+      `/bookings/${id}/send-gallery`,
+      brand ? { brand } : {},
+      { timeout: 60000 }
+    );
     return response.data.data;
   },
 
