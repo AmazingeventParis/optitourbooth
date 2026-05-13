@@ -200,14 +200,18 @@ export async function cancelPendingDispatches(bookingId: string): Promise<void> 
       data: { deliveryStatus: 'cancelled' },
     });
 
-    // Try to remove from queue
+    // Try to remove from queue — with timeout so a stalled Redis never blocks
     if (areQueuesAvailable() && galleryQueue) {
-      try {
-        const job = await galleryQueue.getJob(`gallery-${dispatch.id}`);
-        if (job) await job.remove();
-      } catch {
-        // Job may have already been processed
-      }
+      const removeTimeout = new Promise<void>(resolve => setTimeout(resolve, 3000));
+      const removeJob = (async () => {
+        try {
+          const job = await galleryQueue!.getJob(`gallery-${dispatch.id}`);
+          if (job) await job.remove();
+        } catch {
+          // Job may have already been processed or Redis unavailable
+        }
+      })();
+      await Promise.race([removeJob, removeTimeout]);
     }
   }
 }

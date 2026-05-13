@@ -512,8 +512,10 @@ export const manualSendGallery = asyncHandler(async (req: Request, res: Response
     ? requestedBrand
     : (booking.senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
 
-  // Cancel any pending automatic dispatches before sending manually
-  await cancelPendingDispatches(booking.id);
+  // Cancel pending dispatches in background — don't block the response
+  cancelPendingDispatches(booking.id).catch(err =>
+    console.error('[Booking] cancelPendingDispatches error:', err)
+  );
 
   // Mark booking as sent and record dispatch immediately — respond to client without waiting for SMTP
   await prisma.galleryDispatch.create({
