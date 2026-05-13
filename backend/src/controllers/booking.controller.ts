@@ -515,19 +515,7 @@ export const manualSendGallery = asyncHandler(async (req: Request, res: Response
   // Cancel any pending automatic dispatches before sending manually
   await cancelPendingDispatches(booking.id);
 
-  try {
-    await sendGalleryDirectEmail({
-      to: booking.customerEmail,
-      customerName: booking.customerName,
-      galleryUrl: booking.galleryUrl,
-      brand,
-    });
-  } catch (err) {
-    console.error(`[Booking] Erreur envoi galerie:`, err);
-    return apiResponse.serverError(res, `Erreur lors de l'envoi: ${(err as Error).message}`);
-  }
-
-  // Record as dispatch to prevent future duplicates
+  // Mark booking as sent and record dispatch immediately — respond to client without waiting for SMTP
   await prisma.galleryDispatch.create({
     data: {
       booking: { connect: { id } },
@@ -549,7 +537,18 @@ export const manualSendGallery = asyncHandler(async (req: Request, res: Response
     data: { status: 'gallery_sent' },
   });
 
-  return apiResponse.success(res, { message: `Galerie envoyée à ${booking.customerEmail} via ${brand}` });
+  // Respond immediately — SMTP send happens in background to avoid client timeout
+  res.json({ success: true, data: { message: `Galerie en cours d'envoi à ${booking.customerEmail} via ${brand}` } });
+
+  // Fire-and-forget email send
+  sendGalleryDirectEmail({
+    to: booking.customerEmail,
+    customerName: booking.customerName,
+    galleryUrl: booking.galleryUrl,
+    brand,
+  }).catch(err => {
+    console.error(`[Booking] Erreur envoi galerie à ${booking.customerEmail}:`, err);
+  });
 });
 
 /**
