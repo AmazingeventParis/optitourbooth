@@ -1,5 +1,89 @@
 # Historique des sessions Claude - OptiTourBooth
 
+## Session du 13-14 mai 2026
+
+### Fix timeout "Envoyer Drive" + rapprochement dossiers Drive / emails clients
+
+#### Contexte
+La page `/galeries` permet d'envoyer le lien du dossier Drive photo directement par email au client. Le bouton "Envoyer Drive" produisait `"timeout of 30000ms exceeded"`.
+
+#### Causes racines identifiées et corrigées
+
+**1. BullMQ connecté à `localhost:6379` au lieu du vrai Redis**
+
+- `backend/src/config/queue.ts` lisait `REDIS_HOST`/`REDIS_PORT` (non définis dans Coolify)
+- `REDIS_URL` était bien configuré dans Coolify mais ignoré
+- Résultat : BullMQ tentait `localhost:6379`, échouait, retentait indéfiniment (`maxRetriesPerRequest: null`)
+- `cancelPendingDispatches()` appelait `galleryQueue.getJob()` → bloquait infiniment → backend ne répondait jamais
+
+**Fix** : `queue.ts` parse maintenant `REDIS_URL` (format `redis://user:pass@host:port/db`) et en extrait `host`, `port`, `password`, `db`.
+
+**2. `cancelPendingDispatches` bloquante dans `manualSendGallery`**
+
+- Même si Redis était corrigé, la fonction restait `await`ée dans le contrôleur
+- **Fix** : fire-and-forget (`.catch(err => console.error(...))`)
+
+**3. Envoi SMTP bloquant → réponse jamais envoyée**
+
+- `sendGalleryDirectEmail()` était `await`ée avant `res.json()`
+- SMTP Office365 pouvait prendre > 30s
+- **Fix** : répondre immédiatement au client (`res.json()`), envoyer l'email en background
+
+**4. Timeout nodemailer trop long (aucun)**
+
+- Ajout `connectionTimeout: 10000`, `greetingTimeout: 10000`, `socketTimeout: 20000`
+
+**5. Timeout axios frontend trop court (30s)**
+
+- `sendGallery()` dans `bookings.service.ts` : timeout porté à 60s pour cette requête
+
+**6. Cause finale côté utilisateur : cache navigateur**
+
+- Après tous ces fixes backend déployés, l'API répondait en 651ms
+- L'utilisateur voyait encore le timeout → son navigateur chargeait l'ancien JS en cache
+- **Solution** : `Ctrl + Shift + R` (hard refresh)
+
+#### Vérification live via Chrome DevTools MCP
+
+- Connexion à `optitourbooth.swipego.app/galeries` via `mcp__chrome-devtools`
+- Clic sur "Envoyer Drive" pour tristan marsauche → requête `POST /bookings/.../send-gallery` → **200 OK en < 1s**
+- Réseau réseau confirmé : aucune erreur côté serveur
+
+#### Rapprochement Drive / emails (travail de la session précédente)
+
+- 109 dossiers Drive (`JJ.MM.AAAA Nom client`) rapprochés avec les bookings OptiTour
+- Algorithme token-set overlap (60% seuil) + tolérance ±2 jours sur la date
+- 72 bookings complétés (gallery URL + email)
+- 16 bookings sans email (clients n'ayant pas fourni d'email dans manager2)
+- `normalizeForMatch()` corrigé : tirets remplacés par espaces avant strip des chars spéciaux
+
+#### Fichiers modifiés
+
+- `backend/src/config/queue.ts` : parse `REDIS_URL`
+- `backend/src/services/galleryDispatch.service.ts` : timeout 3s sur `galleryQueue.getJob()`
+- `backend/src/controllers/booking.controller.ts` : `cancelPendingDispatches` fire-and-forget, email fire-and-forget, `res.json()` avant l'email
+- `backend/src/services/email.service.ts` : timeouts nodemailer
+- `backend/src/services/googleDrive.service.ts` : `normalizeForMatch()` fix tirets
+- `frontend/src/services/bookings.service.ts` : timeout 60s pour `sendGallery`
+
+#### Commits
+
+- `de1386b` fix: resolve send-gallery timeout — SMTP timeouts + longer axios deadline
+- `13e2a70` fix: normalizeForMatch — replace hyphens with spaces before stripping chars
+- `572f4e7` fix: send gallery email fire-and-forget to eliminate SMTP timeout
+- `1ec9262` fix: parse REDIS_URL in BullMQ queue config (was falling back to localhost)
+- `f0c0116` fix: make cancelPendingDispatches fully non-blocking in send-gallery
+
+#### Variables d'environnement Coolify (backend)
+
+Toutes configurées :
+- `EMAIL_SHOOTNBOX` / `EMAIL_SHOOTNBOX_PASSWORD` (app password Office365, commence par `sbpw`)
+- `EMAIL_SMAKK` / `EMAIL_SMAKK_PASSWORD`
+- `REDIS_URL` = `redis://default:...@soo88cgkwsowkkoc8g40k8co:6379/0`
+- Note : `EMAIL_SHOOTNBOX_PASSWORD` en doublon dans Coolify (inoffensif, peut être supprimé)
+
+---
+
 ## Session du 12 mai 2026 (suite)
 
 ### Refonte calendrier Chronopost + liaison retour manuel
