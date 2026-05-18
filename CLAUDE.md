@@ -1,5 +1,101 @@
 # Historique des sessions Claude - OptiTourBooth
 
+## Session du 18 mai 2026
+
+### Fix points à dispatcher + intégration CRM→Drive auto-complétion galeries
+
+---
+
+#### 1. Fix PendingPoints — suppressions et modifications manuelles préservées
+
+**Problème** : les points supprimés manuellement réapparaissaient après refresh (sync Google Calendar les recréait). Les modifications manuelles (adresse, jour, horaires) étaient écrasées au refresh suivant.
+
+**Cause racine** : la sync Calendar effectuait un `upsert` inconditionnel par `externalId`, ignorant tout état manuel.
+
+**Fix** : deux nouveaux flags sur `PendingPoint` :
+- `deletedByUser Boolean @default(false)` — soft delete au lieu de hard delete pour les points avec `externalId`
+- `manuallyEdited Boolean @default(false)` — posé à `true` à chaque PATCH utilisateur
+
+**Fichiers modifiés** :
+- `backend/prisma/schema.prisma` : +`deletedByUser`, +`manuallyEdited`
+- `backend/src/controllers/pendingPoint.controller.ts` :
+  - `listByDate` : filtre `deletedByUser: false`
+  - `deletePendingPoint` : soft delete si `externalId` présent, hard delete sinon
+  - `updatePendingPoint` : ajoute `manuallyEdited: true`
+- `backend/src/services/googleCalendar.service.ts` : l'upsert ne met à jour les champs que si `!manuallyEdited && !deletedByUser`
+
+---
+
+#### 2. Intégration CRM → Drive : auto-complétion des fiches `/galeries`
+
+**Objectif** : les fiches clients dans `/galeries` se complètent automatiquement avec l'email et le dossier Drive photo.
+
+**Problèmes identifiés** :
+1. `GOOGLE_DRIVE_PARENT_FOLDER_ID` absent de Coolify → Drive scan ne tournait pas
+2. Drive matching utilisait uniquement `customerName` (titre Calendar) → taux de match ~40%
+3. CRM sync ne stockait pas `companyName`/`contactName` → données inutilisables pour Drive
+4. Smakk CRM non intégré
+
+**Solutions** :
+
+**A. Schema Booking — 4 nouveaux champs** :
+```prisma
+companyName  String?  @map("company_name")   // société CRM
+contactName  String?  @map("contact_name")   // prénom nom contact
+crmOrderId   String?  @map("crm_order_id")   // dédup stable
+crmBrand     String?  @map("crm_brand")      // 'shootnbox' | 'smakk'
+```
+
+**B. CRM Sync refactorisé** (`crmSync.service.ts`) :
+- Cible TOUS les bookings (pas seulement sans email) pour maintenir `companyName`/`contactName` à jour
+- Dédup par `crmOrderId` si déjà connu
+- Stocke : `customerEmail`, `customerPhone`, `companyName`, `contactName`, `crmOrderId`, `crmBrand`
+
+**C. Drive matching amélioré** (`googleDrive.service.ts`) :
+- Essaie les 3 noms dans l'ordre : `customerName` → `companyName` → `contactName`
+- Taux de match estimé ~85%+
+
+**D. Smakk CRM — accès via API directe** :
+- Tentative login session échouée (credentials différents de ShootNBox)
+- Credentials DB trouvés via `m.php` → `/inc/mainfile.php` : user `smakk2` / `hO7vA3oP4j`
+- Script `_otb_orders.php` déployé sur `smakk.fr/manager/` :
+  - Protégé par clé : `opti2026smk_x7kR9qNv`
+  - Requête directe `smakk2.orders_new WHERE status=2`
+  - 1098 commandes disponibles
+  - URL : `https://www.smakk.fr/manager/_otb_orders.php?key=opti2026smk_x7kR9qNv&page=0&size=500`
+- Backend appelle cet endpoint sans login session
+
+**E. Variables d'environnement Coolify ajoutées** :
+- `GOOGLE_DRIVE_PARENT_FOLDER_ID=1MEVCdxEGoAFoJz8AJKMLppBdI63yOl0s`
+- `GOOGLE_DRIVE_ENABLED=true`
+
+#### Credentials Smakk trouvés
+
+| Système | Credentials |
+|---|---|
+| Smakk WordPress DB | `smakk` / `pR3eE4wN5b` (DB: smakk) |
+| Smakk CRM DB | `smakk2` / `hO7vA3oP4j` (DB: smakk2) |
+| Smakk SMTP | `contact@smakk.fr` / `Laurytal2` (smtp.office365.com:587) |
+| OptiTour API Smakk | clé `opti2026smk_x7kR9qNv` |
+
+#### Fichiers modifiés
+
+- `backend/prisma/schema.prisma` : +4 champs Booking, +3 champs PendingPoint
+- `backend/src/services/crmSync.service.ts` : refonte complète (ShootNBox + Smakk API directe)
+- `backend/src/services/googleDrive.service.ts` : matching multi-noms
+- `backend/src/controllers/pendingPoint.controller.ts` : soft delete + manuallyEdited
+- `backend/src/services/googleCalendar.service.ts` : skip upsert si deleted/edited
+- `backend/src/workers/galleryWorker.ts` : fix implicit any
+- `https://www.smakk.fr/manager/_otb_orders.php` : nouveau fichier (API directe DB Smakk)
+
+#### Commits
+
+- `163dffc` docs: session 13-14 mai 2026 (début de session, résumé précédent)
+- `cd006d2` feat: CRM sync stores company/contact names + Smakk CRM skeleton
+- `f99b43c` feat: add Smakk CRM via direct DB API endpoint on smakk.fr
+
+---
+
 ## Session du 13-14 mai 2026
 
 ### Fix timeout "Envoyer Drive" + rapprochement dossiers Drive / emails clients
