@@ -39,12 +39,12 @@ interface SyncResult {
 // ─── Config ──────────────────────────────────────────────────────
 
 const SHOOTNBOX_BASE = 'https://www.shootnbox.fr/manager2';
-const SMAKK_BASE = 'https://www.smakk.fr/manager';
+// Smakk uses a direct DB API endpoint (session login doesn't share credentials)
+const SMAKK_API_URL = 'https://www.smakk.fr/manager/_otb_orders.php';
+const SMAKK_API_KEY = 'opti2026smk_x7kR9qNv';
 
 const SHOOTNBOX_EMAIL = process.env.CRM_SHOOTNBOX_EMAIL || '';
 const SHOOTNBOX_PASSWORD = process.env.CRM_SHOOTNBOX_PASSWORD || '';
-const SMAKK_EMAIL = process.env.CRM_SMAKK_EMAIL || '';
-const SMAKK_PASSWORD = process.env.CRM_SMAKK_PASSWORD || '';
 
 // ─── Name matching ────────────────────────────────────────────────
 
@@ -312,26 +312,55 @@ function buildAlbumRecords(
   return records;
 }
 
-// ─── Smakk scraping ───────────────────────────────────────────────
+// ─── Smakk direct API ────────────────────────────────────────────
+// Smakk CRM has a dedicated lightweight API endpoint on their server
+// (_otb_orders.php) that queries the DB directly and returns JSON.
+// This avoids session-based scraping which requires separate credentials.
 
-async function scrapeSmakkOrders(cookie: string): Promise<CrmRecord[]> {
+async function fetchSmakkOrders(): Promise<CrmRecord[]> {
   const PAGE_SIZE = 500;
   const records: CrmRecord[] = [];
 
-  const currentUrl = `${SMAKK_BASE}/orders_ajax.php?status=2`;
-  const current = await fetchOrdersPage(cookie, currentUrl, 0, PAGE_SIZE);
-  records.push(...parseOrderRows(current.rows, 'smakk'));
-
-  const archiveUrl = `${SMAKK_BASE}/orders_ajax.php?status=2&arch=true`;
-  let start = 0;
-  let totalArchives = 0;
+  let page = 0;
+  let total = 0;
 
   do {
-    const page = await fetchOrdersPage(cookie, archiveUrl, start, PAGE_SIZE);
-    records.push(...parseOrderRows(page.rows, 'smakk'));
-    totalArchives = page.totalFiltered;
-    start += PAGE_SIZE;
-  } while (start < totalArchives);
+    const url = `${SMAKK_API_URL}?key=${SMAKK_API_KEY}&page=${page}&size=${PAGE_SIZE}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Smakk API returned HTTP ${response.status}`);
+    }
+
+    const data = await response.json() as any;
+
+    if (data.error) {
+      throw new Error(`Smakk API error: ${data.error}`);
+    }
+
+    total = data.total || 0;
+
+    for (const row of (data.data || [])) {
+      const email = (row.email || '').trim();
+      if (!email) continue;
+
+      const contactName = [row.first_name, row.last_name].filter(Boolean).map((s: string) => s.trim()).join(' ');
+
+      records.push({
+        orderId: String(row.id),
+        company: (row.company || '').trim(),
+        contactName,
+        email,
+        phone: (row.phone || '').trim(),
+        borne: (row.box_type || '').trim(),
+        eventDate: (row.event_date || '').trim(),
+        brand: 'smakk',
+        source: 'orders',
+      });
+    }
+
+    page++;
+  } while (records.length < total);
 
   return records;
 }
@@ -392,17 +421,13 @@ export async function syncCrmData(): Promise<SyncResult> {
   }
 
   // ── Smakk ──
-  if (SMAKK_EMAIL && SMAKK_PASSWORD) {
-    try {
-      const cookie = await crmLogin(SMAKK_BASE, SMAKK_EMAIL, SMAKK_PASSWORD, 'Smakk');
-      const smakkRecords = await scrapeSmakkOrders(cookie);
-      result.smakk.scrapedOrders = smakkRecords.length;
-      allRecords.push(...smakkRecords);
-    } catch (e: any) {
-      result.errors.push(`Smakk: ${e.message}`);
-    }
+  try {
+    const smakkRecords = await fetchSmakkOrders();
+    result.smakk.scrapedOrders = smakkRecords.length;
+    allRecords.push(...smakkRecords);
+  } catch (e: any) {
+    result.errors.push(`Smakk: ${e.message}`);
   }
-  // Smakk credentials absent → silently skip (not an error)
 
   if (allRecords.length === 0) {
     result.errors.push('No CRM records found from any source');
@@ -496,14 +521,12 @@ let syncInterval: ReturnType<typeof setInterval> | null = null;
 
 export function startCrmSync(): void {
   const hasShootnbox = !!(SHOOTNBOX_EMAIL && SHOOTNBOX_PASSWORD);
-  const hasSmakk = !!(SMAKK_EMAIL && SMAKK_PASSWORD);
 
-  if (!hasShootnbox && !hasSmakk) {
-    console.log('[CRM Sync] No CRM credentials configured, sync disabled');
-    return;
+  if (!hasShootnbox) {
+    console.log('[CRM Sync] ShootNBox credentials not configured (CRM_SHOOTNBOX_EMAIL / CRM_SHOOTNBOX_PASSWORD)');
   }
 
-  const brands = [hasShootnbox && 'ShootNBox', hasSmakk && 'Smakk'].filter(Boolean).join(' + ');
+  const brands = [hasShootnbox && 'ShootNBox', 'Smakk'].filter(Boolean).join(' + ');
   const intervalMs = 60 * 60 * 1000;
 
   setTimeout(async () => {
