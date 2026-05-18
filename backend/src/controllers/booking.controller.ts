@@ -551,6 +551,7 @@ export const manualSendGallery = asyncHandler(async (req: Request, res: Response
   }).catch(err => {
     console.error(`[Booking] Erreur envoi galerie à ${booking.customerEmail}:`, err);
   });
+  return;
 });
 
 /**
