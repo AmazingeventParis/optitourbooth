@@ -795,6 +795,8 @@ model PendingPoint {
   calendarId        String?  @map("calendar_id")
   externalId        String?  @unique @map("external_id")
   dispatched        Boolean  @default(false)
+  deletedByUser     Boolean  @default(false) @map("deleted_by_user")
+  manuallyEdited    Boolean  @default(false) @map("manually_edited")
   usedInPreparation    Boolean  @default(false) @map("used_in_preparation")
   ignoredInPreparation Boolean  @default(false) @map("ignored_in_preparation")
   suggestedMachineId   String?  @map("suggested_machine_id")

@@ -136,6 +136,7 @@ export async function listPendingPoints(req: Request, res: Response): Promise<vo
     where: {
       date: { gte: dateStart, lte: dateEnd },
       dispatched: false,
+      deletedByUser: false,
     },
     orderBy: { createdAt: 'asc' },
   });
@@ -150,7 +151,27 @@ export async function deletePendingPoint(req: Request, res: Response): Promise<v
   const { id } = req.params;
 
   try {
-    await prisma.pendingPoint.delete({ where: { id } });
+    const point = await prisma.pendingPoint.findUnique({
+      where: { id },
+      select: { externalId: true },
+    });
+    if (!point) {
+      apiResponse.notFound(res, 'Point non trouvé');
+      return;
+    }
+
+    if (point.externalId) {
+      // Soft delete : on préserve le PendingPoint pour que la sync Google Calendar
+      // ne le recrée pas au prochain cycle.
+      await prisma.pendingPoint.update({
+        where: { id },
+        data: { deletedByUser: true, dispatched: true },
+      });
+    } else {
+      // Pas d'externalId → point manuel, hard delete OK
+      await prisma.pendingPoint.delete({ where: { id } });
+    }
+
     apiResponse.success(res, { message: 'Point supprimé' });
   } catch (error) {
     if ((error as any).code === 'P2025') {
@@ -183,6 +204,8 @@ export async function updatePendingPoint(req: Request, res: Response): Promise<v
         ...(notes !== undefined && { notes }),
         ...(produitNom !== undefined && { produitNom }),
         ...(dispatched !== undefined && { dispatched }),
+        // Dès qu'un utilisateur modifie un champ, verrouiller contre la sync automatique
+        manuallyEdited: true,
       },
     });
     apiResponse.success(res, updated);

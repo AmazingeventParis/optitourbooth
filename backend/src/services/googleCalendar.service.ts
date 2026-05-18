@@ -846,12 +846,19 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Point livraison (date de début)
     // Détecter changement de date sur un point déjà dispatché → re-dispatcher
     let livDispatchOverride: boolean | undefined;
+    let livManuallyEdited = false;
+    let livDeletedByUser = false;
     try {
       const existingLiv = await prisma.pendingPoint.findUnique({
         where: { externalId: `${eventId}_livraison` },
-        select: { id: true, date: true, dispatched: true },
+        select: { id: true, date: true, dispatched: true, manuallyEdited: true, deletedByUser: true },
       });
-      if (existingLiv && existingLiv.dispatched && isLivraison) {
+      if (existingLiv) {
+        livManuallyEdited = existingLiv.manuallyEdited;
+        livDeletedByUser = existingLiv.deletedByUser;
+      }
+      // Ne pas toucher au re-dispatch automatique si l'utilisateur a édité manuellement
+      if (existingLiv && existingLiv.dispatched && isLivraison && !livManuallyEdited && !livDeletedByUser) {
         const oldDateStr = existingLiv.date.toISOString().substring(0, 10);
         if (oldDateStr !== startDate) {
           console.log(`[Google Calendar] 📅 Date changée pour livraison "${clientName}": ${oldDateStr} → ${startDate}, re-dispatch nécessaire`);
@@ -885,21 +892,24 @@ export async function syncGoogleCalendarEvents(): Promise<{
       await prisma.pendingPoint.upsert({
         where: { externalId: `${eventId}_livraison` },
         update: {
-          date: ensureDateUTC(startDate),
-          clientName,
-          // Only overwrite optional fields when Calendar provides a non-null value.
-          // This preserves manual corrections entered in OptiTour between sync cycles.
-          ...(adresse !== null && { adresse }),
-          ...(produitNom !== null && { produitNom }),
-          ...(creneauLivDebut !== null && { creneauDebut: creneauLivDebut }),
-          ...(creneauLivFin !== null && { creneauFin: creneauLivFin }),
-          ...(contactNom !== null && { contactNom }),
-          ...(contactTelephone !== null && { contactTelephone }),
-          notes,
-          calendarId,
-          ...(attachments.length > 0 && { attachments }),
-          ...(!isLivraison && { dispatched: true }),
-          ...(livDispatchOverride === false && { dispatched: false }),
+          // Ne pas écraser les champs modifiés manuellement par l'utilisateur.
+          // Ne pas changer dispatched si l'utilisateur a supprimé ou édité le point.
+          ...(!livManuallyEdited && !livDeletedByUser && {
+            date: ensureDateUTC(startDate),
+            clientName,
+            // Only overwrite optional fields when Calendar provides a non-null value.
+            ...(adresse !== null && { adresse }),
+            ...(produitNom !== null && { produitNom }),
+            ...(creneauLivDebut !== null && { creneauDebut: creneauLivDebut }),
+            ...(creneauLivFin !== null && { creneauFin: creneauLivFin }),
+            ...(contactNom !== null && { contactNom }),
+            ...(contactTelephone !== null && { contactTelephone }),
+            notes,
+            calendarId,
+            ...(attachments.length > 0 && { attachments }),
+            ...(!isLivraison && { dispatched: true }),
+            ...(livDispatchOverride === false && { dispatched: false }),
+          }),
         },
         create: {
           date: ensureDateUTC(startDate),
@@ -943,12 +953,19 @@ export async function syncGoogleCalendarEvents(): Promise<{
     // Point ramassage (date de fin)
     // Détecter changement de date sur un point ramassage déjà dispatché → re-dispatcher
     let recDispatchOverride: boolean | undefined;
+    let recManuallyEdited = false;
+    let recDeletedByUser = false;
     try {
       const existingRec = await prisma.pendingPoint.findUnique({
         where: { externalId: `${eventId}_ramassage` },
-        select: { id: true, date: true, dispatched: true },
+        select: { id: true, date: true, dispatched: true, manuallyEdited: true, deletedByUser: true },
       });
-      if (existingRec && existingRec.dispatched) {
+      if (existingRec) {
+        recManuallyEdited = existingRec.manuallyEdited;
+        recDeletedByUser = existingRec.deletedByUser;
+      }
+      // Ne pas toucher au re-dispatch automatique si l'utilisateur a édité manuellement
+      if (existingRec && existingRec.dispatched && !recManuallyEdited && !recDeletedByUser) {
         const oldDateStr = existingRec.date.toISOString().substring(0, 10);
         if (oldDateStr !== endDate) {
           console.log(`[Google Calendar] 📅 Date changée pour ramassage "${clientName}": ${oldDateStr} → ${endDate}, re-dispatch nécessaire`);
@@ -982,19 +999,21 @@ export async function syncGoogleCalendarEvents(): Promise<{
       await prisma.pendingPoint.upsert({
         where: { externalId: `${eventId}_ramassage` },
         update: {
-          date: ensureDateUTC(endDate),
-          clientName,
-          ...(adresse !== null && { adresse }),
-          ...(produitNom !== null && { produitNom }),
-          ...(creneauRecDebut !== null && { creneauDebut: creneauRecDebut }),
-          ...(creneauRecFin !== null && { creneauFin: creneauRecFin }),
-          ...(contactNom !== null && { contactNom }),
-          ...(contactTelephone !== null && { contactTelephone }),
-          notes,
-          calendarId,
-          ...(attachments.length > 0 && { attachments }),
-          ...(!isLivraison && { dispatched: true }),
-          ...(recDispatchOverride === false && { dispatched: false }),
+          ...(!recManuallyEdited && !recDeletedByUser && {
+            date: ensureDateUTC(endDate),
+            clientName,
+            ...(adresse !== null && { adresse }),
+            ...(produitNom !== null && { produitNom }),
+            ...(creneauRecDebut !== null && { creneauDebut: creneauRecDebut }),
+            ...(creneauRecFin !== null && { creneauFin: creneauRecFin }),
+            ...(contactNom !== null && { contactNom }),
+            ...(contactTelephone !== null && { contactTelephone }),
+            notes,
+            calendarId,
+            ...(attachments.length > 0 && { attachments }),
+            ...(!isLivraison && { dispatched: true }),
+            ...(recDispatchOverride === false && { dispatched: false }),
+          }),
         },
         create: {
           date: ensureDateUTC(endDate),
