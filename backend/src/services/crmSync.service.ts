@@ -1,19 +1,15 @@
 /**
  * CRM Sync Service
- * Scrapes the Shootnbox CRM (shootnbox.fr/manager2/) and syncs customer
- * emails + phones into OptiTourBooth bookings.
+ * Scrapes ShootNBox CRM (shootnbox.fr/manager2/) and Smakk CRM (smakk.fr/manager/)
+ * and syncs customer data into OptiTourBooth bookings.
  *
- * Strategy (3 sources, priority order):
- *  1. orders_ajax.php?status=2 (confirmed reservations) → best source:
- *     has email, phone, company+person in "customer" field, event date, borne
- *  2. readiness_ajax.php (preparation) → has société ↔ nom link
- *  3. albums_list.php (past events) → has email but only contact name
- *
- * Matching: date + fuzzy(company name OR contact name OR person name)
- * against OptiTourBooth booking customerName (from Google Calendar = company).
+ * For each booking, stores:
+ *   - customerEmail, customerPhone
+ *   - companyName, contactName  ← used by Drive scan for better folder matching
+ *   - crmOrderId, crmBrand      ← stable dedup key
  *
  * Runs every hour via setInterval (configured in app.ts).
- * Read-only on the CRM side — only updates OptiTourBooth bookings.
+ * Read-only on the CRM side.
  */
 
 import { prisma } from '../config/database.js';
@@ -28,13 +24,13 @@ interface CrmRecord {
   phone: string;
   borne: string;
   eventDate: string;     // DD.MM.YYYY
+  brand: 'shootnbox' | 'smakk';
   source: 'orders' | 'readiness+albums' | 'albums';
 }
 
 interface SyncResult {
-  scrapedOrders: number;
-  scrapedReadiness: number;
-  scrapedAlbums: number;
+  shootnbox: { scrapedOrders: number; scrapedReadiness: number; scrapedAlbums: number };
+  smakk: { scrapedOrders: number };
   matched: number;
   updated: number;
   errors: string[];
@@ -42,16 +38,21 @@ interface SyncResult {
 
 // ─── Config ──────────────────────────────────────────────────────
 
-const CRM_BASE_URL = 'https://www.shootnbox.fr/manager2';
-const CRM_EMAIL = process.env.CRM_SHOOTNBOX_EMAIL || '';
-const CRM_PASSWORD = process.env.CRM_SHOOTNBOX_PASSWORD || '';
+const SHOOTNBOX_BASE = 'https://www.shootnbox.fr/manager2';
+const SMAKK_BASE = 'https://www.smakk.fr/manager';
 
-// ─── Name matching (same logic as googleDrive.service.ts) ────────
+const SHOOTNBOX_EMAIL = process.env.CRM_SHOOTNBOX_EMAIL || '';
+const SHOOTNBOX_PASSWORD = process.env.CRM_SHOOTNBOX_PASSWORD || '';
+const SMAKK_EMAIL = process.env.CRM_SMAKK_EMAIL || '';
+const SMAKK_PASSWORD = process.env.CRM_SMAKK_PASSWORD || '';
+
+// ─── Name matching ────────────────────────────────────────────────
 
 function normalizeForMatch(name: string): string {
   return name
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase()
+    .replace(/[-_]/g, ' ')
     .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -62,7 +63,6 @@ function namesMatch(crmName: string, bookingName: string): boolean {
   const b = normalizeForMatch(bookingName);
   if (!a || !b) return false;
   if (a.includes(b) || b.includes(a)) return true;
-  // Prefix match for truncated/suffixed names (min 5 chars)
   if (a.length >= 5 && b.length >= 5) {
     if (a.startsWith(b.slice(0, 5)) || b.startsWith(a.slice(0, 5))) return true;
   }
@@ -77,7 +77,7 @@ function bornesMatch(crmBorne: string, bookingProduit: string | null): boolean {
   return a.includes(b) || b.includes(a);
 }
 
-// ─── Date helpers ────────────────────────────────────────────────
+// ─── Date helpers ─────────────────────────────────────────────────
 
 function parseCrmDate(dateStr: string): Date | null {
   const match = dateStr.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
@@ -96,25 +96,18 @@ function dateInRange(date: Date, start: Date, end: Date | null): boolean {
   return d >= s && d <= e;
 }
 
-// ─── HTML helpers ────────────────────────────────────────────────
+// ─── HTML helpers ─────────────────────────────────────────────────
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, '').replace(/\s+/g, ' ').trim();
 }
 
-/**
- * Parse the "customer" field from orders_ajax.php.
- * Format: "COMPANY    PERSON  Lieu de l'évènement : ..." or "Person Name  Lieu..."
- * Returns [company, person].
- */
 function parseCustomerField(raw: string): [string, string] {
   let text = stripHtml(raw);
-  // Remove everything after location/event type markers
   for (const sep of ["Lieu de l'", "Type d'", 'Retrait']) {
     const idx = text.indexOf(sep);
     if (idx > 0) text = text.slice(0, idx).trim();
   }
-  // Split by 3+ spaces (company vs person)
   const parts = text.split(/\s{3,}/);
   if (parts.length >= 2) {
     return [parts[0]!.trim(), parts[1]!.trim()];
@@ -122,57 +115,50 @@ function parseCustomerField(raw: string): [string, string] {
   return ['', parts[0]!.trim()];
 }
 
-// ─── CRM Scraping ────────────────────────────────────────────────
+// ─── Generic CRM login ────────────────────────────────────────────
 
-async function crmLogin(): Promise<string> {
-  if (!CRM_EMAIL || !CRM_PASSWORD) {
-    throw new Error('CRM credentials not configured (CRM_SHOOTNBOX_EMAIL / CRM_SHOOTNBOX_PASSWORD)');
-  }
-
-  const response = await fetch(`${CRM_BASE_URL}/d26386b04e.php`, {
+async function crmLogin(baseUrl: string, email: string, password: string, brand: string): Promise<string> {
+  const response = await fetch(`${baseUrl}/d26386b04e.php`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `event=login&email=${encodeURIComponent(CRM_EMAIL)}&password=${encodeURIComponent(CRM_PASSWORD)}`,
+    body: `event=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
     redirect: 'manual',
   });
 
   const text = await response.text();
   if (text.trim() !== 'done') {
-    throw new Error(`CRM login failed: ${text.trim()}`);
+    throw new Error(`${brand} CRM login failed: ${text.trim()}`);
   }
 
   const setCookies = response.headers.getSetCookie?.() || [];
   const cookieHeader = setCookies.map(c => c.split(';')[0]).join('; ');
 
   if (!cookieHeader) {
-    throw new Error('CRM login succeeded but no session cookie returned');
+    throw new Error(`${brand} CRM login succeeded but no session cookie returned`);
   }
 
   return cookieHeader;
 }
 
-/**
- * Fetch paginated orders from orders_ajax.php.
- * Used for both current reservations and archives.
- */
-async function fetchOrdersPage(cookie: string, url: string, start: number, length: number): Promise<{ rows: any[]; totalFiltered: number }> {
+// ─── Paginated orders fetch ───────────────────────────────────────
+
+async function fetchOrdersPage(
+  cookie: string, url: string, start: number, length: number,
+): Promise<{ rows: any[]; totalFiltered: number }> {
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      Cookie: cookie,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `draw=1&start=${start}&length=${length}`,
   });
 
   const data = await response.json() as any;
   return {
     rows: data.aaData || data.data || [],
-    totalFiltered: data.iTotalDisplayRecords || 0,
+    totalFiltered: data.iTotalDisplayRecords || data.recordsFiltered || 0,
   };
 }
 
-function parseOrderRows(rows: any[]): CrmRecord[] {
+function parseOrderRows(rows: any[], brand: 'shootnbox' | 'smakk'): CrmRecord[] {
   const records: CrmRecord[] = [];
 
   for (const row of rows) {
@@ -193,6 +179,7 @@ function parseOrderRows(rows: any[]): CrmRecord[] {
       phone,
       borne,
       eventDate,
+      brand,
       source: 'orders',
     });
   }
@@ -200,29 +187,23 @@ function parseOrderRows(rows: any[]): CrmRecord[] {
   return records;
 }
 
-/**
- * Source 1: Scrape orders_ajax.php?status=2 (confirmed reservations)
- * + archives (status=2&arch=true). Best source — has company name,
- * person name, email, phone, event date, borne.
- * Paginates through all pages (500 per page).
- */
-async function scrapeOrders(cookie: string): Promise<CrmRecord[]> {
+// ─── ShootNBox scraping ───────────────────────────────────────────
+
+async function scrapeShootnboxOrders(cookie: string): Promise<CrmRecord[]> {
   const PAGE_SIZE = 500;
   const records: CrmRecord[] = [];
 
-  // Current reservations (usually < 500)
-  const currentUrl = `${CRM_BASE_URL}/orders_ajax.php?status=2`;
+  const currentUrl = `${SHOOTNBOX_BASE}/orders_ajax.php?status=2`;
   const current = await fetchOrdersPage(cookie, currentUrl, 0, PAGE_SIZE);
-  records.push(...parseOrderRows(current.rows));
+  records.push(...parseOrderRows(current.rows, 'shootnbox'));
 
-  // Archives (can be 1500+, paginate)
-  const archiveUrl = `${CRM_BASE_URL}/orders_ajax.php?status=2&arch=true`;
+  const archiveUrl = `${SHOOTNBOX_BASE}/orders_ajax.php?status=2&arch=true`;
   let start = 0;
   let totalArchives = 0;
 
   do {
     const page = await fetchOrdersPage(cookie, archiveUrl, start, PAGE_SIZE);
-    records.push(...parseOrderRows(page.rows));
+    records.push(...parseOrderRows(page.rows, 'shootnbox'));
     totalArchives = page.totalFiltered;
     start += PAGE_SIZE;
   } while (start < totalArchives);
@@ -230,19 +211,12 @@ async function scrapeOrders(cookie: string): Promise<CrmRecord[]> {
   return records;
 }
 
-/**
- * Source 2: Scrape readiness_ajax.php (preparation page)
- * Has société ↔ nom link. No email — must be joined with albums.
- */
-async function scrapeReadiness(cookie: string): Promise<Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>> {
+async function scrapeShootnboxReadiness(cookie: string): Promise<Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>> {
   const map = new Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>();
 
-  const response = await fetch(`${CRM_BASE_URL}/readiness_ajax.php`, {
+  const response = await fetch(`${SHOOTNBOX_BASE}/readiness_ajax.php`, {
     method: 'POST',
-    headers: {
-      Cookie: cookie,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'draw=1&start=0&length=500',
   });
 
@@ -257,38 +231,31 @@ async function scrapeReadiness(cookie: string): Promise<Map<string, { societe: s
     const dateMatch = dateRaw.match(/^(\d{2}\.\d{2}\.\d{4})/);
     const eventDate = dateMatch ? dateMatch[1]! : '';
 
-    const societe = stripHtml(String(row.societe || ''));
-    const contactName = stripHtml(String(row.name || ''));
-    const borne = stripHtml(String(row.borne || ''));
-
-    map.set(orderId, { societe, contactName, eventDate, borne });
+    map.set(orderId, {
+      societe: stripHtml(String(row.societe || '')),
+      contactName: stripHtml(String(row.name || '')),
+      eventDate,
+      borne: stripHtml(String(row.borne || '')),
+    });
   }
 
   return map;
 }
 
-/**
- * Source 3: Scrape albums_list.php (past events with photos)
- * Has email + phone, but only contact name (no company).
- */
-async function scrapeAlbums(cookie: string): Promise<Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>> {
+async function scrapeShootnboxAlbums(cookie: string): Promise<Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>> {
   const map = new Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>();
 
-  const response = await fetch(`${CRM_BASE_URL}/albums_list.php`, {
+  const response = await fetch(`${SHOOTNBOX_BASE}/albums_list.php`, {
     headers: { Cookie: cookie },
   });
 
   const html = await response.text();
-
   if (html.includes('<title>Entrance</title>')) {
-    throw new Error('CRM session expired (redirected to login)');
+    throw new Error('ShootNBox CRM session expired (redirected to login)');
   }
 
   const tbodyMatch = html.match(/<tbody>([\s\S]*?)<\/tbody>/);
-  if (!tbodyMatch) {
-    console.warn('[CRM Sync] No <tbody> found in albums page');
-    return map;
-  }
+  if (!tbodyMatch) return map;
 
   const rows = tbodyMatch[1]!.match(/<tr[^>]*>([\s\S]*?)<\/tr>/g) || [];
 
@@ -302,26 +269,21 @@ async function scrapeAlbums(cookie: string): Promise<Map<string, { contactName: 
     const emailMatch = userHtml.match(/mailto:([^"]+)"/);
     const phoneMatch = userHtml.match(/tel:([^"]+)"/);
 
-    const contactName = nameMatch ? nameMatch[1]!.trim() : '';
     const email = emailMatch ? emailMatch[1]!.trim() : '';
-    const phone = phoneMatch ? phoneMatch[1]!.trim() : '';
-    const borne = stripHtml(cells[2]!);
-    const eventDate = stripHtml(cells[5]!);
-
     if (!email) continue;
 
-    map.set(orderId, { contactName, email, phone, borne, eventDate });
+    map.set(orderId, {
+      contactName: nameMatch ? nameMatch[1]!.trim() : '',
+      email,
+      phone: phoneMatch ? phoneMatch[1]!.trim() : '',
+      borne: stripHtml(cells[2]!),
+      eventDate: stripHtml(cells[5]!),
+    });
   }
 
   return map;
 }
 
-// ─── Merge sources ───────────────────────────────────────────────
-
-/**
- * Merge readiness (société) + albums (email) into additional records.
- * These complement the orders source for past events not in reservations.
- */
 function buildAlbumRecords(
   readinessMap: Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>,
   albumsMap: Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>,
@@ -330,7 +292,6 @@ function buildAlbumRecords(
   const records: CrmRecord[] = [];
 
   for (const [orderId, album] of albumsMap) {
-    // Skip if already covered by orders source
     if (existingOrderIds.has(orderId)) continue;
 
     const readiness = readinessMap.get(orderId);
@@ -343,6 +304,7 @@ function buildAlbumRecords(
       phone: album.phone,
       borne: readiness?.borne || album.borne,
       eventDate: readiness?.eventDate || album.eventDate,
+      brand: 'shootnbox',
       source: readiness ? 'readiness+albums' : 'albums',
     });
   }
@@ -350,7 +312,31 @@ function buildAlbumRecords(
   return records;
 }
 
-// ─── Matching & Sync ─────────────────────────────────────────────
+// ─── Smakk scraping ───────────────────────────────────────────────
+
+async function scrapeSmakkOrders(cookie: string): Promise<CrmRecord[]> {
+  const PAGE_SIZE = 500;
+  const records: CrmRecord[] = [];
+
+  const currentUrl = `${SMAKK_BASE}/orders_ajax.php?status=2`;
+  const current = await fetchOrdersPage(cookie, currentUrl, 0, PAGE_SIZE);
+  records.push(...parseOrderRows(current.rows, 'smakk'));
+
+  const archiveUrl = `${SMAKK_BASE}/orders_ajax.php?status=2&arch=true`;
+  let start = 0;
+  let totalArchives = 0;
+
+  do {
+    const page = await fetchOrdersPage(cookie, archiveUrl, start, PAGE_SIZE);
+    records.push(...parseOrderRows(page.rows, 'smakk'));
+    totalArchives = page.totalFiltered;
+    start += PAGE_SIZE;
+  } while (start < totalArchives);
+
+  return records;
+}
+
+// ─── Matching ─────────────────────────────────────────────────────
 
 function recordMatchesBooking(
   record: CrmRecord,
@@ -362,74 +348,70 @@ function recordMatchesBooking(
   if (!crmDate) return false;
   if (!dateInRange(crmDate, bookingDate, bookingEndDate)) return false;
 
-  // Try company name first (most common for OptiTourBooth bookings)
   if (record.company && namesMatch(record.company, bookingName)) return true;
-
-  // Try contact/person name
   if (record.contactName && namesMatch(record.contactName, bookingName)) return true;
 
   return false;
 }
 
-/**
- * Main sync function: scrape CRM and update OptiTourBooth bookings
- */
-export async function syncCrmEmails(): Promise<SyncResult> {
+// ─── Main sync ────────────────────────────────────────────────────
+
+export async function syncCrmData(): Promise<SyncResult> {
   const result: SyncResult = {
-    scrapedOrders: 0,
-    scrapedReadiness: 0,
-    scrapedAlbums: 0,
+    shootnbox: { scrapedOrders: 0, scrapedReadiness: 0, scrapedAlbums: 0 },
+    smakk: { scrapedOrders: 0 },
     matched: 0,
     updated: 0,
     errors: [],
   };
 
-  // 1. Login to CRM
-  let cookie: string;
-  try {
-    cookie = await crmLogin();
-  } catch (e: any) {
-    result.errors.push(`Login failed: ${e.message}`);
-    return result;
+  const allRecords: CrmRecord[] = [];
+
+  // ── ShootNBox ──
+  if (SHOOTNBOX_EMAIL && SHOOTNBOX_PASSWORD) {
+    try {
+      const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox');
+      const [orderRecords, readinessMap, albumsMap] = await Promise.all([
+        scrapeShootnboxOrders(cookie),
+        scrapeShootnboxReadiness(cookie),
+        scrapeShootnboxAlbums(cookie),
+      ]);
+
+      result.shootnbox.scrapedOrders = orderRecords.length;
+      result.shootnbox.scrapedReadiness = readinessMap.size;
+      result.shootnbox.scrapedAlbums = albumsMap.size;
+
+      const orderIds = new Set(orderRecords.map(r => r.orderId));
+      allRecords.push(...orderRecords);
+      allRecords.push(...buildAlbumRecords(readinessMap, albumsMap, orderIds));
+    } catch (e: any) {
+      result.errors.push(`ShootNBox: ${e.message}`);
+    }
+  } else {
+    result.errors.push('ShootNBox: credentials not configured (CRM_SHOOTNBOX_EMAIL / CRM_SHOOTNBOX_PASSWORD)');
   }
 
-  // 2. Scrape all 3 sources in parallel
-  let orderRecords: CrmRecord[];
-  let readinessMap: Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>;
-  let albumsMap: Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>;
-
-  try {
-    [orderRecords, readinessMap, albumsMap] = await Promise.all([
-      scrapeOrders(cookie),
-      scrapeReadiness(cookie),
-      scrapeAlbums(cookie),
-    ]);
-    result.scrapedOrders = orderRecords.length;
-    result.scrapedReadiness = readinessMap.size;
-    result.scrapedAlbums = albumsMap.size;
-  } catch (e: any) {
-    result.errors.push(`Scrape failed: ${e.message}`);
-    return result;
+  // ── Smakk ──
+  if (SMAKK_EMAIL && SMAKK_PASSWORD) {
+    try {
+      const cookie = await crmLogin(SMAKK_BASE, SMAKK_EMAIL, SMAKK_PASSWORD, 'Smakk');
+      const smakkRecords = await scrapeSmakkOrders(cookie);
+      result.smakk.scrapedOrders = smakkRecords.length;
+      allRecords.push(...smakkRecords);
+    } catch (e: any) {
+      result.errors.push(`Smakk: ${e.message}`);
+    }
   }
-
-  // 3. Build complete record set: orders first (best), then albums+readiness for the rest
-  const orderIds = new Set(orderRecords.map(r => r.orderId));
-  const albumRecords = buildAlbumRecords(readinessMap, albumsMap, orderIds);
-  const allRecords = [...orderRecords, ...albumRecords];
+  // Smakk credentials absent → silently skip (not an error)
 
   if (allRecords.length === 0) {
-    result.errors.push('No CRM records found');
+    result.errors.push('No CRM records found from any source');
     return result;
   }
 
-  // 4. Get bookings that need email
+  // ── Match and update ALL bookings ──
+  // Target all bookings — even those with email — so companyName/contactName always stay fresh
   const bookings = await prisma.booking.findMany({
-    where: {
-      OR: [
-        { customerEmail: null },
-        { customerEmail: '' },
-      ],
-    },
     select: {
       id: true,
       customerName: true,
@@ -438,19 +420,26 @@ export async function syncCrmEmails(): Promise<SyncResult> {
       eventDate: true,
       eventEndDate: true,
       produitNom: true,
+      crmOrderId: true,
     },
   });
 
-  if (bookings.length === 0) {
-    console.log('[CRM Sync] All bookings already have emails — nothing to sync');
-    return result;
-  }
-
-  // 5. Match and update
   for (const booking of bookings) {
-    const candidates = allRecords.filter(r =>
-      recordMatchesBooking(r, booking.customerName, booking.eventDate, booking.eventEndDate)
-    );
+    // If already linked by crmOrderId, just refresh that record
+    let candidates: CrmRecord[];
+    if (booking.crmOrderId) {
+      candidates = allRecords.filter(r => r.orderId === booking.crmOrderId);
+      // Fall back to name match if the order isn't in current scrape (e.g. deep archive)
+      if (candidates.length === 0) {
+        candidates = allRecords.filter(r =>
+          recordMatchesBooking(r, booking.customerName, booking.eventDate, booking.eventEndDate)
+        );
+      }
+    } else {
+      candidates = allRecords.filter(r =>
+        recordMatchesBooking(r, booking.customerName, booking.eventDate, booking.eventEndDate)
+      );
+    }
 
     if (candidates.length === 0) continue;
 
@@ -471,23 +460,23 @@ export async function syncCrmEmails(): Promise<SyncResult> {
     result.matched++;
 
     try {
-      const updateData: Record<string, string> = {
-        customerEmail: best.email,
-      };
-
-      if (!booking.customerPhone && best.phone) {
-        updateData.customerPhone = best.phone;
-      }
-
       await prisma.booking.update({
         where: { id: booking.id },
-        data: updateData,
+        data: {
+          ...(best.email && { customerEmail: best.email }),
+          ...(!booking.customerPhone && best.phone && { customerPhone: best.phone }),
+          ...(best.company && { companyName: best.company }),
+          ...(best.contactName && { contactName: best.contactName }),
+          crmOrderId: best.orderId,
+          crmBrand: best.brand,
+        },
       });
 
       result.updated++;
       console.log(
-        `[CRM Sync] ✓ "${booking.customerName}" → ${best.email} [${best.source}]` +
-        (best.company ? ` (company: ${best.company})` : '')
+        `[CRM Sync] ✓ [${best.brand}] "${booking.customerName}" → ${best.email}` +
+        (best.company ? ` (${best.company})` : '') +
+        (best.contactName ? ` / ${best.contactName}` : '')
       );
     } catch (e: any) {
       result.errors.push(`Update failed for booking ${booking.id}: ${e.message}`);
@@ -497,51 +486,53 @@ export async function syncCrmEmails(): Promise<SyncResult> {
   return result;
 }
 
-// ─── Cron control ────────────────────────────────────────────────
+// ─── Backward compat export ───────────────────────────────────────
+
+export const syncCrmEmails = syncCrmData;
+
+// ─── Cron control ─────────────────────────────────────────────────
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
 
 export function startCrmSync(): void {
-  if (!CRM_EMAIL || !CRM_PASSWORD) {
-    console.log('[CRM Sync] Credentials not configured (CRM_SHOOTNBOX_EMAIL / CRM_SHOOTNBOX_PASSWORD), sync disabled');
+  const hasShootnbox = !!(SHOOTNBOX_EMAIL && SHOOTNBOX_PASSWORD);
+  const hasSmakk = !!(SMAKK_EMAIL && SMAKK_PASSWORD);
+
+  if (!hasShootnbox && !hasSmakk) {
+    console.log('[CRM Sync] No CRM credentials configured, sync disabled');
     return;
   }
 
-  const intervalMs = 60 * 60 * 1000; // 1 hour
+  const brands = [hasShootnbox && 'ShootNBox', hasSmakk && 'Smakk'].filter(Boolean).join(' + ');
+  const intervalMs = 60 * 60 * 1000;
 
-  // Initial sync after 30 seconds (let other services start first)
   setTimeout(async () => {
     try {
-      const result = await syncCrmEmails();
+      const result = await syncCrmData();
       console.log(
-        `[CRM Sync] Initial: orders=${result.scrapedOrders}, readiness=${result.scrapedReadiness}, ` +
-        `albums=${result.scrapedAlbums}, matched=${result.matched}, updated=${result.updated}`
+        `[CRM Sync] Initial (${brands}): snb_orders=${result.shootnbox.scrapedOrders}, ` +
+        `smakk_orders=${result.smakk.scrapedOrders}, matched=${result.matched}, updated=${result.updated}`
       );
-      if (result.errors.length > 0) {
-        console.warn('[CRM Sync] Errors:', result.errors);
-      }
+      if (result.errors.length > 0) console.warn('[CRM Sync] Errors:', result.errors);
     } catch (e) {
       console.error('[CRM Sync] Initial sync error:', e);
     }
   }, 30_000);
 
-  // Periodic sync every hour
   syncInterval = setInterval(async () => {
     try {
-      const result = await syncCrmEmails();
+      const result = await syncCrmData();
       console.log(
-        `[CRM Sync] Sync: orders=${result.scrapedOrders}, readiness=${result.scrapedReadiness}, ` +
-        `albums=${result.scrapedAlbums}, matched=${result.matched}, updated=${result.updated}`
+        `[CRM Sync] Sync (${brands}): snb_orders=${result.shootnbox.scrapedOrders}, ` +
+        `smakk_orders=${result.smakk.scrapedOrders}, matched=${result.matched}, updated=${result.updated}`
       );
-      if (result.errors.length > 0) {
-        console.warn('[CRM Sync] Errors:', result.errors);
-      }
+      if (result.errors.length > 0) console.warn('[CRM Sync] Errors:', result.errors);
     } catch (e) {
       console.error('[CRM Sync] Sync error:', e);
     }
   }, intervalMs);
 
-  console.log('⏰ CRON: CRM email sync every 60 min');
+  console.log(`⏰ CRON: CRM sync (${brands}) every 60 min`);
 }
 
 export function stopCrmSync(): void {

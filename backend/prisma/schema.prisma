@@ -702,6 +702,10 @@ model Booking {
   photosNotUnloaded   Boolean       @default(false) @map("photos_not_unloaded")
   driveFolderId       String?       @map("drive_folder_id")
   photoCount          Int?          @map("photo_count")
+  companyName         String?       @map("company_name")
+  contactName         String?       @map("contact_name")
+  crmOrderId          String?       @map("crm_order_id")
+  crmBrand            String?       @map("crm_brand")
 
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")

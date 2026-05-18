@@ -24,11 +24,11 @@ export function startGalleryWorker(): void {
       }
     );
 
-    galleryWorker.on('completed', (job) => {
+    galleryWorker.on('completed', (job: any) => {
       console.log(`[GalleryWorker] Job ${job.id} completed`);
     });
 
-    galleryWorker.on('failed', (job, err) => {
+    galleryWorker.on('failed', (job: any, err: any) => {
       console.error(`[GalleryWorker] Job ${job?.id} failed:`, err.message);
     });
 

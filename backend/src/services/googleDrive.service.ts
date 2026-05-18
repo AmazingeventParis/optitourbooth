@@ -188,6 +188,8 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
     select: {
       id: true,
       customerName: true,
+      companyName: true,
+      contactName: true,
       eventDate: true,
       eventEndDate: true,
       galleryUrl: true,
@@ -219,7 +221,12 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
       if (b.driveFolderId === folder.id) return false;
       const dateOk = dateInRange(folder.parsed.date, b.eventDate, b.eventEndDate);
       if (!dateOk) return false;
-      return namesMatch(folder.parsed.clientName, b.customerName);
+      // Try all available name candidates: Calendar title, CRM company, CRM contact
+      return (
+        namesMatch(folder.parsed.clientName, b.customerName) ||
+        (b.companyName ? namesMatch(folder.parsed.clientName, b.companyName) : false) ||
+        (b.contactName ? namesMatch(folder.parsed.clientName, b.contactName) : false)
+      );
     });
 
     if (matchedBooking) {
@@ -342,8 +349,8 @@ export async function listFolderThumbnails(galleryUrl: string): Promise<{ thumbn
   });
 
   const thumbnails = (response.data.files || [])
-    .filter(f => f.thumbnailLink)
-    .map(f => f.thumbnailLink!.replace(/=s\d+/, '=s400'));
+    .filter((f: any) => f.thumbnailLink)
+    .map((f: any) => f.thumbnailLink!.replace(/=s\d+/, '=s400'));
 
   return { thumbnails, totalCount };
 }

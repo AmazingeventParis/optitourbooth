@@ -570,7 +570,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
 
       const events = response.data.items || [];
       const taggedEvents = events.filter(
-        (e) => e.summary && EVENT_TAG_REGEX.test(e.summary.trim())
+        (e: any) => e.summary && EVENT_TAG_REGEX.test(e.summary.trim())
       );
 
       // Log les pièces jointes trouvées
@@ -592,7 +592,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
       }
 
       console.log(`[Google Calendar] ${calId}: ${taggedEvents.length} événements taggés sur ${events.length} total`);
-      allTaggedEvents.push(...taggedEvents.map(event => ({ event, calendarId: calId })));
+      allTaggedEvents.push(...taggedEvents.map((event: any) => ({ event, calendarId: calId })));
     } catch (e) {
       console.error(`[Google Calendar] Erreur lecture calendrier ${calId}:`, e);
     }
