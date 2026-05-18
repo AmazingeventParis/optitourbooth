@@ -1,4 +1,49 @@
 workflows:
+  android-apk:
+    name: Android APK Build
+    max_build_duration: 45
+    instance_type: linux_x2
+    environment:
+      node: 20
+      java: 17
+      vars:
+        VITE_API_URL: "https://optitourbooth-api.swipego.app/api"
+        VITE_CAPACITOR: "true"
+    scripts:
+      - name: Install dependencies
+        script: |
+          cd frontend
+          npm install --include=dev --legacy-peer-deps
+      - name: Build web assets (capacitor mode)
+        script: |
+          cd frontend
+          npx vite build --mode capacitor
+      - name: Init & sync Capacitor Android
+        script: |
+          cd frontend
+          npx cap add android 2>/dev/null || echo "Platform already exists"
+          npx cap sync android
+      - name: Build debug APK
+        script: |
+          cd frontend/android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - name: Copy APK to public/downloads
+        script: |
+          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk \
+             frontend/public/downloads/optitour.apk
+          echo "APK size: $(du -sh frontend/public/downloads/optitour.apk | cut -f1)"
+      - name: Commit and push updated APK
+        script: |
+          git config user.email "ci@swipego.app"
+          git config user.name "Codemagic CI"
+          git add frontend/public/downloads/optitour.apk
+          git commit -m "build: update Android APK [ci skip]" || echo "Nothing to commit"
+          git push origin master || echo "Push failed — download artifact manually"
+    artifacts:
+      - frontend/android/app/build/outputs/apk/debug/app-debug.apk
+      - frontend/public/downloads/optitour.apk
+
   ios-build:
     name: iOS Build & TestFlight
     max_build_duration: 30
