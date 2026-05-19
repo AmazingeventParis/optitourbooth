@@ -376,8 +376,10 @@ async function fetchSmakkOrders(signal?: AbortSignal): Promise<CrmRecord[]> {
       });
     }
 
+    const pageRows = (data.data || []).length;
     page++;
-  } while (records.length < total);
+    if (pageRows === 0) break;
+  } while (page * PAGE_SIZE < total);
 
   return records;
 }
