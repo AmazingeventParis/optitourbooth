@@ -588,6 +588,10 @@ async function _syncCrmData(signal: AbortSignal): Promise<SyncResult> {
     if (!customerName) continue;
 
     try {
+      // Check if a booking with this crmOrderId already exists (no DB unique constraint — check manually)
+      const existing = await prisma.booking.findFirst({ where: { crmOrderId: record.orderId }, select: { id: true } });
+      if (existing) continue;
+
       await prisma.booking.create({
         data: {
           publicToken: randomUUID(),
@@ -607,10 +611,7 @@ async function _syncCrmData(signal: AbortSignal): Promise<SyncResult> {
       result.created++;
       console.log(`[CRM Sync] + Created booking [${record.brand}] "${customerName}" ${record.eventDate}`);
     } catch (e: any) {
-      // Unique constraint on crmOrderId would mean it already exists — skip silently
-      if (!e.message?.includes('Unique constraint')) {
-        result.errors.push(`Create failed for order ${record.orderId}: ${e.message}`);
-      }
+      result.errors.push(`Create failed for order ${record.orderId}: ${e.message}`);
     }
   }
 
