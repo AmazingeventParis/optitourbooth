@@ -424,6 +424,7 @@ export async function syncCrmData(): Promise<SyncResult> {
       smakk: { scrapedOrders: 0 },
       matched: 0,
       updated: 0,
+      created: 0,
       errors: [e.message || 'Unknown sync error'],
       completedAt: new Date().toISOString(),
     };
