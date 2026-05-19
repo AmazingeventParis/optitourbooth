@@ -945,6 +945,15 @@ export const testCrmLogin = asyncHandler(async (_req: Request, res: Response) =>
     const archTotal = archData.iTotalDisplayRecords || archData.recordsFiltered || 0;
     const curRows = (curData.aaData || curData.data || []) as any[];
 
+    // Step 3: Fetch readiness sample (to see all available field names)
+    const readinessResp = await fetch(`${base}/readiness_ajax.php`, {
+      method: 'POST',
+      headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'draw=1&start=0&length=3',
+    });
+    const readinessData = await readinessResp.json() as any;
+    const readinessRows = (readinessData.aaData || readinessData.data || []) as any[];
+
     return apiResponse.success(res, {
       loginOk: true,
       currentTotal: curTotal,
@@ -955,6 +964,9 @@ export const testCrmLogin = asyncHandler(async (_req: Request, res: Response) =>
         event_date: r.event_date ? String(r.event_date).replace(/<[^>]+>/g, '').trim() : null,
         customer: r.customer ? String(r.customer).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) : null,
       })),
+      // Raw readiness row to discover all available field names
+      sampleReadinessRowKeys: readinessRows.length > 0 ? Object.keys(readinessRows[0]) : [],
+      sampleReadinessRow: readinessRows[0] || null,
     });
   } catch (e: any) {
     return apiResponse.success(res, { loginOk: false, error: e.message });
