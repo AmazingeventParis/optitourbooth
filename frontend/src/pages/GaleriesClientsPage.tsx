@@ -481,6 +481,13 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
     onSendBrand(brand, email);
   };
 
+  // Derive active brand from crmBrand: only the matching brand's buttons are interactive
+  const activeBrand: 'SHOOTNBOX' | 'SMAKK' | null =
+    booking.crmBrand === 'shootnbox' ? 'SHOOTNBOX' :
+    booking.crmBrand === 'smakk' ? 'SMAKK' : null;
+  const snbEnabled = activeBrand === null || activeBrand === 'SHOOTNBOX';
+  const smakkEnabled = activeBrand === null || activeBrand === 'SMAKK';
+
   return (
     <Card className="p-4 flex flex-col justify-between">
       <div>
@@ -563,8 +570,10 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
       <div className="pt-3 border-t border-gray-100">
         <div className="grid grid-cols-2 gap-2">
           {/* SHOOTNBOX */}
-          <div className="space-y-1.5">
-            <div className="text-[10px] font-bold text-orange-600 uppercase text-center tracking-wider">Shootnbox</div>
+          <div className={clsx("space-y-1.5 transition-opacity", !snbEnabled && "opacity-30 pointer-events-none")}>
+            <div className={clsx("text-[10px] font-bold uppercase text-center tracking-wider", snbEnabled ? "text-orange-600" : "text-gray-400")}>
+              Shootnbox
+            </div>
             <button onClick={() => onSendDrive('SHOOTNBOX')} disabled={sending || !emailValue.trim() || !booking.galleryUrl}
               className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               <FolderOpenIcon className="h-3.5 w-3.5" /> Envoyer Drive
@@ -580,8 +589,10 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
           </div>
 
           {/* SMAKK */}
-          <div className="space-y-1.5">
-            <div className="text-[10px] font-bold text-purple-600 uppercase text-center tracking-wider">Smakk</div>
+          <div className={clsx("space-y-1.5 transition-opacity", !smakkEnabled && "opacity-30 pointer-events-none")}>
+            <div className={clsx("text-[10px] font-bold uppercase text-center tracking-wider", smakkEnabled ? "text-purple-600" : "text-gray-400")}>
+              Smakk
+            </div>
             <button onClick={() => onSendDrive('SMAKK')} disabled={sending || !emailValue.trim() || !booking.galleryUrl}
               className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               <FolderOpenIcon className="h-3.5 w-3.5" /> Envoyer Drive
