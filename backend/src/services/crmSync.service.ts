@@ -90,10 +90,15 @@ function parseCrmDate(dateStr: string): Date | null {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Allow ±2 days around the booking date range.
+// LIR bookings: eventDate = delivery day (D), eventEndDate = pickup day (D+2).
+// ShootNBox CRM: event_date = actual event day (D+1), so exact range match fails.
 function dateInRange(date: Date, start: Date, end: Date | null): boolean {
   const d = date.getTime();
-  const s = start.getTime();
-  const e = end ? end.getTime() : s;
+  const s = start.getTime() - 2 * DAY_MS;
+  const e = (end ? end.getTime() : start.getTime()) + 2 * DAY_MS;
   return d >= s && d <= e;
 }
 
