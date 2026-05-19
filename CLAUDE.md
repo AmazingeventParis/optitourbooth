@@ -1,5 +1,104 @@
 # Historique des sessions Claude - OptiTourBooth
 
+## Session du 19 mai 2026
+
+### Fix numId population + FA-based Drive matching opérationnel
+
+#### Résumé
+
+L'objectif était de faire fonctionner le rapprochement Drive→email dans `/galeries` grâce aux numéros de FA dans les noms de dossiers Drive (`DD.MM.YYYY - Nom - FAXXXXX`).
+
+#### Problème racine : numId jamais écrit
+
+Le CRM sync tournait (Smakk OK) mais `numId` restait null pour tous les bookings. Causes trouvées et corrigées :
+
+**1. URL ShootNBox avec www → 301 redirect silencieux**
+- `crmSync.service.ts` et `ringPhotosSync.service.ts` utilisaient `https://www.shootnbox.fr/manager2`
+- `redirect: 'manual'` dans `crmLogin()` → la réponse 301 était interprétée comme un échec de login
+- Fix : `https://shootnbox.fr/manager2` (sans www) dans les deux fichiers
+- Commits : `ca7ec91`, `646264c`
+
+**2. Route PUT vs PATCH pour booking update**
+- L'endpoint backend est `PUT /api/bookings/:id`, pas PATCH
+- Découvert lors du patching direct
+
+**3. Structure API response bookings**
+- `data` est un array direct, pas `{ bookings: [...] }`
+- Pagination par `meta.total`
+
+#### Patching direct (bypass CRM sync)
+
+Puisque le CRM sync ne tournait pas côté ShootNBox, scripts Python locaux :
+
+**`patch_num_id.py`** : Smakk bookings
+- Fetche les 1147 commandes Smakk depuis `_otb_orders.php` (toutes ont `num_id`)
+- Match par `crmOrderId` (déjà set pour 49 bookings Smakk)
+- Résultat : **49 Smakk bookings patchés avec numId**
+
+**`patch_shootnbox.py`** : ShootNBox bookings
+- Login ShootNBox local + scrape 1754 commandes avec FA numbers
+- Match par date + nom pour bookings sans email
+- Résultat : **51 ShootNBox bookings patchés avec email + numId**
+
+**`patch_missing7.py`** : 7 cas sans CRM match
+- 7 bookings ont un dossier Drive mais pas d'email CRM
+- Recherche dans Smakk + ShootNBox : 0 match (ces clients ne sont pas dans le CRM avec status=2)
+- Ces 7 doivent être traités manuellement
+
+#### Drive scan résultats
+
+Après 2 passes :
+- **94 bookings** ont un `galleryUrl` (dossier Drive lié)
+- **87 bookings** ont les DEUX (email + gallery) → affichés complets sur `/galeries`
+- 7 ont gallery sans email (non trouvés dans CRM)
+
+#### État final
+
+| Métrique | Valeur |
+|---|---|
+| Total bookings | 259 |
+| Avec email | 188 |
+| Avec numId | 100 (49 Smakk + 51 ShootNBox) |
+| Avec gallery | 94 |
+| **Email + gallery (prêts)** | **87** |
+
+#### Fichiers modifiés
+
+- `backend/src/services/crmSync.service.ts` : URL ShootNBox sans www
+- `backend/src/services/ringPhotosSync.service.ts` : URL ShootNBox sans www
+- `patch_num_id.py` : script patching Smakk numId
+- `patch_shootnbox.py` : script patching ShootNBox email + numId
+- `patch_missing7.py` : tentative patching 7 cas sans match
+
+#### Fix CRM sync côté serveur (suite de session — même jour)
+
+Après le patching manuel, `snb=0` (crmBrand=shootnbox) persistait malgré les fixes URL déployés.
+
+**Diagnostic** :
+1. Added `GET /api/bookings/test-crm-login` (avant `:id` route) → login works from server ✓
+2. Archive ShootNBox = 1675 commandes disponibles ✓
+3. Cause racine découverte : `dateInRange()` n'avait **aucune tolérance** sur les dates
+
+**Fix** : `dateInRange()` dans `crmSync.service.ts` — ajout ±2 jours de chaque côté
+- LIR bookings : `eventDate` = jour de livraison (J), CRM `event_date` = jour de l'événement (J+1)
+- Sans tolérance → 0 match pour les LIR
+- Avec ±2d → match correct (même comportement que `patch_shootnbox.py`)
+- Commit : `1095f46`
+
+**Autres fixes** :
+- `galleryWorker.ts` : parse `REDIS_URL` (comme `queue.ts`) → stop des ECONNREFUSED spam
+- Commit : `95ab649`
+
+#### Note Coolify
+
+Le buffer de logs Coolify (100 lignes) est saturé par les erreurs Redis ECONNREFUSED (BullMQ). Les logs CRM Sync sont poussés hors du buffer. Les syncs tournent correctement mais sont invisibles dans les logs.
+
+Fix déployé dans `95ab649` : `galleryWorker.ts` utilise maintenant `REDIS_URL` → devrait stopper le spam.
+
+Coolify API token : `1|FNcssp3CipkrPNVSQyv3IboYwGsP8sjPskoBG3ux98e5a576` (voir memory)
+
+---
+
 ## Session du 18 mai 2026
 
 ### Fix points à dispatcher + intégration CRM→Drive auto-complétion galeries
