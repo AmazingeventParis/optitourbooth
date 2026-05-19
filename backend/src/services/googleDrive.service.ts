@@ -61,25 +61,35 @@ function namesMatch(folderName: string, bookingName: string): boolean {
 }
 
 /**
- * Parse a folder name in format "JJ.MM.AAAA Nom client" or "JJ.MM.AA Nom client"
- * Returns the date and client name, or null if format doesn't match
+ * Parse a folder name in two formats:
+ *   New: "DD.MM.YYYY - Nom client - FAXXXXX"  (preferred, FA-matched)
+ *   Old: "DD.MM.YYYY Nom client"
+ * Returns date, clientName, and optional numId (FA number), or null if unrecognised.
  */
-function parseFolderName(name: string): { date: Date; clientName: string } | null {
-  const match = name.match(/^(\d{2})\.(\d{2})\.(\d{2,4})\s+(.+)$/);
-  if (!match) return null;
+function parseFolderName(name: string): { date: Date; clientName: string; numId?: string } | null {
+  // New format: DD.MM.YYYY - Name - FAXXXXX
+  const newFmt = name.match(/^(\d{2})\.(\d{2})\.(\d{2,4})\s*-\s*(.+?)\s*-\s*(FA\d+)\s*$/i);
+  if (newFmt) {
+    const day = parseInt(newFmt[1]!, 10);
+    const month = parseInt(newFmt[2]!, 10);
+    let year = parseInt(newFmt[3]!, 10);
+    const clientName = newFmt[4]!.trim();
+    const numId = newFmt[5]!.toUpperCase();
+    if (year < 100) year += 2000;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return { date: new Date(Date.UTC(year, month - 1, day)), clientName, numId };
+  }
 
-  const day = parseInt(match[1]!, 10);
-  const month = parseInt(match[2]!, 10);
-  let year = parseInt(match[3]!, 10);
-  const clientName = match[4]!.trim();
-
-  // 2-digit year → 20xx
+  // Old format: DD.MM.YYYY Name (or DD.MM.YY Name)
+  const oldFmt = name.match(/^(\d{2})\.(\d{2})\.(\d{2,4})\s+(.+)$/);
+  if (!oldFmt) return null;
+  const day = parseInt(oldFmt[1]!, 10);
+  const month = parseInt(oldFmt[2]!, 10);
+  let year = parseInt(oldFmt[3]!, 10);
+  const clientName = oldFmt[4]!.trim();
   if (year < 100) year += 2000;
-
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return { date, clientName };
+  return { date: new Date(Date.UTC(year, month - 1, day)), clientName };
 }
 
 /**
@@ -178,7 +188,7 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
     .map(f => ({ ...f, parsed: parseFolderName(f.name) }))
     .filter(f => f.parsed !== null) as Array<{
       id: string; name: string; webViewLink: string;
-      parsed: { date: Date; clientName: string };
+      parsed: { date: Date; clientName: string; numId?: string };
     }>;
 
   console.log(`[Drive Scan] ${parsedFolders.length} dossiers au format JJ.MM.AAAA reconnus`);
@@ -190,6 +200,7 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
       customerName: true,
       companyName: true,
       contactName: true,
+      numId: true,
       eventDate: true,
       eventEndDate: true,
       galleryUrl: true,
@@ -201,7 +212,6 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
   let photoCountsUpdated = 0;
 
   for (const folder of parsedFolders) {
-    // Try to find a matching booking
     // Check if a booking already has this driveFolderId but missing galleryUrl (e.g. after reset)
     const alreadyMatched = bookings.find(b => b.driveFolderId === folder.id && !b.galleryUrl);
     if (alreadyMatched) {
@@ -216,21 +226,33 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
       continue;
     }
 
-    const matchedBooking = bookings.find(b => {
-      // Skip if already matched to this exact folder
-      if (b.driveFolderId === folder.id) return false;
-      const dateOk = dateInRange(folder.parsed.date, b.eventDate, b.eventEndDate);
-      if (!dateOk) return false;
-      // Try all available name candidates: Calendar title, CRM company, CRM contact
-      return (
-        namesMatch(folder.parsed.clientName, b.customerName) ||
-        (b.companyName ? namesMatch(folder.parsed.clientName, b.companyName) : false) ||
-        (b.contactName ? namesMatch(folder.parsed.clientName, b.contactName) : false)
-      );
-    });
+    // Skip folders already fully matched
+    if (bookings.find(b => b.driveFolderId === folder.id && b.galleryUrl)) continue;
+
+    let matchedBooking: typeof bookings[number] | undefined;
+    let matchMethod = '';
+
+    // Primary: FA number exact match (new folder naming convention)
+    if (folder.parsed.numId) {
+      matchedBooking = bookings.find(b => b.numId === folder.parsed.numId && b.driveFolderId !== folder.id);
+      if (matchedBooking) matchMethod = `FA:${folder.parsed.numId}`;
+    }
+
+    // Fallback: date + name fuzzy match (old format or FA not yet synced)
+    if (!matchedBooking) {
+      matchedBooking = bookings.find(b => {
+        if (b.driveFolderId === folder.id) return false;
+        if (!dateInRange(folder.parsed.date, b.eventDate, b.eventEndDate)) return false;
+        return (
+          namesMatch(folder.parsed.clientName, b.customerName) ||
+          (b.companyName ? namesMatch(folder.parsed.clientName, b.companyName) : false) ||
+          (b.contactName ? namesMatch(folder.parsed.clientName, b.contactName) : false)
+        );
+      });
+      if (matchedBooking) matchMethod = 'date+name';
+    }
 
     if (matchedBooking) {
-      // Count photos in this folder
       const photoCount = await countFolderFiles(folder.id);
 
       await prisma.booking.update({
@@ -242,12 +264,11 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
         },
       });
 
-      // Update local ref so we don't re-match
       matchedBooking.driveFolderId = folder.id;
       matchedBooking.galleryUrl = folder.webViewLink;
 
       matched++;
-      console.log(`[Drive Scan] ✅ Match: "${folder.name}" → booking "${matchedBooking.customerName}"`);
+      console.log(`[Drive Scan] ✅ Match (${matchMethod}): "${folder.name}" → booking "${matchedBooking.customerName}"`);
     }
   }
 

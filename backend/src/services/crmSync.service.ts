@@ -18,6 +18,7 @@ import { prisma } from '../config/database.js';
 
 interface CrmRecord {
   orderId: string;
+  numId?: string;        // FA number (ShootNBox only, e.g. "FA14016")
   company: string;       // société / company name
   contactName: string;   // person name
   email: string;
@@ -171,8 +172,15 @@ function parseOrderRows(rows: any[], brand: 'shootnbox' | 'smakk'): CrmRecord[] 
     const borne = stripHtml(String(row.box_type || ''));
     const eventDate = stripHtml(String(row.event_date || ''));
 
+    // Extract FA number from facture HTML field (ShootNBox only)
+    const numIdMatch = brand === 'shootnbox'
+      ? stripHtml(String(row.facture || '')).match(/FA\d+/)
+      : null;
+    const numId = numIdMatch ? numIdMatch[0] : undefined;
+
     records.push({
       orderId,
+      numId,
       company,
       contactName: person,
       email,
@@ -494,6 +502,7 @@ export async function syncCrmData(): Promise<SyncResult> {
           ...(best.contactName && { contactName: best.contactName }),
           crmOrderId: best.orderId,
           crmBrand: best.brand,
+          ...(best.numId && { numId: best.numId }),
         },
       });
 
