@@ -308,14 +308,14 @@ export function startDriveFolderSync(): void {
 
   const intervalMinutes = config.googleDrive.scanIntervalMinutes || 30;
 
-  // Initial scan after 20 seconds
+  // Initial scan after 90 seconds (after CRM sync at 30s has populated numId on bookings)
   setTimeout(async () => {
     try {
       await scanAndMatchDriveFolders();
     } catch (e) {
       console.error('[Drive Scan] Erreur lors du scan initial:', e);
     }
-  }, 20_000);
+  }, 90_000);
 
   // Periodic scan
   scanInterval = setInterval(async () => {
