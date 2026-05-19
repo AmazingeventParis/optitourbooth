@@ -71,6 +71,9 @@ router.post('/bookings', authenticate, requireAdmin, createBooking);
 // Create booking from Google Calendar event
 router.post('/bookings/from-event', authenticate, requireAdmin, createBookingFromEvent);
 
+// Quick ShootNBox CRM login test (debug)
+router.get('/bookings/test-crm-login', authenticate, requireAdmin, testCrmLogin);
+
 // Get booking detail
 router.get('/bookings/:id', authenticate, requireAdmin, getBookingDetail);
 
@@ -97,9 +100,6 @@ router.post('/bookings/scan-drive-folders', authenticate, requireAdmin, triggerD
 
 // Manually trigger CRM sync (ShootNBox + Smakk → bookings)
 router.post('/bookings/sync-crm', authenticate, requireAdmin, triggerCrmSync);
-
-// Quick ShootNBox CRM login test (debug)
-router.get('/bookings/test-crm-login', authenticate, requireAdmin, testCrmLogin);
 
 // Update review match status
 router.patch('/bookings/review-matches/:matchId/status', authenticate, requireAdmin, updateReviewMatchStatus);
