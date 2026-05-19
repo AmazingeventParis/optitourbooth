@@ -39,7 +39,7 @@ interface SyncResult {
 
 // ─── Config ──────────────────────────────────────────────────────
 
-const SHOOTNBOX_BASE = 'https://www.shootnbox.fr/manager2';
+const SHOOTNBOX_BASE = 'https://shootnbox.fr/manager2';
 // Smakk uses a direct DB API endpoint (session login doesn't share credentials)
 const SMAKK_API_URL = 'https://www.smakk.fr/manager/_otb_orders.php';
 const SMAKK_API_KEY = 'opti2026smk_x7kR9qNv';
