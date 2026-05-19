@@ -897,32 +897,51 @@ export const triggerCrmSync = asyncHandler(async (req: Request, res: Response) =
 
 /**
  * GET /api/bookings/test-crm-login
- * Quick test: can the server reach ShootNBox CRM and log in?
+ * Quick test: can the server reach ShootNBox CRM and log in? Returns sample orders.
  */
 export const testCrmLogin = asyncHandler(async (_req: Request, res: Response) => {
   const email = process.env.CRM_SHOOTNBOX_EMAIL || '';
   const password = process.env.CRM_SHOOTNBOX_PASSWORD || '';
   const base = 'https://shootnbox.fr/manager2';
   try {
-    const resp = await fetch(`${base}/d26386b04e.php`, {
+    // Step 1: Login
+    const loginResp = await fetch(`${base}/d26386b04e.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `event=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
       redirect: 'manual',
-      signal: AbortSignal.timeout(15000),
     });
-    const text = await resp.text();
-    const setCookies = resp.headers.getSetCookie?.() || [];
+    const loginText = await loginResp.text();
+    const setCookies = loginResp.headers.getSetCookie?.() || [];
+    const cookie = setCookies.map((c: string) => c.split(';')[0]).join('; ');
+
+    if (loginText.trim() !== 'done' || !cookie) {
+      return apiResponse.success(res, { loginOk: false, loginBody: loginText.trim(), cookie: !!cookie });
+    }
+
+    // Step 2: Fetch first page of archive orders
+    const ordersResp = await fetch(`${base}/orders_ajax.php?status=2&arch=true`, {
+      method: 'POST',
+      headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'draw=1&start=0&length=5',
+    });
+    const ordersData = await ordersResp.json() as any;
+    const rows = (ordersData.aaData || ordersData.data || []) as any[];
+    const total = ordersData.iTotalDisplayRecords || ordersData.recordsFiltered || 0;
+
     return apiResponse.success(res, {
-      status: resp.status,
-      body: text.trim(),
-      ok: text.trim() === 'done',
-      cookieCount: setCookies.length,
-      email: email ? `${email.slice(0, 3)}***` : '(not set)',
-      url: `${base}/d26386b04e.php`,
+      loginOk: true,
+      cookie: cookie.slice(0, 20) + '...',
+      archiveTotal: total,
+      sampleRows: rows.slice(0, 3).map((r: any) => ({
+        id: r.id,
+        email: r.email ? String(r.email).replace(/<[^>]+>/g, '').trim() : null,
+        event_date: r.event_date ? String(r.event_date).replace(/<[^>]+>/g, '').trim() : null,
+        customer: r.customer ? String(r.customer).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) : null,
+      })),
     });
   } catch (e: any) {
-    return apiResponse.success(res, { ok: false, error: e.message });
+    return apiResponse.success(res, { loginOk: false, error: e.message });
   }
 });
 
