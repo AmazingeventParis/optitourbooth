@@ -1,5 +1,59 @@
 # Historique des sessions Claude - OptiTourBooth
 
+## Session du 19 mai 2026 (suite — même jour)
+
+### Fix sync CRM bloquée indéfiniment → opérationnelle
+
+#### Problème
+
+La sync CRM (`syncCrmData`) ne se terminait jamais → `snb=0` persistait, aucun booking ShootNBox mis à jour.
+
+#### Causes racines et fixes
+
+**1. `AbortSignal.timeout(30_000)` ne coupait pas la lecture du body HTTP**
+- Dans Node.js (selon la version), `AbortSignal.timeout` annule la connexion mais pas forcément `response.text()` / `response.json()`
+- `albums_list.php` répondait avec des headers mais le body était énorme → `response.text()` bloquait indéfiniment
+- **Fix** : `AbortController` global 90s par invocation de sync, passé comme `signal` à TOUTES les fonctions fetch (login, orders, readiness, albums, smakk)
+- Commit : `3304086`
+
+**2. Boucle infinie dans `fetchSmakkOrders`**
+- Condition de boucle : `while (records.length < total)` — compare les records FILTRÉS (avec email) contre le total brut
+- Si des commandes Smakk n'ont pas d'email, `records.length` n'atteint jamais `total` → boucle infinie
+- **Fix** : `while (page * PAGE_SIZE < total)` + guard `if (pageRows === 0) break`
+- Commit : `5660100`
+
+#### Résultat final
+
+| Métrique | Avant | Après |
+|---|---|---|
+| snb (ShootNBox matchés) | 0 | **121** |
+| smakk (Smakk matchés) | 49 | **49** |
+| numId renseigné | 100 | **170** |
+| Email clients | 188 | **193** |
+| Gallery + Email (`/galeries`) | 87 | **88** |
+| Erreurs CRM sync | hang infini | **[]** |
+
+Sync : ShootNBox 1755 commandes + Smakk 1101, matched=170, updated=170, errors=[], durée ~40s.
+
+#### Architecture finale de `syncCrmData`
+
+```typescript
+export async function syncCrmData(): Promise<SyncResult> {
+  const controller = new AbortController();
+  const masterTimeout = setTimeout(() => controller.abort(...), 90_000);
+  try {
+    return await _syncCrmData(controller.signal); // signal passé à tous les fetch
+  } catch (e) {
+    lastSyncResult = { ...errorResult, completedAt: ... }; // visible via GET /crm-status
+    throw e;
+  } finally {
+    clearTimeout(masterTimeout);
+  }
+}
+```
+
+---
+
 ## Session du 19 mai 2026
 
 ### Fix numId population + FA-based Drive matching opérationnel
