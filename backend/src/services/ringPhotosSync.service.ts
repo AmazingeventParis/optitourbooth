@@ -46,7 +46,7 @@ interface PhotoSyncResult {
 
 // ─── Config ──────────────────────────────────────────────────────
 
-const CRM_BASE_URL = 'https://www.shootnbox.fr/manager2';
+const CRM_BASE_URL = 'https://shootnbox.fr/manager2';
 const UPLOADS_BASE_URL = 'https://shootnbox.fr/uploads';
 const CRM_EMAIL = process.env.CRM_SHOOTNBOX_EMAIL || '';
 const CRM_PASSWORD = process.env.CRM_SHOOTNBOX_PASSWORD || '';
