@@ -11,6 +11,7 @@ import {
   // Admin
   listBookings,
   listCalendarEvents,
+  listGalleryBookings,
   createBooking,
   createBookingFromEvent,
   getBookingDetail,
@@ -65,6 +66,9 @@ router.get('/bookings/stats', authenticate, requireAdmin, getBookingStats);
 
 // List calendar events with booking status
 router.get('/bookings/calendar-events', authenticate, requireAdmin, listCalendarEvents);
+
+// Gallery view: all CRM bookings for /galeries page
+router.get('/bookings/gallery-view', authenticate, requireAdmin, listGalleryBookings);
 
 // Create a new booking
 router.post('/bookings', authenticate, requireAdmin, createBooking);

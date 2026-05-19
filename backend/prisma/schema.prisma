@@ -705,7 +705,7 @@ model Booking {
   companyName         String?       @map("company_name")
   contactName         String?       @map("contact_name")
   eventName           String?       @map("event_name")
-  crmOrderId          String?       @map("crm_order_id")
+  crmOrderId          String?       @unique @map("crm_order_id")
   crmBrand            String?       @map("crm_brand")
   numId               String?       @map("num_id")
 

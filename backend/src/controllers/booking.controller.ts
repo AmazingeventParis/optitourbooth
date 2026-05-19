@@ -978,6 +978,68 @@ export const testCrmLogin = asyncHandler(async (_req: Request, res: Response) =>
 });
 
 /**
+ * GET /api/bookings/gallery-view
+ * Returns all bookings for the /galeries page.
+ * Upcoming: only CRM-matched bookings (crmBrand set).
+ * Past: all bookings (including calendar-only, for history).
+ */
+export const listGalleryBookings = asyncHandler(async (_req: Request, res: Response) => {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const allBookings = await prisma.booking.findMany({
+    include: {
+      _count: { select: { events: true, reviewMatches: true, galleryDispatches: true } },
+      galleryDispatches: {
+        where: { deliveryStatus: 'sent' },
+        orderBy: { sentAt: 'desc' },
+        take: 1,
+        select: { sentAt: true },
+      },
+    },
+    orderBy: { eventDate: 'desc' },
+  });
+
+  const format = (b: typeof allBookings[0]) => ({
+    id: b.id,
+    publicToken: b.publicToken,
+    publicUrl: `${config.reviewSystem.publicBaseUrl}/${b.publicToken}`,
+    customerName: b.customerName,
+    customerEmail: b.customerEmail,
+    customerPhone: b.customerPhone,
+    companyName: b.companyName,
+    contactName: b.contactName,
+    eventName: b.eventName,
+    crmBrand: b.crmBrand,
+    senderBrand: b.senderBrand,
+    rating: b.rating,
+    status: b.status,
+    galleryUrl: b.galleryUrl,
+    googleReviewUrl: b.googleReviewUrl,
+    emailSentAt: b.emailSentAt,
+    gallerySentAt: b.galleryDispatches?.[0]?.sentAt || null,
+    photosNotUnloaded: b.photosNotUnloaded,
+    photoCount: b.photoCount ?? null,
+    produitNom: b.produitNom,
+    eventDate: b.eventDate.toISOString().substring(0, 10),
+    eventEndDate: b.eventEndDate ? b.eventEndDate.toISOString().substring(0, 10) : null,
+    createdAt: b.createdAt,
+    _count: b._count,
+  });
+
+  const upcoming = allBookings
+    .filter(b => b.eventDate >= today && b.crmBrand !== null)
+    .map(format)
+    .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+
+  const past = allBookings
+    .filter(b => b.eventDate < today)
+    .map(format);
+
+  return apiResponse.success(res, { upcoming, past });
+});
+
+/**
  * GET /api/bookings/stats
  * Get booking statistics
  */

@@ -113,6 +113,38 @@ export interface CalendarEventsResponse {
   past: CalendarEvent[];
 }
 
+export interface GalleryBooking {
+  id: string;
+  publicToken: string;
+  publicUrl: string;
+  customerName: string;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  companyName: string | null;
+  contactName: string | null;
+  eventName: string | null;
+  crmBrand: string | null;
+  senderBrand: string | null;
+  rating: number | null;
+  status: string;
+  galleryUrl: string | null;
+  googleReviewUrl: string | null;
+  emailSentAt: string | null;
+  gallerySentAt: string | null;
+  photosNotUnloaded: boolean;
+  photoCount: number | null;
+  produitNom: string | null;
+  eventDate: string;
+  eventEndDate: string | null;
+  createdAt: string;
+  _count: { events: number; reviewMatches: number; galleryDispatches: number };
+}
+
+export interface GalleryViewResponse {
+  upcoming: GalleryBooking[];
+  past: GalleryBooking[];
+}
+
 export const bookingsService = {
   async list(params?: { page?: number; limit?: number; status?: string; search?: string }) {
     const response = await api.get<ApiResponse<Booking[]>>('/bookings', { params });
@@ -169,6 +201,11 @@ export const bookingsService = {
 
   async getCalendarEvents() {
     const response = await api.get<ApiResponse<CalendarEventsResponse>>('/bookings/calendar-events');
+    return response.data.data;
+  },
+
+  async getGalleryView() {
+    const response = await api.get<ApiResponse<GalleryViewResponse>>('/bookings/gallery-view');
     return response.data.data;
   },
 

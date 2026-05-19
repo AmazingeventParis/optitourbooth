@@ -12,6 +12,7 @@
  * Read-only on the CRM side.
  */
 
+import { randomUUID } from 'crypto';
 import { prisma } from '../config/database.js';
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ interface SyncResult {
   smakk: { scrapedOrders: number };
   matched: number;
   updated: number;
+  created: number;
   errors: string[];
 }
 
@@ -437,6 +439,7 @@ async function _syncCrmData(signal: AbortSignal): Promise<SyncResult> {
     smakk: { scrapedOrders: 0 },
     matched: 0,
     updated: 0,
+    created: 0,
     errors: [],
   };
 
@@ -502,6 +505,8 @@ async function _syncCrmData(signal: AbortSignal): Promise<SyncResult> {
     },
   });
 
+  const matchedCrmOrderIds = new Set<string>();
+
   for (const booking of bookings) {
     // If already linked by crmOrderId, just refresh that record
     let candidates: CrmRecord[];
@@ -553,6 +558,7 @@ async function _syncCrmData(signal: AbortSignal): Promise<SyncResult> {
       });
 
       result.updated++;
+      matchedCrmOrderIds.add(best.orderId);
       console.log(
         `[CRM Sync] ✓ [${best.brand}] "${booking.customerName}" → ${best.email}` +
         (best.numId ? ` FA:${best.numId}` : ' FA:none') +
@@ -561,6 +567,49 @@ async function _syncCrmData(signal: AbortSignal): Promise<SyncResult> {
       );
     } catch (e: any) {
       result.errors.push(`Update failed for booking ${booking.id}: ${e.message}`);
+    }
+  }
+
+  // ── Create bookings for CRM orders with no existing booking ──
+  // Deduplicate by orderId, skip orders already matched above
+  const seenOrderIds = new Set<string>();
+  for (const record of allRecords) {
+    if (matchedCrmOrderIds.has(record.orderId)) continue;
+    if (seenOrderIds.has(record.orderId)) continue;
+    seenOrderIds.add(record.orderId);
+
+    // Only create if we have a valid date
+    const eventDate = parseCrmDate(record.eventDate);
+    if (!eventDate) continue;
+
+    // Skip records with no usable name
+    const customerName = record.eventName || record.company || record.contactName;
+    if (!customerName) continue;
+
+    try {
+      await prisma.booking.create({
+        data: {
+          publicToken: randomUUID(),
+          customerName,
+          customerEmail: record.email || null,
+          customerPhone: record.phone || null,
+          companyName: record.company || null,
+          contactName: record.contactName || null,
+          eventName: record.eventName || null,
+          eventDate,
+          produitNom: record.borne || null,
+          crmOrderId: record.orderId,
+          crmBrand: record.brand,
+          ...(record.numId && { numId: record.numId }),
+        },
+      });
+      result.created++;
+      console.log(`[CRM Sync] + Created booking [${record.brand}] "${customerName}" ${record.eventDate}`);
+    } catch (e: any) {
+      // Unique constraint on crmOrderId would mean it already exists — skip silently
+      if (!e.message?.includes('Unique constraint')) {
+        result.errors.push(`Create failed for order ${record.orderId}: ${e.message}`);
+      }
     }
   }
 
