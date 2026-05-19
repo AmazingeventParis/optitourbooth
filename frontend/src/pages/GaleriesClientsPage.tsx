@@ -374,7 +374,7 @@ export default function GaleriesClientsPage() {
           <p>Aucun événement {tab === 'upcoming' ? 'à venir' : 'passé'}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {current.map((booking) => (
             <EventCard
               key={booking.id}
@@ -481,12 +481,9 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
     onSendBrand(brand, email);
   };
 
-  // Derive active brand from crmBrand: only the matching brand's buttons are interactive
   const activeBrand: 'SHOOTNBOX' | 'SMAKK' | null =
     booking.crmBrand === 'shootnbox' ? 'SHOOTNBOX' :
     booking.crmBrand === 'smakk' ? 'SMAKK' : null;
-  const snbEnabled = activeBrand === null || activeBrand === 'SHOOTNBOX';
-  const smakkEnabled = activeBrand === null || activeBrand === 'SMAKK';
 
   return (
     <Card className="p-4 flex flex-col justify-between">
@@ -566,47 +563,29 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
         </div>
       </div>
 
-      {/* Actions */}
+      {/* Actions — only the matching brand */}
       <div className="pt-3 border-t border-gray-100">
-        <div className="grid grid-cols-2 gap-2">
-          {/* SHOOTNBOX */}
-          <div className={clsx("space-y-1.5 transition-opacity", !snbEnabled && "opacity-30 pointer-events-none")}>
-            <div className={clsx("text-[10px] font-bold uppercase text-center tracking-wider", snbEnabled ? "text-orange-600" : "text-gray-400")}>
-              Shootnbox
-            </div>
-            <button onClick={() => onSendDrive('SHOOTNBOX')} disabled={sending || !emailValue.trim() || !booking.galleryUrl}
-              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-              <FolderOpenIcon className="h-3.5 w-3.5" /> Envoyer Drive
-            </button>
-            <button onClick={() => onCopyBrandUrl('SHOOTNBOX')}
-              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors">
-              <ClipboardDocumentIcon className="h-3.5 w-3.5" /> Copier URL avis
-            </button>
-            <button onClick={() => handleSendBrand('SHOOTNBOX')} disabled={sending || !emailValue.trim()}
-              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors disabled:opacity-50">
-              <PaperAirplaneIcon className="h-3.5 w-3.5" /> Envoyer URL avis
-            </button>
-          </div>
-
-          {/* SMAKK */}
-          <div className={clsx("space-y-1.5 transition-opacity", !smakkEnabled && "opacity-30 pointer-events-none")}>
-            <div className={clsx("text-[10px] font-bold uppercase text-center tracking-wider", smakkEnabled ? "text-purple-600" : "text-gray-400")}>
-              Smakk
-            </div>
-            <button onClick={() => onSendDrive('SMAKK')} disabled={sending || !emailValue.trim() || !booking.galleryUrl}
-              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-              <FolderOpenIcon className="h-3.5 w-3.5" /> Envoyer Drive
-            </button>
-            <button onClick={() => onCopyBrandUrl('SMAKK')}
-              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors">
-              <ClipboardDocumentIcon className="h-3.5 w-3.5" /> Copier URL avis
-            </button>
-            <button onClick={() => handleSendBrand('SMAKK')} disabled={sending || !emailValue.trim()}
-              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors disabled:opacity-50">
-              <PaperAirplaneIcon className="h-3.5 w-3.5" /> Envoyer URL avis
-            </button>
-          </div>
-        </div>
+        {activeBrand === 'SHOOTNBOX' || activeBrand === null ? (
+          <BrandActions
+            brand="SHOOTNBOX"
+            sending={sending}
+            hasEmail={!!emailValue.trim()}
+            hasGallery={!!booking.galleryUrl}
+            onSendDrive={() => onSendDrive('SHOOTNBOX')}
+            onCopyUrl={() => onCopyBrandUrl('SHOOTNBOX')}
+            onSendUrl={() => handleSendBrand('SHOOTNBOX')}
+          />
+        ) : (
+          <BrandActions
+            brand="SMAKK"
+            sending={sending}
+            hasEmail={!!emailValue.trim()}
+            hasGallery={!!booking.galleryUrl}
+            onSendDrive={() => onSendDrive('SMAKK')}
+            onCopyUrl={() => onCopyBrandUrl('SMAKK')}
+            onSendUrl={() => handleSendBrand('SMAKK')}
+          />
+        )}
 
         {/* Drive link */}
         {editingGalleryUrl ? (
@@ -638,6 +617,44 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
         )}
       </div>
     </Card>
+  );
+}
+
+function BrandActions({ brand, sending, hasEmail, hasGallery, onSendDrive, onCopyUrl, onSendUrl }: {
+  brand: 'SHOOTNBOX' | 'SMAKK';
+  sending: boolean;
+  hasEmail: boolean;
+  hasGallery: boolean;
+  onSendDrive: () => void;
+  onCopyUrl: () => void;
+  onSendUrl: () => void;
+}) {
+  const isSnb = brand === 'SHOOTNBOX';
+  const label = isSnb ? 'Shootnbox' : 'Smakk';
+  const solidCls = isSnb
+    ? 'text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed';
+  const outlineCls = isSnb
+    ? 'text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 disabled:opacity-50'
+    : 'text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 disabled:opacity-50';
+  const labelCls = isSnb ? 'text-orange-600' : 'text-purple-600';
+
+  return (
+    <div className="space-y-1.5">
+      <div className={clsx('text-[10px] font-bold uppercase text-center tracking-wider', labelCls)}>{label}</div>
+      <button onClick={onSendDrive} disabled={sending || !hasEmail || !hasGallery}
+        className={clsx('w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold transition-colors', solidCls)}>
+        <FolderOpenIcon className="h-3.5 w-3.5" /> Envoyer Drive
+      </button>
+      <button onClick={onCopyUrl}
+        className={clsx('w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold transition-colors', outlineCls)}>
+        <ClipboardDocumentIcon className="h-3.5 w-3.5" /> Copier URL avis
+      </button>
+      <button onClick={onSendUrl} disabled={sending || !hasEmail}
+        className={clsx('w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold transition-colors', outlineCls)}>
+        <PaperAirplaneIcon className="h-3.5 w-3.5" /> Envoyer URL avis
+      </button>
+    </div>
   );
 }
 
