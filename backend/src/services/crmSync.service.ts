@@ -588,9 +588,30 @@ async function _syncCrmData(signal: AbortSignal): Promise<SyncResult> {
     if (!customerName) continue;
 
     try {
-      // Check if a booking with this crmOrderId already exists (no DB unique constraint — check manually)
-      const existing = await prisma.booking.findFirst({ where: { crmOrderId: record.orderId }, select: { id: true } });
-      if (existing) continue;
+      // Guard 1: same crmOrderId already stored on a booking
+      const existingById = await prisma.booking.findFirst({ where: { crmOrderId: record.orderId }, select: { id: true } });
+      if (existingById) continue;
+
+      // Guard 2: a booking for the same date+brand already exists (e.g. sibling order for same event)
+      // Prevents duplicates when a client has 2 orders (2 bornes) for the same event
+      const dateStart = new Date(eventDate);
+      dateStart.setUTCDate(dateStart.getUTCDate() - 2);
+      const dateEnd = new Date(eventDate);
+      dateEnd.setUTCDate(dateEnd.getUTCDate() + 2);
+      const nameConditions = ([] as Array<Record<string, string>>).concat(
+        record.company ? [{ companyName: record.company }] : [],
+        record.contactName ? [{ contactName: record.contactName }] : [],
+      );
+      if (nameConditions.length > 0) {
+        const existingByDate = await prisma.booking.findFirst({
+          where: { crmBrand: record.brand, eventDate: { gte: dateStart, lte: dateEnd }, OR: nameConditions },
+          select: { id: true },
+        });
+        if (existingByDate) {
+          matchedCrmOrderIds.add(record.orderId);
+          continue;
+        }
+      }
 
       await prisma.booking.create({
         data: {
