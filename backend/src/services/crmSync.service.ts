@@ -510,6 +510,7 @@ export async function syncCrmData(): Promise<SyncResult> {
       result.updated++;
       console.log(
         `[CRM Sync] ✓ [${best.brand}] "${booking.customerName}" → ${best.email}` +
+        (best.numId ? ` FA:${best.numId}` : ' FA:none') +
         (best.company ? ` (${best.company})` : '') +
         (best.contactName ? ` / ${best.contactName}` : '')
       );
