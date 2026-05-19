@@ -8,6 +8,7 @@ import { scheduleGalleryDispatch, cancelPendingDispatches } from '../services/ga
 import { processNewReview } from '../services/reviewMatching.service.js';
 import { fetchReview, parsePubSubMessage, isGoogleBusinessConfigured } from '../services/googleBusiness.service.js';
 import { isDriveConfigured, listFolderThumbnails, scanAndMatchDriveFolders } from '../services/googleDrive.service.js';
+import { syncCrmData } from '../services/crmSync.service.js';
 import { sendReviewLinkEmail, sendGalleryDirectEmail } from '../services/email.service.js';
 
 // ===========================
@@ -874,6 +875,11 @@ export const resetAllRatings = asyncHandler(async (_req: Request, res: Response)
  */
 export const triggerDriveScan = asyncHandler(async (_req: Request, res: Response) => {
   const result = await scanAndMatchDriveFolders();
+  return apiResponse.success(res, result);
+});
+
+export const triggerCrmSync = asyncHandler(async (_req: Request, res: Response) => {
+  const result = await syncCrmData();
   return apiResponse.success(res, result);
 });
 

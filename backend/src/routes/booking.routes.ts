@@ -21,6 +21,7 @@ import {
   resetGalleryUrls,
   resetAllRatings,
   triggerDriveScan,
+  triggerCrmSync,
   updateReviewMatchStatus,
   getBookingStats,
 } from '../controllers/booking.controller.js';
@@ -92,6 +93,9 @@ router.post('/bookings/reset-ratings', authenticate, requireAdmin, resetAllRatin
 
 // Manually trigger Drive folder scan and matching
 router.post('/bookings/scan-drive-folders', authenticate, requireAdmin, triggerDriveScan);
+
+// Manually trigger CRM sync (ShootNBox + Smakk → bookings)
+router.post('/bookings/sync-crm', authenticate, requireAdmin, triggerCrmSync);
 
 // Update review match status
 router.patch('/bookings/review-matches/:matchId/status', authenticate, requireAdmin, updateReviewMatchStatus);
