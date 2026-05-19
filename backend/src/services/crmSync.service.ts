@@ -356,6 +356,7 @@ async function fetchSmakkOrders(): Promise<CrmRecord[]> {
 
       records.push({
         orderId: String(row.id),
+        numId: (row.num_id || '').trim() || undefined,
         company: (row.company || '').trim(),
         contactName,
         email,
