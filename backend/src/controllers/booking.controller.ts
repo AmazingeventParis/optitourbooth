@@ -882,10 +882,15 @@ export const triggerDriveScan = asyncHandler(async (_req: Request, res: Response
   return apiResponse.success(res, { message: 'Drive scan started in background' });
 });
 
-export const triggerCrmSync = asyncHandler(async (_req: Request, res: Response) => {
+export const triggerCrmSync = asyncHandler(async (req: Request, res: Response) => {
+  // ?wait=1 returns the full sync result synchronously (for debugging)
+  if (req.query.wait === '1') {
+    const result = await syncCrmData();
+    return apiResponse.success(res, result);
+  }
   // Fire-and-forget: CRM sync can take several minutes
   syncCrmData()
-    .then(r => console.log(`[CRM Sync] Manual trigger done: matched=${r.matched}, updated=${r.updated}`))
+    .then(r => console.log(`[CRM Sync] Manual trigger done: matched=${r.matched}, updated=${r.updated}, errors=${JSON.stringify(r.errors)}`))
     .catch(e => console.error('[CRM Sync] Manual trigger error:', e));
   return apiResponse.success(res, { message: 'CRM sync started in background' });
 });

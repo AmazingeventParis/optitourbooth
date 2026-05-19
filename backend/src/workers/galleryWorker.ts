@@ -3,13 +3,29 @@ import { sendGallery } from '../services/galleryDispatch.service.js';
 
 let galleryWorker: Worker | null = null;
 
-export function startGalleryWorker(): void {
-  try {
-    const connection = {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
+function getRedisConnection() {
+  const redisUrl = process.env.REDIS_URL;
+  if (redisUrl) {
+    const u = new URL(redisUrl);
+    return {
+      host: u.hostname,
+      port: parseInt(u.port || '6379', 10),
+      password: u.password || undefined,
+      username: (u.username && u.username !== 'default') ? u.username : undefined,
+      db: parseInt(u.pathname.slice(1) || '0', 10),
       maxRetriesPerRequest: null,
     };
+  }
+  return {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    maxRetriesPerRequest: null,
+  };
+}
+
+export function startGalleryWorker(): void {
+  try {
+    const connection = getRedisConnection();
 
     galleryWorker = new Worker(
       'gallery-dispatch',
