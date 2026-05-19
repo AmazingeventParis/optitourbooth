@@ -200,6 +200,7 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
       customerName: true,
       companyName: true,
       contactName: true,
+      eventName: true,
       numId: true,
       eventDate: true,
       eventEndDate: true,
@@ -244,6 +245,7 @@ export async function scanAndMatchDriveFolders(): Promise<{ matched: number; pho
         if (b.driveFolderId === folder.id) return false;
         if (!dateInRange(folder.parsed.date, b.eventDate, b.eventEndDate)) return false;
         return (
+          (b.eventName ? namesMatch(folder.parsed.clientName, b.eventName) : false) ||
           namesMatch(folder.parsed.clientName, b.customerName) ||
           (b.companyName ? namesMatch(folder.parsed.clientName, b.companyName) : false) ||
           (b.contactName ? namesMatch(folder.parsed.clientName, b.contactName) : false)

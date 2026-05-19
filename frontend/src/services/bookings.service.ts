@@ -90,6 +90,10 @@ export interface CalendarEvent {
     customerName: string;
     customerEmail: string | null;
     customerPhone: string | null;
+    companyName: string | null;
+    contactName: string | null;
+    eventName: string | null;
+    crmBrand: string | null;
     senderBrand: string | null;
     rating: number | null;
     galleryUrl: string | null;

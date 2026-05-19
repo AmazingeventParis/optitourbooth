@@ -296,7 +296,7 @@ export default function GaleriesClientsPage() {
     }
     if (search.trim()) {
       const q = search.toLowerCase().trim();
-      result = result.filter(ev => (ev.booking?.customerName || ev.clientName).toLowerCase().includes(q));
+      result = result.filter(ev => (ev.booking?.eventName || ev.booking?.customerName || ev.clientName).toLowerCase().includes(q));
     }
     if (starFilter !== null) {
       if (starFilter === 0) {
@@ -526,7 +526,7 @@ function EventCard({ event, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, 
   const booking = event.booking;
   const badges = getBookingBadges(booking);
 
-  const displayName = booking?.customerName || event.clientName;
+  const displayName = booking?.eventName || booking?.customerName || event.clientName;
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(displayName);
   const [emailValue, setEmailValue] = useState(booking?.customerEmail || '');

@@ -21,6 +21,7 @@ interface CrmRecord {
   numId?: string;        // FA number (ShootNBox only, e.g. "FA14016")
   company: string;       // société / company name
   contactName: string;   // person name
+  eventName?: string;    // "Nom d'Event" from readiness (matches Drive folder name)
   email: string;
   phone: string;
   borne: string;
@@ -225,8 +226,8 @@ async function scrapeShootnboxOrders(cookie: string, signal?: AbortSignal): Prom
   return records;
 }
 
-async function scrapeShootnboxReadiness(cookie: string, signal?: AbortSignal): Promise<Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>> {
-  const map = new Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>();
+async function scrapeShootnboxReadiness(cookie: string, signal?: AbortSignal): Promise<Map<string, { societe: string; contactName: string; eventName: string; eventDate: string; borne: string }>> {
+  const map = new Map<string, { societe: string; contactName: string; eventName: string; eventDate: string; borne: string }>();
 
   const response = await fetch(`${SHOOTNBOX_BASE}/readiness_ajax.php`, {
     method: 'POST',
@@ -249,6 +250,7 @@ async function scrapeShootnboxReadiness(cookie: string, signal?: AbortSignal): P
     map.set(orderId, {
       societe: stripHtml(String(row.societe || '')),
       contactName: stripHtml(String(row.name || '')),
+      eventName: stripHtml(String(row.nom_event || '')),
       eventDate,
       borne: stripHtml(String(row.borne || '')),
     });
@@ -301,7 +303,7 @@ async function scrapeShootnboxAlbums(cookie: string, signal?: AbortSignal): Prom
 }
 
 function buildAlbumRecords(
-  readinessMap: Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>,
+  readinessMap: Map<string, { societe: string; contactName: string; eventName: string; eventDate: string; borne: string }>,
   albumsMap: Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>,
   existingOrderIds: Set<string>,
 ): CrmRecord[] {
@@ -316,6 +318,7 @@ function buildAlbumRecords(
       orderId,
       company: readiness?.societe || '',
       contactName: album.contactName || readiness?.contactName || '',
+      eventName: readiness?.eventName || '',
       email: album.email,
       phone: album.phone,
       borne: readiness?.borne || album.borne,
@@ -453,6 +456,13 @@ async function _syncCrmData(signal: AbortSignal): Promise<SyncResult> {
       result.shootnbox.scrapedReadiness = readinessMap.size;
       result.shootnbox.scrapedAlbums = albumsMap.size;
 
+      // Enrich orderRecords with eventName from readiness (orders_ajax doesn't have nom_event)
+      for (const rec of orderRecords) {
+        const readiness = readinessMap.get(rec.orderId);
+        if (readiness?.eventName) rec.eventName = readiness.eventName;
+        if (!rec.company && readiness?.societe) rec.company = readiness.societe;
+      }
+
       const orderIds = new Set(orderRecords.map(r => r.orderId));
       allRecords.push(...orderRecords);
       allRecords.push(...buildAlbumRecords(readinessMap, albumsMap, orderIds));
@@ -535,6 +545,7 @@ async function _syncCrmData(signal: AbortSignal): Promise<SyncResult> {
           ...(!booking.customerPhone && best.phone && { customerPhone: best.phone }),
           ...(best.company && { companyName: best.company }),
           ...(best.contactName && { contactName: best.contactName }),
+          ...(best.eventName && { eventName: best.eventName }),
           crmOrderId: best.orderId,
           crmBrand: best.brand,
           ...(best.numId && { numId: best.numId }),
