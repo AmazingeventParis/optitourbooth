@@ -104,7 +104,7 @@ function buildBrandUrl(publicUrl: string, brand: 'SHOOTNBOX' | 'SMAKK'): string 
 export default function GaleriesClientsPage() {
   const [data, setData] = useState<{ upcoming: GalleryBooking[]; past: GalleryBooking[] }>({ upcoming: [], past: [] });
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
+  const [tab, setTab] = useState<'upcoming' | 'past' | 'archived'>('upcoming');
   const [search, setSearch] = useState('');
   const [starFilter, setStarFilter] = useState<number | null>(null);
   const [monthFilter, setMonthFilter] = useState<string | null>(null);
@@ -243,9 +243,17 @@ export default function GaleriesClientsPage() {
     return result;
   };
 
+  // Split past into "recent" (≤ 2 weeks) and "archived" (> 2 weeks)
+  const twoWeeksAgo = new Date();
+  twoWeeksAgo.setUTCDate(twoWeeksAgo.getUTCDate() - 14);
+  twoWeeksAgo.setUTCHours(0, 0, 0, 0);
+  const recentPast = data.past.filter(b => new Date(b.eventDate.substring(0, 10) + 'T12:00:00Z') >= twoWeeksAgo);
+  const archivedPast = data.past.filter(b => new Date(b.eventDate.substring(0, 10) + 'T12:00:00Z') < twoWeeksAgo);
+
   const filteredUpcoming = filterBookings(data.upcoming);
-  const filteredPast = filterBookings(data.past);
-  const current = tab === 'upcoming' ? filteredUpcoming : filteredPast;
+  const filteredPast = filterBookings(recentPast);
+  const filteredArchived = filterBookings(archivedPast);
+  const current = tab === 'upcoming' ? filteredUpcoming : tab === 'past' ? filteredPast : filteredArchived;
   const allBookings = [...data.upcoming, ...data.past];
 
   return (
@@ -332,7 +340,7 @@ export default function GaleriesClientsPage() {
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
           >
             <option value="">Tous les mois</option>
-            {getMonthOptions(tab === 'upcoming' ? data.upcoming : data.past).map((opt) => (
+            {getMonthOptions(tab === 'upcoming' ? data.upcoming : tab === 'past' ? recentPast : archivedPast).map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label} ({opt.count})</option>
             ))}
           </select>
@@ -363,6 +371,14 @@ export default function GaleriesClientsPage() {
         >
           Passés ({filteredPast.length})
         </button>
+        <button
+          onClick={() => { setTab('archived'); setMonthFilter(null); }}
+          className={clsx('px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+            tab === 'archived' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+          )}
+        >
+          Archives ({filteredArchived.length})
+        </button>
       </div>
 
       {/* Cards */}
@@ -371,7 +387,7 @@ export default function GaleriesClientsPage() {
       ) : current.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
           <PhotoIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p>Aucun événement {tab === 'upcoming' ? 'à venir' : 'passé'}</p>
+          <p>Aucun événement {tab === 'upcoming' ? 'à venir' : tab === 'past' ? 'passé (2 dernières semaines)' : 'en archive'}</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
