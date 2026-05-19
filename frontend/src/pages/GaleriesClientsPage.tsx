@@ -244,11 +244,11 @@ export default function GaleriesClientsPage() {
   };
 
   // Split past into "recent" (≤ 2 weeks) and "archived" (> 2 weeks)
-  const twoWeeksAgo = new Date();
-  twoWeeksAgo.setUTCDate(twoWeeksAgo.getUTCDate() - 14);
-  twoWeeksAgo.setUTCHours(0, 0, 0, 0);
-  const recentPast = data.past.filter(b => new Date(b.eventDate.substring(0, 10) + 'T12:00:00Z') >= twoWeeksAgo);
-  const archivedPast = data.past.filter(b => new Date(b.eventDate.substring(0, 10) + 'T12:00:00Z') < twoWeeksAgo);
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
+  thirtyDaysAgo.setUTCHours(0, 0, 0, 0);
+  const recentPast = data.past.filter(b => new Date(b.eventDate.substring(0, 10) + 'T12:00:00Z') >= thirtyDaysAgo);
+  const archivedPast = data.past.filter(b => new Date(b.eventDate.substring(0, 10) + 'T12:00:00Z') < thirtyDaysAgo);
 
   const filteredUpcoming = filterBookings(data.upcoming);
   const filteredPast = filterBookings(recentPast);
@@ -387,7 +387,7 @@ export default function GaleriesClientsPage() {
       ) : current.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
           <PhotoIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p>Aucun événement {tab === 'upcoming' ? 'à venir' : tab === 'past' ? 'passé (2 dernières semaines)' : 'en archive'}</p>
+          <p>Aucun événement {tab === 'upcoming' ? 'à venir' : tab === 'past' ? 'passé (30 derniers jours)' : 'en archive'}</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
