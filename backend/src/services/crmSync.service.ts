@@ -522,8 +522,13 @@ export async function syncCrmData(): Promise<SyncResult> {
     }
   }
 
+  lastSyncResult = { ...result, completedAt: new Date().toISOString() };
   return result;
 }
+
+// ─── Last-result cache (readable via GET /bookings/crm-status) ───────
+
+export let lastSyncResult: (SyncResult & { completedAt: string }) | null = null;
 
 // ─── Backward compat export ───────────────────────────────────────
 

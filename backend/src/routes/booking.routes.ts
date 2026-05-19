@@ -23,6 +23,7 @@ import {
   triggerDriveScan,
   triggerCrmSync,
   testCrmLogin,
+  getCrmStatus,
   updateReviewMatchStatus,
   getBookingStats,
 } from '../controllers/booking.controller.js';
@@ -70,6 +71,9 @@ router.post('/bookings', authenticate, requireAdmin, createBooking);
 
 // Create booking from Google Calendar event
 router.post('/bookings/from-event', authenticate, requireAdmin, createBookingFromEvent);
+
+// Get last CRM sync result (debug)
+router.get('/bookings/crm-status', authenticate, requireAdmin, getCrmStatus);
 
 // Quick ShootNBox CRM login test (debug)
 router.get('/bookings/test-crm-login', authenticate, requireAdmin, testCrmLogin);

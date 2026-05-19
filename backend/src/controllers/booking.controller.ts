@@ -8,7 +8,7 @@ import { scheduleGalleryDispatch, cancelPendingDispatches } from '../services/ga
 import { processNewReview } from '../services/reviewMatching.service.js';
 import { fetchReview, parsePubSubMessage, isGoogleBusinessConfigured } from '../services/googleBusiness.service.js';
 import { isDriveConfigured, listFolderThumbnails, scanAndMatchDriveFolders } from '../services/googleDrive.service.js';
-import { syncCrmData } from '../services/crmSync.service.js';
+import { syncCrmData, lastSyncResult } from '../services/crmSync.service.js';
 import { sendReviewLinkEmail, sendGalleryDirectEmail } from '../services/email.service.js';
 
 // ===========================
@@ -893,6 +893,14 @@ export const triggerCrmSync = asyncHandler(async (req: Request, res: Response) =
     .then(r => console.log(`[CRM Sync] Manual trigger done: matched=${r.matched}, updated=${r.updated}, errors=${JSON.stringify(r.errors)}`))
     .catch(e => console.error('[CRM Sync] Manual trigger error:', e));
   return apiResponse.success(res, { message: 'CRM sync started in background' });
+});
+
+/**
+ * GET /api/bookings/crm-status
+ * Returns the result of the last completed CRM sync (for debugging).
+ */
+export const getCrmStatus = asyncHandler(async (_req: Request, res: Response) => {
+  return apiResponse.success(res, lastSyncResult ?? { message: 'No sync completed yet since last restart' });
 });
 
 /**
