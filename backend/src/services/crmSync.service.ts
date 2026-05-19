@@ -123,12 +123,13 @@ function parseCustomerField(raw: string): [string, string] {
 
 // ─── Generic CRM login ────────────────────────────────────────────
 
-async function crmLogin(baseUrl: string, email: string, password: string, brand: string): Promise<string> {
+async function crmLogin(baseUrl: string, email: string, password: string, brand: string, signal?: AbortSignal): Promise<string> {
   const response = await fetch(`${baseUrl}/d26386b04e.php`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `event=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
     redirect: 'manual',
+    signal,
   });
 
   const text = await response.text();
@@ -149,13 +150,13 @@ async function crmLogin(baseUrl: string, email: string, password: string, brand:
 // ─── Paginated orders fetch ───────────────────────────────────────
 
 async function fetchOrdersPage(
-  cookie: string, url: string, start: number, length: number,
+  cookie: string, url: string, start: number, length: number, signal?: AbortSignal,
 ): Promise<{ rows: any[]; totalFiltered: number }> {
   const response = await fetch(url, {
     method: 'POST',
     headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `draw=1&start=${start}&length=${length}`,
-    signal: AbortSignal.timeout(30_000),
+    signal,
   });
 
   const data = await response.json() as any;
@@ -203,7 +204,7 @@ function parseOrderRows(rows: any[], brand: 'shootnbox' | 'smakk'): CrmRecord[] 
 
 // ─── ShootNBox scraping ───────────────────────────────────────────
 
-async function scrapeShootnboxOrders(cookie: string): Promise<CrmRecord[]> {
+async function scrapeShootnboxOrders(cookie: string, signal?: AbortSignal): Promise<CrmRecord[]> {
   const PAGE_SIZE = 500;
   const records: CrmRecord[] = [];
 
@@ -213,7 +214,7 @@ async function scrapeShootnboxOrders(cookie: string): Promise<CrmRecord[]> {
     let start = 0;
     let total = 0;
     do {
-      const page = await fetchOrdersPage(cookie, url, start, PAGE_SIZE);
+      const page = await fetchOrdersPage(cookie, url, start, PAGE_SIZE, signal);
       if (page.rows.length === 0) break;
       records.push(...parseOrderRows(page.rows, 'shootnbox'));
       total = page.totalFiltered;
@@ -224,14 +225,14 @@ async function scrapeShootnboxOrders(cookie: string): Promise<CrmRecord[]> {
   return records;
 }
 
-async function scrapeShootnboxReadiness(cookie: string): Promise<Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>> {
+async function scrapeShootnboxReadiness(cookie: string, signal?: AbortSignal): Promise<Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>> {
   const map = new Map<string, { societe: string; contactName: string; eventDate: string; borne: string }>();
 
   const response = await fetch(`${SHOOTNBOX_BASE}/readiness_ajax.php`, {
     method: 'POST',
     headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'draw=1&start=0&length=500',
-    signal: AbortSignal.timeout(30_000),
+    signal,
   });
 
   const data = await response.json() as any;
@@ -256,12 +257,12 @@ async function scrapeShootnboxReadiness(cookie: string): Promise<Map<string, { s
   return map;
 }
 
-async function scrapeShootnboxAlbums(cookie: string): Promise<Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>> {
+async function scrapeShootnboxAlbums(cookie: string, signal?: AbortSignal): Promise<Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>> {
   const map = new Map<string, { contactName: string; email: string; phone: string; borne: string; eventDate: string }>();
 
   const response = await fetch(`${SHOOTNBOX_BASE}/albums_list.php`, {
     headers: { Cookie: cookie },
-    signal: AbortSignal.timeout(30_000),
+    signal,
   });
 
   const html = await response.text();
@@ -332,7 +333,7 @@ function buildAlbumRecords(
 // (_otb_orders.php) that queries the DB directly and returns JSON.
 // This avoids session-based scraping which requires separate credentials.
 
-async function fetchSmakkOrders(): Promise<CrmRecord[]> {
+async function fetchSmakkOrders(signal?: AbortSignal): Promise<CrmRecord[]> {
   const PAGE_SIZE = 500;
   const records: CrmRecord[] = [];
 
@@ -341,7 +342,7 @@ async function fetchSmakkOrders(): Promise<CrmRecord[]> {
 
   do {
     const url = `${SMAKK_API_URL}?key=${SMAKK_API_KEY}&page=${page}&size=${PAGE_SIZE}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
 
     if (!response.ok) {
       throw new Error(`Smakk API returned HTTP ${response.status}`);
@@ -402,6 +403,30 @@ function recordMatchesBooking(
 // ─── Main sync ────────────────────────────────────────────────────
 
 export async function syncCrmData(): Promise<SyncResult> {
+  // One AbortController for the entire sync — aborts everything after 90 seconds
+  const controller = new AbortController();
+  const masterTimeout = setTimeout(() => {
+    controller.abort(new Error('CRM sync master timeout (90s)'));
+  }, 90_000);
+
+  try {
+    return await _syncCrmData(controller.signal);
+  } catch (e: any) {
+    lastSyncResult = {
+      shootnbox: { scrapedOrders: 0, scrapedReadiness: 0, scrapedAlbums: 0 },
+      smakk: { scrapedOrders: 0 },
+      matched: 0,
+      updated: 0,
+      errors: [e.message || 'Unknown sync error'],
+      completedAt: new Date().toISOString(),
+    };
+    throw e;
+  } finally {
+    clearTimeout(masterTimeout);
+  }
+}
+
+async function _syncCrmData(signal: AbortSignal): Promise<SyncResult> {
   const result: SyncResult = {
     shootnbox: { scrapedOrders: 0, scrapedReadiness: 0, scrapedAlbums: 0 },
     smakk: { scrapedOrders: 0 },
@@ -415,11 +440,11 @@ export async function syncCrmData(): Promise<SyncResult> {
   // ── ShootNBox ──
   if (SHOOTNBOX_EMAIL && SHOOTNBOX_PASSWORD) {
     try {
-      const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox');
+      const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox', signal);
       const [orderRecords, readinessMap, albumsMap] = await Promise.all([
-        scrapeShootnboxOrders(cookie),
-        scrapeShootnboxReadiness(cookie),
-        scrapeShootnboxAlbums(cookie),
+        scrapeShootnboxOrders(cookie, signal),
+        scrapeShootnboxReadiness(cookie, signal),
+        scrapeShootnboxAlbums(cookie, signal),
       ]);
 
       result.shootnbox.scrapedOrders = orderRecords.length;
@@ -438,7 +463,7 @@ export async function syncCrmData(): Promise<SyncResult> {
 
   // ── Smakk ──
   try {
-    const smakkRecords = await fetchSmakkOrders();
+    const smakkRecords = await fetchSmakkOrders(signal);
     result.smakk.scrapedOrders = smakkRecords.length;
     allRecords.push(...smakkRecords);
   } catch (e: any) {
