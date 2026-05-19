@@ -1033,7 +1033,7 @@ export const listGalleryBookings = asyncHandler(async (_req: Request, res: Respo
     .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
 
   const past = allBookings
-    .filter(b => b.eventDate < today)
+    .filter(b => b.eventDate < today && b.crmBrand !== null)
     .map(format);
 
   return apiResponse.success(res, { upcoming, past });
