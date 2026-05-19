@@ -919,21 +919,29 @@ export const testCrmLogin = asyncHandler(async (_req: Request, res: Response) =>
       return apiResponse.success(res, { loginOk: false, loginBody: loginText.trim(), cookie: !!cookie });
     }
 
-    // Step 2: Fetch first page of archive orders
-    const ordersResp = await fetch(`${base}/orders_ajax.php?status=2&arch=true`, {
-      method: 'POST',
-      headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'draw=1&start=0&length=5',
-    });
-    const ordersData = await ordersResp.json() as any;
-    const rows = (ordersData.aaData || ordersData.data || []) as any[];
-    const total = ordersData.iTotalDisplayRecords || ordersData.recordsFiltered || 0;
+    // Step 2: Fetch counts for current + archive orders
+    const [curResp, archResp] = await Promise.all([
+      fetch(`${base}/orders_ajax.php?status=2`, {
+        method: 'POST',
+        headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'draw=1&start=0&length=5',
+      }),
+      fetch(`${base}/orders_ajax.php?status=2&arch=true`, {
+        method: 'POST',
+        headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'draw=1&start=0&length=5',
+      }),
+    ]);
+    const [curData, archData] = await Promise.all([curResp.json() as any, archResp.json() as any]);
+    const curTotal = curData.iTotalDisplayRecords || curData.recordsFiltered || 0;
+    const archTotal = archData.iTotalDisplayRecords || archData.recordsFiltered || 0;
+    const curRows = (curData.aaData || curData.data || []) as any[];
 
     return apiResponse.success(res, {
       loginOk: true,
-      cookie: cookie.slice(0, 20) + '...',
-      archiveTotal: total,
-      sampleRows: rows.slice(0, 3).map((r: any) => ({
+      currentTotal: curTotal,
+      archiveTotal: archTotal,
+      sampleCurrentRows: curRows.slice(0, 3).map((r: any) => ({
         id: r.id,
         email: r.email ? String(r.email).replace(/<[^>]+>/g, '').trim() : null,
         event_date: r.event_date ? String(r.event_date).replace(/<[^>]+>/g, '').trim() : null,

@@ -206,20 +206,18 @@ async function scrapeShootnboxOrders(cookie: string): Promise<CrmRecord[]> {
   const PAGE_SIZE = 500;
   const records: CrmRecord[] = [];
 
-  const currentUrl = `${SHOOTNBOX_BASE}/orders_ajax.php?status=2`;
-  const current = await fetchOrdersPage(cookie, currentUrl, 0, PAGE_SIZE);
-  records.push(...parseOrderRows(current.rows, 'shootnbox'));
-
-  const archiveUrl = `${SHOOTNBOX_BASE}/orders_ajax.php?status=2&arch=true`;
-  let start = 0;
-  let totalArchives = 0;
-
-  do {
-    const page = await fetchOrdersPage(cookie, archiveUrl, start, PAGE_SIZE);
-    records.push(...parseOrderRows(page.rows, 'shootnbox'));
-    totalArchives = page.totalFiltered;
-    start += PAGE_SIZE;
-  } while (start < totalArchives);
+  // Paginate both current and archive (upcoming events are in current, past in archive)
+  for (const urlSuffix of ['orders_ajax.php?status=2', 'orders_ajax.php?status=2&arch=true']) {
+    const url = `${SHOOTNBOX_BASE}/${urlSuffix}`;
+    let start = 0;
+    let total = 0;
+    do {
+      const page = await fetchOrdersPage(cookie, url, start, PAGE_SIZE);
+      records.push(...parseOrderRows(page.rows, 'shootnbox'));
+      total = page.totalFiltered;
+      start += PAGE_SIZE;
+    } while (start < total);
+  }
 
   return records;
 }
