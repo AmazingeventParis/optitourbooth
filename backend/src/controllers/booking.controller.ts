@@ -874,13 +874,19 @@ export const resetAllRatings = asyncHandler(async (_req: Request, res: Response)
  * Manually trigger a Drive folder scan and match
  */
 export const triggerDriveScan = asyncHandler(async (_req: Request, res: Response) => {
-  const result = await scanAndMatchDriveFolders();
-  return apiResponse.success(res, result);
+  // Fire-and-forget: Drive scan can take several minutes (counts photos in all folders)
+  scanAndMatchDriveFolders()
+    .then(r => console.log(`[Drive Scan] Manual trigger done: matched=${r.matched}, photoCountsUpdated=${r.photoCountsUpdated}`))
+    .catch(e => console.error('[Drive Scan] Manual trigger error:', e));
+  return apiResponse.success(res, { message: 'Drive scan started in background' });
 });
 
 export const triggerCrmSync = asyncHandler(async (_req: Request, res: Response) => {
-  const result = await syncCrmData();
-  return apiResponse.success(res, result);
+  // Fire-and-forget: CRM sync can take several minutes
+  syncCrmData()
+    .then(r => console.log(`[CRM Sync] Manual trigger done: matched=${r.matched}, updated=${r.updated}`))
+    .catch(e => console.error('[CRM Sync] Manual trigger error:', e));
+  return apiResponse.success(res, { message: 'CRM sync started in background' });
 });
 
 /**
