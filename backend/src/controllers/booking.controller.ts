@@ -896,6 +896,37 @@ export const triggerCrmSync = asyncHandler(async (req: Request, res: Response) =
 });
 
 /**
+ * GET /api/bookings/test-crm-login
+ * Quick test: can the server reach ShootNBox CRM and log in?
+ */
+export const testCrmLogin = asyncHandler(async (_req: Request, res: Response) => {
+  const email = process.env.CRM_SHOOTNBOX_EMAIL || '';
+  const password = process.env.CRM_SHOOTNBOX_PASSWORD || '';
+  const base = 'https://shootnbox.fr/manager2';
+  try {
+    const resp = await fetch(`${base}/d26386b04e.php`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `event=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(15000),
+    });
+    const text = await resp.text();
+    const setCookies = resp.headers.getSetCookie?.() || [];
+    return apiResponse.success(res, {
+      status: resp.status,
+      body: text.trim(),
+      ok: text.trim() === 'done',
+      cookieCount: setCookies.length,
+      email: email ? `${email.slice(0, 3)}***` : '(not set)',
+      url: `${base}/d26386b04e.php`,
+    });
+  } catch (e: any) {
+    return apiResponse.success(res, { ok: false, error: e.message });
+  }
+});
+
+/**
  * GET /api/bookings/stats
  * Get booking statistics
  */
