@@ -155,6 +155,7 @@ async function fetchOrdersPage(
     method: 'POST',
     headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `draw=1&start=${start}&length=${length}`,
+    signal: AbortSignal.timeout(30_000),
   });
 
   const data = await response.json() as any;
@@ -213,6 +214,7 @@ async function scrapeShootnboxOrders(cookie: string): Promise<CrmRecord[]> {
     let total = 0;
     do {
       const page = await fetchOrdersPage(cookie, url, start, PAGE_SIZE);
+      if (page.rows.length === 0) break;
       records.push(...parseOrderRows(page.rows, 'shootnbox'));
       total = page.totalFiltered;
       start += PAGE_SIZE;
@@ -229,6 +231,7 @@ async function scrapeShootnboxReadiness(cookie: string): Promise<Map<string, { s
     method: 'POST',
     headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'draw=1&start=0&length=500',
+    signal: AbortSignal.timeout(30_000),
   });
 
   const data = await response.json() as any;
@@ -258,6 +261,7 @@ async function scrapeShootnboxAlbums(cookie: string): Promise<Map<string, { cont
 
   const response = await fetch(`${SHOOTNBOX_BASE}/albums_list.php`, {
     headers: { Cookie: cookie },
+    signal: AbortSignal.timeout(30_000),
   });
 
   const html = await response.text();
