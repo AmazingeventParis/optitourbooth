@@ -114,7 +114,8 @@ function stripHtml(html: string): string {
 
 function parseCustomerField(raw: string): [string, string] {
   let text = stripHtml(raw);
-  for (const sep of ["Lieu de l'", "Type d'", 'Retrait']) {
+  // Cut at event metadata (straight and curly apostrophes both used in HTML)
+  for (const sep of ["Lieu de l’", "Lieu de l'", "Type d’", "Type d'", 'Retrait']) {
     const idx = text.indexOf(sep);
     if (idx > 0) text = text.slice(0, idx).trim();
   }
@@ -723,7 +724,6 @@ export interface PendingPointsSyncResult {
   skipped: number;
   errors: string[];
   completedAt?: string;
-  debug?: Record<string, any>;
 }
 
 export let lastPendingPointsSyncResult: PendingPointsSyncResult | null = null;
@@ -742,8 +742,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   try {
     // 1. Login ShootNBox
     const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox PendingPoints', controller.signal);
-    const debugCounters: Record<string, { total: number; livraison: number; notVegasSlim: number; futureDate: number }> = {};
-    result.debug = { cookieLen: cookie.length, urlResults: {} as Record<string, any>, counters: debugCounters };
 
     // 2. Récupérer les commandes actuelles (non-archivées) : delivery=Livraison, box_type!=Vegas Slim
     const PAGE_SIZE = 500;
@@ -761,24 +759,12 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         const { rows, totalFiltered } = await fetchOrdersPage(
           cookie, `${SHOOTNBOX_BASE}/${urlSuffix}`, start, PAGE_SIZE, controller.signal
         );
-        if (start === 0) {
-          (result.debug!.urlResults as Record<string, any>)[urlSuffix] = {
-            rowCount: rows.length, totalFiltered,
-            allKeys: rows[0] ? Object.keys(rows[0]) : [],
-            firstRowFull: rows[0] ? JSON.stringify(rows[0]).slice(0, 2000) : null,
-          };
-        }
         if (rows.length === 0) break;
         total = totalFiltered;
 
-        if (!debugCounters[urlSuffix]) debugCounters[urlSuffix] = { total: 0, livraison: 0, notVegasSlim: 0, futureDate: 0 };
         for (const row of rows) {
-          debugCounters[urlSuffix].total++;
-          const deliveryVal = stripHtml(String(row.delivery || ''));
-          if (deliveryVal !== 'Livraison') continue;
-          debugCounters[urlSuffix].livraison++;
+          if (stripHtml(String(row.delivery || '')) !== 'Livraison') continue;
           if (stripHtml(String(row.box_type || '')) === 'Vegas Slim') continue;
-          debugCounters[urlSuffix].notVegasSlim++;
 
           const orderId = String(row.id || '').trim();
           if (!orderId) continue;
@@ -788,7 +774,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
 
           // Only upcoming events (event_date >= today)
           if (new Date(eventDateISO) < today) continue;
-          debugCounters[urlSuffix].futureDate++;
 
           // Deduplicate across both URL passes
           if (eligible.some(e => e.orderId === orderId)) continue;
@@ -823,12 +808,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       console.warn('[CRM PendingPoints] Formulaires inaccessibles:', e);
     }
 
-    result.debug!.eligibleCount = eligible.length;
-    result.debug!.step4 = { attempted: 0, existingFound: 0, createAttempted: 0, sampleExisting: null as any };
-
     // 4. Créer / enrichir les PendingPoints
     for (const order of eligible) {
-      (result.debug!.step4 as any).attempted++;
       const form = order.numId ? formByNumId.get(order.numId) : undefined;
 
       // Si le formulaire indique chronopost ou retrait → pas de chauffeur → skip
@@ -849,9 +830,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       // ── Livraison ──
       try {
         const existingLiv = await prisma.pendingPoint.findFirst({ where: { externalId: livExt } });
-        if (existingLiv) { (result.debug!.step4 as any).existingFound++; if (!(result.debug!.step4 as any).sampleExisting) (result.debug!.step4 as any).sampleExisting = { externalId: existingLiv.externalId, id: existingLiv.id }; }
         if (!existingLiv) {
-          (result.debug!.step4 as any).createAttempted++;
           await prisma.pendingPoint.create({
             data: {
               date: ensureDateUTC(livDate),
@@ -872,20 +851,24 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           result.created++;
           if (form) result.enriched++;
           console.log(`[CRM PendingPoints] + ${order.clientName} livraison ${livDate}${form ? ' (enrichi)' : ''}`);
-        } else if (form && !existingLiv.manuallyEdited && parsedLiv) {
+        } else if (!existingLiv.manuallyEdited) {
+          // Always fix clientName (may have been created with raw HTML) + enrich if form available
           await prisma.pendingPoint.update({
             where: { id: existingLiv.id },
             data: {
-              ...(parsedLiv.adresse && { adresse: parsedLiv.adresse }),
-              ...(parsedLiv.creneauDebut && { creneauDebut: parsedLiv.creneauDebut }),
-              ...(parsedLiv.creneauFin && { creneauFin: parsedLiv.creneauFin }),
-              ...(parsedLiv.contactNom && { contactNom: parsedLiv.contactNom }),
-              ...(parsedLiv.contactTelephone && { contactTelephone: parsedLiv.contactTelephone }),
-              ...(parsedLiv.notes && { notes: parsedLiv.notes }),
-              manuallyEdited: true,
+              clientName: order.clientName,
+              ...(form && parsedLiv && {
+                ...(parsedLiv.adresse && { adresse: parsedLiv.adresse }),
+                ...(parsedLiv.creneauDebut && { creneauDebut: parsedLiv.creneauDebut }),
+                ...(parsedLiv.creneauFin && { creneauFin: parsedLiv.creneauFin }),
+                ...(parsedLiv.contactNom && { contactNom: parsedLiv.contactNom }),
+                ...(parsedLiv.contactTelephone && { contactTelephone: parsedLiv.contactTelephone }),
+                ...(parsedLiv.notes && { notes: parsedLiv.notes }),
+                manuallyEdited: true,
+              }),
             },
           });
-          result.enriched++;
+          if (form && parsedLiv) result.enriched++;
         }
       } catch (e: any) {
         result.errors.push(`Livraison ${order.orderId}: ${e.message}`);
@@ -914,20 +897,23 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           });
           result.created++;
           if (form) result.enriched++;
-        } else if (form && !existingRec.manuallyEdited && parsedRec) {
+        } else if (!existingRec.manuallyEdited) {
           await prisma.pendingPoint.update({
             where: { id: existingRec.id },
             data: {
-              ...(parsedRec.adresse && { adresse: parsedRec.adresse }),
-              ...(parsedRec.creneauDebut && { creneauDebut: parsedRec.creneauDebut }),
-              ...(parsedRec.creneauFin && { creneauFin: parsedRec.creneauFin }),
-              ...(parsedRec.contactNom && { contactNom: parsedRec.contactNom }),
-              ...(parsedRec.contactTelephone && { contactTelephone: parsedRec.contactTelephone }),
-              ...(parsedRec.notes && { notes: parsedRec.notes }),
-              manuallyEdited: true,
+              clientName: order.clientName,
+              ...(form && parsedRec && {
+                ...(parsedRec.adresse && { adresse: parsedRec.adresse }),
+                ...(parsedRec.creneauDebut && { creneauDebut: parsedRec.creneauDebut }),
+                ...(parsedRec.creneauFin && { creneauFin: parsedRec.creneauFin }),
+                ...(parsedRec.contactNom && { contactNom: parsedRec.contactNom }),
+                ...(parsedRec.contactTelephone && { contactTelephone: parsedRec.contactTelephone }),
+                ...(parsedRec.notes && { notes: parsedRec.notes }),
+                manuallyEdited: true,
+              }),
             },
           });
-          result.enriched++;
+          if (form && parsedRec) result.enriched++;
         }
       } catch (e: any) {
         result.errors.push(`Ramassage ${order.orderId}: ${e.message}`);
