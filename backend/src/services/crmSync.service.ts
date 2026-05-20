@@ -115,20 +115,20 @@ function stripHtml(html: string): string {
 function parseCustomerField(raw: string): [string, string] {
   // Extract all bold text segments from the HTML (company is first <b>, contact is second <b>)
   const boldMatches = [...raw.matchAll(/<b[^>]*>([\s\S]*?)<\/b>/gi)];
-  const boldTexts = boldMatches.map(m => stripHtml(m[1] || ‘’).trim()).filter(Boolean);
+  const boldTexts = boldMatches.map(m => stripHtml(m[1] || '').trim()).filter(Boolean);
 
   if (boldTexts.length >= 2) {
     return [boldTexts[0]!, boldTexts[1]!];
   }
   if (boldTexts.length === 1) {
-    return [‘’, boldTexts[0]!];
+    return ['', boldTexts[0]!];
   }
 
   // Fallback: strip full HTML and cut at event metadata
   let text = stripHtml(raw);
-  text = text.replace(/Lieu de l.(?:\S+)\s+.vènement.*$/i, ‘’).trim();
-  text = text.replace(/Type d.\S+\s+.vènement.*$/i, ‘’).trim();
-  return [‘’, text];
+  text = text.replace(/Lieu de l.(?:\S+)\s+.vènement.*$/i, '').trim();
+  text = text.replace(/Type d.\S+\s+.vènement.*$/i, '').trim();
+  return ['', text];
 }
 
 // ─── Generic CRM login ────────────────────────────────────────────
