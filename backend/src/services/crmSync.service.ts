@@ -749,34 +749,45 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       boxType: string; eventDateISO: string; returnDateISO: string | null;
     }> = [];
 
-    let start = 0;
-    let total = 0;
-    do {
-      const { rows, totalFiltered } = await fetchOrdersPage(
-        cookie, `${SHOOTNBOX_BASE}/orders_ajax.php?status=2`, start, PAGE_SIZE, controller.signal
-      );
-      if (rows.length === 0) break;
-      total = totalFiltered;
+    // Query both current and archived orders (future events may be in either)
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    for (const urlSuffix of ['orders_ajax.php?status=2', 'orders_ajax.php?status=2&arch=true']) {
+      let start = 0;
+      let total = 0;
+      do {
+        const { rows, totalFiltered } = await fetchOrdersPage(
+          cookie, `${SHOOTNBOX_BASE}/${urlSuffix}`, start, PAGE_SIZE, controller.signal
+        );
+        if (rows.length === 0) break;
+        total = totalFiltered;
 
-      for (const row of rows) {
-        if (stripHtml(String(row.delivery || '')) !== 'Livraison') continue;
-        if (stripHtml(String(row.box_type || '')) === 'Vegas Slim') continue;
+        for (const row of rows) {
+          if (stripHtml(String(row.delivery || '')) !== 'Livraison') continue;
+          if (stripHtml(String(row.box_type || '')) === 'Vegas Slim') continue;
 
-        const orderId = String(row.id || '').trim();
-        if (!orderId) continue;
+          const orderId = String(row.id || '').trim();
+          if (!orderId) continue;
 
-        const [company, contactName] = parseCustomerField(String(row.customer || ''));
-        const clientName = company || contactName || `Commande ${orderId}`;
-        const boxType = stripHtml(String(row.box_type || ''));
-        const eventDateISO = pendingDateDMY(stripHtml(String(row.event_date || '')));
-        if (!eventDateISO) continue;
-        const returnDateISO = pendingDateDMY(stripHtml(String(row.return_date || '')));
-        const numIdMatch = stripHtml(String(row.facture || '')).match(/FA\d+/);
+          const eventDateISO = pendingDateDMY(stripHtml(String(row.event_date || '')));
+          if (!eventDateISO) continue;
 
-        eligible.push({ orderId, numId: numIdMatch ? numIdMatch[0] : null, clientName, boxType, eventDateISO, returnDateISO });
-      }
-      start += PAGE_SIZE;
-    } while (start < total);
+          // Only upcoming events (event_date >= today)
+          if (new Date(eventDateISO) < today) continue;
+
+          // Deduplicate across both URL passes
+          if (eligible.some(e => e.orderId === orderId)) continue;
+
+          const [company, contactName] = parseCustomerField(String(row.customer || ''));
+          const clientName = company || contactName || `Commande ${orderId}`;
+          const boxType = stripHtml(String(row.box_type || ''));
+          const returnDateISO = pendingDateDMY(stripHtml(String(row.return_date || '')));
+          const numIdMatch = stripHtml(String(row.facture || '')).match(/FA\d+/);
+
+          eligible.push({ orderId, numId: numIdMatch ? numIdMatch[0] : null, clientName, boxType, eventDateISO, returnDateISO });
+        }
+        start += PAGE_SIZE;
+      } while (start < total);
+    }
 
     console.log(`[CRM PendingPoints] ${eligible.length} commandes éligibles (Livraison, hors Vegas Slim)`);
 
