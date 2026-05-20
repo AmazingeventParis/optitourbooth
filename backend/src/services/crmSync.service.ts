@@ -723,6 +723,15 @@ function pendingParseLogistics(
   };
 }
 
+// Parse Smakk créneau string "9h30 - 14h" or "14h00" → [debut, fin]
+function parseSmakkCreneau(raw: string): [string | null, string | null] {
+  if (!raw) return [null, null];
+  const parts = raw.split(/\s*[-–]\s*/);
+  const debut = parts[0]?.trim() || null;
+  const fin = parts[1]?.trim() || null;
+  return [debut, fin];
+}
+
 export interface PendingPointsSyncResult {
   created: number;
   enriched: number;
@@ -955,6 +964,182 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         result.errors.push(`Ramassage ${order.orderId}: ${e.message}`);
       }
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SMAKK CRM → PendingPoints
+    // Source: _otb_orders.php (direct DB query via smakk.fr/manager/)
+    // Inclut: Livraison + Installation, hors Retrait boutique
+    // Données directement dans orders_new: adresse, créneau, contact
+    // ═══════════════════════════════════════════════════════════════
+
+    // A. Nettoyage : supprimer les points smk_order_* doublonnant Calendar
+    const smkPoints = await prisma.pendingPoint.findMany({
+      where: { externalId: { startsWith: 'smk_order_' } },
+      select: { id: true, date: true, type: true },
+    });
+    let smkCleaned = 0;
+    for (const pt of smkPoints) {
+      const calPt = await prisma.pendingPoint.findFirst({
+        where: { type: pt.type, calendarId: { not: null }, date: pt.date, deletedByUser: false },
+        select: { id: true },
+      });
+      if (calPt) { await prisma.pendingPoint.delete({ where: { id: pt.id } }); smkCleaned++; }
+    }
+    if (smkCleaned > 0) console.log(`[CRM PendingPoints] 🗑️ ${smkCleaned} doublon(s) CRM Smakk supprimé(s)`);
+
+    // B. Fetch Smakk orders
+    const SMK_PAGE_SIZE = 500;
+    const smakkEligible: Array<{
+      orderId: string; clientName: string; boxType: string;
+      livDateISO: string; recDateISO: string;
+      adresse: string | null; phone: string | null;
+      takeContact: string | null; returnContact: string | null;
+      creneauDebutLiv: string | null; creneauFinLiv: string | null;
+      creneauDebutRec: string | null; creneauFinRec: string | null;
+    }> = [];
+
+    let smkPage = 0; let smkTotal = 0;
+    do {
+      const smkUrl = `${SMAKK_API_URL}?key=${SMAKK_API_KEY}&page=${smkPage}&size=${SMK_PAGE_SIZE}`;
+      const smkResp = await fetch(smkUrl, { signal: controller.signal });
+      if (!smkResp.ok) throw new Error(`Smakk API HTTP ${smkResp.status}`);
+      const smkData = await smkResp.json() as any;
+      smkTotal = smkData.total || 0;
+      const smkRows: any[] = smkData.data || [];
+      if (smkRows.length === 0) break;
+
+      for (const row of smkRows) {
+        // Exclure Retrait boutique (pas de chauffeur) et Chronopost
+        const delivOpts = (row.delivery_options || '').toLowerCase();
+        if (delivOpts.includes('retrait')) { result.skipped++; continue; }
+        if (delivOpts.includes('chronopost')) { result.skipped++; continue; }
+
+        // Date de livraison : take_date en priorité, sinon event_date
+        const livDateRaw = (row.take_date || '').trim() || (row.event_date || '').trim();
+        const livDateISO = pendingDateDMY(livDateRaw);
+        if (!livDateISO) continue;
+        if (new Date(livDateISO) < today) continue;
+
+        // Date de ramassage : return_date, sinon livraison
+        const recDateISO = pendingDateDMY((row.return_date || '').trim()) || livDateISO;
+
+        const company = (row.company || '').trim();
+        const contact = [(row.first_name || '').trim(), (row.last_name || '').trim()].filter(Boolean).join(' ');
+        const clientName = company || contact || `Smakk ${row.id}`;
+
+        // Adresse : address + cp + city
+        const adresseParts = [
+          (row.address || '').trim(),
+          [(row.cp || '').trim(), (row.city || '').trim()].filter(Boolean).join(' '),
+        ].filter(Boolean);
+        const adresse = adresseParts.join(', ') || null;
+
+        // Créneaux : parser "9h30 - 14h" → { debut, fin }
+        const [cdLiv, cfLiv] = parseSmakkCreneau((row.take_time || '').trim());
+        const [cdRec, cfRec] = parseSmakkCreneau((row.return_time || '').trim());
+
+        smakkEligible.push({
+          orderId: String(row.id),
+          clientName,
+          boxType: (row.box_type || '').trim(),
+          livDateISO,
+          recDateISO,
+          adresse,
+          phone: (row.phone || '').trim() || null,
+          takeContact: (row.take_contact || '').trim() || null,
+          returnContact: (row.return_contact || '').trim() || null,
+          creneauDebutLiv: cdLiv,
+          creneauFinLiv: cfLiv,
+          creneauDebutRec: cdRec,
+          creneauFinRec: cfRec,
+        });
+      }
+
+      smkPage++;
+    } while (smkPage * SMK_PAGE_SIZE < smkTotal);
+
+    console.log(`[CRM PendingPoints Smakk] ${smakkEligible.length} commandes éligibles (Livraison, hors Retrait/Chronopost)`);
+
+    // C. Créer / mettre à jour les PendingPoints Smakk
+    for (const order of smakkEligible) {
+      const livExt = `smk_order_${order.orderId}_livraison`;
+      const recExt = `smk_order_${order.orderId}_ramassage`;
+
+      // ── Livraison Smakk ──
+      try {
+        const existingLiv = await prisma.pendingPoint.findFirst({ where: { externalId: livExt } });
+        if (!existingLiv) {
+          const calendarLiv = await prisma.pendingPoint.findFirst({
+            where: { type: 'livraison', calendarId: { not: null }, date: ensureDateUTC(order.livDateISO), deletedByUser: false },
+          });
+          if (calendarLiv) { result.skipped++; }
+          else {
+            await prisma.pendingPoint.create({ data: {
+              date: ensureDateUTC(order.livDateISO),
+              clientName: order.clientName,
+              type: 'livraison',
+              produitNom: order.boxType || null,
+              source: 'crm_smakk',
+              externalId: livExt,
+              adresse: order.adresse,
+              creneauDebut: order.creneauDebutLiv,
+              creneauFin: order.creneauFinLiv,
+              contactNom: order.takeContact,
+              contactTelephone: order.phone,
+            }});
+            result.created++;
+            console.log(`[CRM PendingPoints Smakk] + ${order.clientName} livraison ${order.livDateISO}`);
+          }
+        } else if (!existingLiv.manuallyEdited) {
+          await prisma.pendingPoint.update({ where: { id: existingLiv.id }, data: {
+            clientName: order.clientName,
+            adresse: order.adresse,
+            creneauDebut: order.creneauDebutLiv,
+            creneauFin: order.creneauFinLiv,
+            contactNom: order.takeContact,
+            contactTelephone: order.phone,
+          }});
+        }
+      } catch (e: any) { result.errors.push(`Smakk livraison ${order.orderId}: ${e.message}`); }
+
+      // ── Ramassage Smakk ──
+      try {
+        const existingRec = await prisma.pendingPoint.findFirst({ where: { externalId: recExt } });
+        if (!existingRec) {
+          const calendarRec = await prisma.pendingPoint.findFirst({
+            where: { type: 'ramassage', calendarId: { not: null }, date: ensureDateUTC(order.recDateISO), deletedByUser: false },
+          });
+          if (calendarRec) { result.skipped++; }
+          else {
+            await prisma.pendingPoint.create({ data: {
+              date: ensureDateUTC(order.recDateISO),
+              clientName: order.clientName,
+              type: 'ramassage',
+              produitNom: order.boxType || null,
+              source: 'crm_smakk',
+              externalId: recExt,
+              adresse: order.adresse,
+              creneauDebut: order.creneauDebutRec,
+              creneauFin: order.creneauFinRec,
+              contactNom: order.returnContact || order.takeContact,
+              contactTelephone: order.phone,
+            }});
+            result.created++;
+            console.log(`[CRM PendingPoints Smakk] + ${order.clientName} ramassage ${order.recDateISO}`);
+          }
+        } else if (!existingRec.manuallyEdited) {
+          await prisma.pendingPoint.update({ where: { id: existingRec.id }, data: {
+            clientName: order.clientName,
+            adresse: order.adresse,
+            creneauDebut: order.creneauDebutRec,
+            creneauFin: order.creneauFinRec,
+            contactNom: order.returnContact || order.takeContact,
+            contactTelephone: order.phone,
+          }});
+        }
+      } catch (e: any) { result.errors.push(`Smakk ramassage ${order.orderId}: ${e.message}`); }
+    }
+
   } catch (e: any) {
     result.errors.push(e.message || 'Erreur inattendue');
   } finally {
