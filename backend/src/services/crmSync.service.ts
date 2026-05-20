@@ -14,6 +14,7 @@
 
 import { randomUUID } from 'crypto';
 import { prisma } from '../config/database.js';
+import { ensureDateUTC } from '../utils/dateUtils.js';
 
 // ─── Types ───────────────────────────────────────────────────────
 
