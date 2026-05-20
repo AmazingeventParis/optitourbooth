@@ -745,6 +745,24 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   const masterTimeout = setTimeout(() => controller.abort(new Error('syncCrmPendingPoints timeout (60s)')), 60_000);
 
   try {
+    // 0. Nettoyage : supprimer les points CRM qui ont déjà un équivalent Google Calendar sur la même date+type
+    const crmPoints = await prisma.pendingPoint.findMany({
+      where: { externalId: { startsWith: 'snb_order_' } },
+      select: { id: true, date: true, type: true, externalId: true },
+    });
+    let cleaned = 0;
+    for (const pt of crmPoints) {
+      const calPt = await prisma.pendingPoint.findFirst({
+        where: { type: pt.type, calendarId: { not: null }, date: pt.date, deletedByUser: false },
+        select: { id: true },
+      });
+      if (calPt) {
+        await prisma.pendingPoint.delete({ where: { id: pt.id } });
+        cleaned++;
+      }
+    }
+    if (cleaned > 0) console.log(`[CRM PendingPoints] 🗑️ ${cleaned} doublon(s) CRM supprimé(s) (Calendar prioritaire)`);
+
     // 1. Login ShootNBox
     const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox PendingPoints', controller.signal);
 
@@ -836,7 +854,12 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       try {
         const existingLiv = await prisma.pendingPoint.findFirst({ where: { externalId: livExt } });
         if (!existingLiv) {
-          await prisma.pendingPoint.create({
+          // Garde anti-doublon : si Calendar gère déjà un événement à cette date → on laisse Calendar
+          const calendarLiv = await prisma.pendingPoint.findFirst({
+            where: { type: 'livraison', calendarId: { not: null }, date: ensureDateUTC(livDate), deletedByUser: false },
+          });
+          if (calendarLiv) { result.skipped++; }
+          else await prisma.pendingPoint.create({
             data: {
               date: ensureDateUTC(livDate),
               clientName: order.clientName,
@@ -883,6 +906,12 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       try {
         const existingRec = await prisma.pendingPoint.findFirst({ where: { externalId: recExt } });
         if (!existingRec) {
+          // Garde anti-doublon : si Calendar gère déjà un ramassage à cette date → on laisse Calendar
+          const calendarRec = await prisma.pendingPoint.findFirst({
+            where: { type: 'ramassage', calendarId: { not: null }, date: ensureDateUTC(recDate), deletedByUser: false },
+          });
+          if (calendarRec) { result.skipped++; }
+          else {
           await prisma.pendingPoint.create({
             data: {
               date: ensureDateUTC(recDate),
@@ -902,6 +931,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           });
           result.created++;
           if (form) result.enriched++;
+          console.log(`[CRM PendingPoints] + ${order.clientName} ramassage ${recDate}${form ? ' (enrichi)' : ''}`);
+          }
         } else if (!existingRec.manuallyEdited) {
           await prisma.pendingPoint.update({
             where: { id: existingRec.id },
