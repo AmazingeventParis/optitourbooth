@@ -113,18 +113,22 @@ function stripHtml(html: string): string {
 }
 
 function parseCustomerField(raw: string): [string, string] {
-  let text = stripHtml(raw);
-  // Cut at event metadata — match any apostrophe variant (straight/curly)
-  text = text.replace(/Lieu de l.(?:é|e)v[eè]nement.*$/i, ‘’).trim();
-  text = text.replace(/Type d.(?:é|e)v[eè]nement.*$/i, ‘’).trim();
-  text = text.replace(/Retrait.*$/i, ‘’).trim();
-  // Company and contact are separated by multiple spaces or newlines
-  const parts = text.split(/\s{2,}|\n/);
-  const nonEmpty = parts.map(s => s.trim()).filter(Boolean);
-  if (nonEmpty.length >= 2) {
-    return [nonEmpty[0]!, nonEmpty[1]!];
+  // Extract all bold text segments from the HTML (company is first <b>, contact is second <b>)
+  const boldMatches = [...raw.matchAll(/<b[^>]*>([\s\S]*?)<\/b>/gi)];
+  const boldTexts = boldMatches.map(m => stripHtml(m[1] || ‘’).trim()).filter(Boolean);
+
+  if (boldTexts.length >= 2) {
+    return [boldTexts[0]!, boldTexts[1]!];
   }
-  return [‘’, nonEmpty[0] || text.trim()];
+  if (boldTexts.length === 1) {
+    return [‘’, boldTexts[0]!];
+  }
+
+  // Fallback: strip full HTML and cut at event metadata
+  let text = stripHtml(raw);
+  text = text.replace(/Lieu de l.(?:\S+)\s+.vènement.*$/i, ‘’).trim();
+  text = text.replace(/Type d.\S+\s+.vènement.*$/i, ‘’).trim();
+  return [‘’, text];
 }
 
 // ─── Generic CRM login ────────────────────────────────────────────
