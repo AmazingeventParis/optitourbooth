@@ -823,8 +823,12 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       console.warn('[CRM PendingPoints] Formulaires inaccessibles:', e);
     }
 
+    result.debug!.eligibleCount = eligible.length;
+    result.debug!.step4 = { attempted: 0, existingFound: 0, createAttempted: 0, sampleExisting: null as any };
+
     // 4. Créer / enrichir les PendingPoints
     for (const order of eligible) {
+      (result.debug!.step4 as any).attempted++;
       const form = order.numId ? formByNumId.get(order.numId) : undefined;
 
       // Si le formulaire indique chronopost ou retrait → pas de chauffeur → skip
@@ -845,7 +849,9 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       // ── Livraison ──
       try {
         const existingLiv = await prisma.pendingPoint.findFirst({ where: { externalId: livExt } });
+        if (existingLiv) { (result.debug!.step4 as any).existingFound++; if (!(result.debug!.step4 as any).sampleExisting) (result.debug!.step4 as any).sampleExisting = { externalId: existingLiv.externalId, id: existingLiv.id }; }
         if (!existingLiv) {
+          (result.debug!.step4 as any).createAttempted++;
           await prisma.pendingPoint.create({
             data: {
               date: ensureDateUTC(livDate),
