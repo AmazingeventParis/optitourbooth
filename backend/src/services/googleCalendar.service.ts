@@ -1061,36 +1061,19 @@ export async function syncGoogleCalendarEvents(): Promise<{
       errors++;
     }
 
-    // Auto-create Google Drive folder + Booking for this event
+    // Mettre à jour le booking existant si Calendar en avait créé un (ancien système)
+    // CRM est désormais seul responsable de créer les bookings (ShootNBox + Smakk)
     if (isDriveConfigured() && eventId) {
       try {
         const existingBooking = await prisma.booking.findUnique({
           where: { googleEventId: eventId },
         });
 
-        if (!existingBooking) {
-          const publicToken = crypto.randomBytes(24).toString('base64url');
-          await prisma.booking.create({
-            data: {
-              publicToken,
-              customerName: clientName,
-              customerPhone: contactTelephone || null,
-              eventDate: ensureDateUTC(startDate),
-              eventEndDate: ensureDateUTC(endDate),
-              produitNom: produitNom || null,
-              googleEventId: eventId,
-              googleReviewUrl: config.googleBusiness.defaultReviewUrl || null,
-              status: 'link_sent',
-            },
-          });
-          console.log(`[Google Calendar] Booking créé pour "${clientName}" (dossier Drive sera matché par scan)`);
-        } else {
-          // Booking exists — update missing info (contact) and dates if changed
+        if (existingBooking) {
           const bookingUpdate: Record<string, any> = {};
           if (contactTelephone && !existingBooking.customerPhone) {
             bookingUpdate.customerPhone = contactTelephone;
           }
-          // Mettre à jour les dates du booking si elles ont changé dans Google Calendar
           const newEventDate = ensureDateUTC(startDate);
           const newEventEndDate = ensureDateUTC(endDate);
           if (existingBooking.eventDate.toISOString().substring(0, 10) !== startDate) {
@@ -1110,7 +1093,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           }
         }
       } catch (e) {
-        console.error(`[Google Calendar] Erreur création dossier Drive pour ${clientName}:`, e);
+        console.error(`[Google Calendar] Erreur mise à jour booking pour ${clientName}:`, e);
       }
     }
   }
