@@ -137,6 +137,7 @@ export interface GalleryBooking {
   eventDate: string;
   eventEndDate: string | null;
   createdAt: string;
+  internalFeedback?: string | null;
   _count: { events: number; reviewMatches: number; galleryDispatches: number };
 }
 

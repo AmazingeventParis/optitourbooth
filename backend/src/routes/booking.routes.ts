@@ -6,6 +6,7 @@ import {
   handleStarRating,
   handleReviewClick,
   handleNoReviewClick,
+  submitFeedback,
   // Internal
   handlePubSubReview,
   // Admin
@@ -47,6 +48,9 @@ router.post('/public/bookings/:token/actions/review-click', handleReviewClick);
 
 // Handle "I don't want to leave a review" click
 router.post('/public/bookings/:token/actions/no-review-click', handleNoReviewClick);
+
+// Save internal feedback comment from low-rating clients (never published)
+router.post('/public/bookings/:token/actions/submit-feedback', submitFeedback);
 
 // ===========================
 // INTERNAL ROUTES (Pub/Sub webhook)

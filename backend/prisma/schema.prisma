@@ -708,6 +708,7 @@ model Booking {
   crmOrderId          String?       @map("crm_order_id")
   crmBrand            String?       @map("crm_brand")
   numId               String?       @map("num_id")
+  internalFeedback    String?       @map("internal_feedback")
 
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")

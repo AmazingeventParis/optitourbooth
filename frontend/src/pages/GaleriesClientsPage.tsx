@@ -13,6 +13,7 @@ import {
   CheckIcon,
   XMarkIcon,
   MagnifyingGlassIcon,
+  ChatBubbleLeftEllipsisIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
@@ -510,15 +511,22 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
             <CalendarDaysIcon className="h-4 w-4" />
             {formatDateRange(booking.eventDate, booking.eventEndDate)}
           </span>
-          {badges.length > 0 && (
-            <div className="flex flex-wrap justify-end gap-1">
-              {badges.map((b, i) => (
-                <span key={i} className={clsx('px-1.5 py-0.5 text-[10px] font-medium rounded-full whitespace-nowrap', b.color)}>
-                  {b.label}
-                </span>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap justify-end gap-1">
+            {booking.internalFeedback && (
+              <span
+                title={booking.internalFeedback}
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-orange-100 text-orange-700 cursor-help whitespace-nowrap flex-shrink-0"
+              >
+                <ChatBubbleLeftEllipsisIcon className="h-3 w-3" />
+                Commentaire
+              </span>
+            )}
+            {badges.map((b, i) => (
+              <span key={i} className={clsx('px-1.5 py-0.5 text-[10px] font-medium rounded-full whitespace-nowrap', b.color)}>
+                {b.label}
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Name */}

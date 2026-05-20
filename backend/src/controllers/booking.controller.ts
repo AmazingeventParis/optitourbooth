@@ -294,6 +294,33 @@ export const handleNoReviewClick = asyncHandler(async (req: Request, res: Respon
   });
 });
 
+/**
+ * POST /api/public/bookings/:token/actions/submit-feedback
+ * Save internal feedback from low-rating clients (never published)
+ */
+export const submitFeedback = asyncHandler(async (req: Request, res: Response) => {
+  const { token } = req.params;
+  const { feedback } = req.body;
+
+  const booking = await prisma.booking.findUnique({
+    where: { publicToken: token },
+    select: { id: true },
+  });
+
+  if (!booking) {
+    return apiResponse.notFound(res, 'Réservation introuvable');
+  }
+
+  if (feedback && typeof feedback === 'string' && feedback.trim().length > 0) {
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { internalFeedback: feedback.trim().substring(0, 2000) },
+    });
+  }
+
+  return apiResponse.success(res, { saved: true });
+});
+
 // ===========================
 // INTERNAL ROUTES (Pub/Sub)
 // ===========================
@@ -1123,6 +1150,7 @@ export const listGalleryBookings = asyncHandler(async (_req: Request, res: Respo
     eventDate: b.eventDate.toISOString().substring(0, 10),
     eventEndDate: b.eventEndDate ? b.eventEndDate.toISOString().substring(0, 10) : null,
     createdAt: b.createdAt,
+    internalFeedback: b.internalFeedback,
     _count: b._count,
   });
 
