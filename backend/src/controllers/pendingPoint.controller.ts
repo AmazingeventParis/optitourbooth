@@ -607,3 +607,179 @@ export async function importFromCRM(req: Request, res: Response): Promise<void> 
     points: updated,
   });
 }
+
+/**
+ * POST /api/pending-points/bulk-import-crm
+ * Enrichit TOUS les points à dispatcher à venir avec les infos du formulaire Mail Info Client.
+ * Source de vérité : shootnbox.fr/manager2 (otb_cfg_bulk.php).
+ * Ne touche pas les points déjà dispatched ou deletedByUser.
+ * Body: { applyUpdate?: boolean } — default false (preview)
+ */
+export async function bulkImportFromCRM(req: Request, res: Response): Promise<void> {
+  const { applyUpdate = false } = req.body;
+
+  const lookupKey = process.env.CRM_LOOKUP_KEY || 'otb_crm_lookup_2026';
+  const bulkUrl = `https://shootnbox.fr/manager2/otb_cfg_bulk.php?key=${lookupKey}`;
+
+  // 1. Récupérer toutes les configs soumises depuis shootnbox.fr
+  let crmConfigs: any[];
+  try {
+    const resp = await fetch(bulkUrl, { signal: AbortSignal.timeout(20_000) });
+    const body = await resp.json();
+    if (!Array.isArray(body)) throw new Error('Réponse inattendue (pas un tableau)');
+    crmConfigs = body;
+  } catch (err) {
+    apiResponse.error(res, 'CRM_FETCH_ERROR', `Impossible de contacter shootnbox.fr: ${(err as Error).message}`, 502);
+    return;
+  }
+
+  // 2. Charger tous les PendingPoints à venir non dispatched
+  const todayUTC = ensureDateUTC(new Date().toISOString().substring(0, 10));
+  const upcomingPoints = await prisma.pendingPoint.findMany({
+    where: {
+      date: { gte: todayUTC },
+      dispatched: false,
+      deletedByUser: false,
+    },
+    orderBy: { date: 'asc' },
+  });
+
+  // 3. Pour chaque config CRM, trouver les points correspondants et calculer les mises à jour
+  const allUpdates: Array<{
+    numId: string;
+    societe: string;
+    logType: string;
+    matchedPoints: Array<{ id: string; type: string; clientName: string }>;
+    updatePayload: Record<string, any>;
+  }> = [];
+  const skipped: Array<{ numId: string; reason: string }> = [];
+
+  for (const cfg of crmConfigs) {
+    const numId: string = cfg.num_id || '';
+    const logType: string = cfg.logistique_type || 'classique';
+    const d = cfg.submitted_data as Record<string, string> | undefined;
+
+    if (!d) {
+      skipped.push({ numId, reason: 'pas de submitted_data' });
+      continue;
+    }
+
+    const parsedLiv = parseLogisticsPayload(d, 'livraison', logType);
+    const parsedRec = parseLogisticsPayload(d, 'ramassage', logType);
+
+    if (!parsedLiv && !parsedRec) {
+      skipped.push({ numId, reason: `logistique_type=${logType} ignoré (retrait)` });
+      continue;
+    }
+
+    const eventDateISO = normalizeDateDMY(cfg.event_date || '');
+    const allDates = [...new Set([
+      parsedLiv?.date,
+      parsedRec?.date,
+      eventDateISO,
+    ].filter((x): x is string => !!x))];
+
+    const namePhrases = ([cfg.societe, cfg.last_name] as (string | undefined)[])
+      .filter((s): s is string => typeof s === 'string' && s.trim().length >= 3)
+      .map((s) => s.trim());
+
+    const dateFrom = parsedLiv?.date || parsedRec?.date || eventDateISO;
+    const dateTo   = parsedRec?.date || parsedLiv?.date || eventDateISO;
+
+    // Chercher uniquement parmi les points à venir déjà chargés
+    let candidates = upcomingPoints.filter(p => {
+      const pDate = p.date.toISOString().substring(0, 10);
+      const nameMatch = namePhrases.length === 0 || namePhrases.some(phrase =>
+        p.clientName.toLowerCase().includes(phrase.toLowerCase())
+      );
+      const dateMatch = !dateFrom || !dateTo || (pDate >= dateFrom && pDate <= dateTo);
+      return nameMatch && dateMatch;
+    });
+
+    // Stratégie 2 : nom seul si rien trouvé
+    if (candidates.length === 0 && namePhrases.length > 0) {
+      candidates = upcomingPoints.filter(p =>
+        namePhrases.some(phrase => p.clientName.toLowerCase().includes(phrase.toLowerCase()))
+      );
+    }
+
+    // Stratégie 3 : dates seules
+    if (candidates.length === 0 && allDates.length > 0) {
+      candidates = upcomingPoints.filter(p =>
+        allDates.includes(p.date.toISOString().substring(0, 10))
+      );
+    }
+
+    if (candidates.length === 0) {
+      skipped.push({ numId, reason: 'aucun point correspondant trouvé' });
+      continue;
+    }
+
+    // Construire le payload d'update pour chaque candidat
+    for (const point of candidates) {
+      const payload = point.type === 'ramassage' ? parsedRec : parsedLiv;
+      if (!payload) continue;
+
+      const existing = allUpdates.find(u => u.numId === numId);
+      const matchEntry = { id: point.id, type: point.type, clientName: point.clientName };
+      if (existing) {
+        existing.matchedPoints.push(matchEntry);
+      } else {
+        allUpdates.push({
+          numId,
+          societe: cfg.societe || cfg.last_name || '',
+          logType,
+          matchedPoints: [matchEntry],
+          updatePayload: {
+            adresse:          payload.adresse,
+            creneauDebut:     payload.creneauDebut,
+            creneauFin:       payload.creneauFin,
+            contactNom:       payload.contactNom,
+            contactTelephone: payload.contactTelephone,
+            notes:            payload.notes,
+          },
+        });
+      }
+    }
+  }
+
+  if (!applyUpdate) {
+    apiResponse.success(res, {
+      preview: true,
+      crmConfigsTotal: crmConfigs.length,
+      skippedCount: skipped.length,
+      skipped,
+      matchedConfigs: allUpdates.length,
+      totalPointsToUpdate: allUpdates.reduce((s, u) => s + u.matchedPoints.length, 0),
+      updates: allUpdates,
+    });
+    return;
+  }
+
+  // Appliquer toutes les mises à jour
+  let updatedCount = 0;
+  const errors: Array<{ id: string; error: string }> = [];
+
+  for (const update of allUpdates) {
+    for (const match of update.matchedPoints) {
+      try {
+        await prisma.pendingPoint.update({
+          where: { id: match.id },
+          data: { ...update.updatePayload, manuallyEdited: true },
+        });
+        updatedCount++;
+      } catch (err) {
+        errors.push({ id: match.id, error: (err as Error).message });
+      }
+    }
+  }
+
+  apiResponse.success(res, {
+    applied: true,
+    crmConfigsTotal: crmConfigs.length,
+    skippedCount: skipped.length,
+    skipped,
+    updatedCount,
+    errors,
+  });
+}

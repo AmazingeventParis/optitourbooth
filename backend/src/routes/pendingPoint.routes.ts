@@ -25,5 +25,6 @@ router.post('/sync-google-calendar', authenticate, requireRole('admin', 'superad
 
 // Import logistique depuis Mail Info Client (shootnbox.fr)
 router.post('/import-crm', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.importFromCRM));
+router.post('/bulk-import-crm', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.bulkImportFromCRM));
 
 export default router;
