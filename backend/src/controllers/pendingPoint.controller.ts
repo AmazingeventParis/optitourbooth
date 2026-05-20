@@ -686,32 +686,35 @@ export async function bulkImportFromCRM(req: Request, res: Response): Promise<vo
     const dateFrom = parsedLiv?.date || parsedRec?.date || eventDateISO;
     const dateTo   = parsedRec?.date || parsedLiv?.date || eventDateISO;
 
-    // Chercher uniquement parmi les points à venir déjà chargés
+    // En mode bulk, n'utiliser que les stratégies à base de nom (jamais dates seules).
+    // La stratégie 3 (dates seules) est désactivée : trop de faux positifs quand plusieurs
+    // événements tombent le même jour que le client Chronopost/inconnu.
+    if (namePhrases.length === 0) {
+      skipped.push({ numId, reason: 'nom trop court ou absent — ignoré en bulk (pas de match par dates seules)' });
+      continue;
+    }
+
+    // Stratégie 1 : nom ET plage de dates
     let candidates = upcomingPoints.filter(p => {
       const pDate = p.date.toISOString().substring(0, 10);
-      const nameMatch = namePhrases.length === 0 || namePhrases.some(phrase =>
+      const nameMatch = namePhrases.some(phrase =>
         p.clientName.toLowerCase().includes(phrase.toLowerCase())
       );
       const dateMatch = !dateFrom || !dateTo || (pDate >= dateFrom && pDate <= dateTo);
       return nameMatch && dateMatch;
     });
 
-    // Stratégie 2 : nom seul si rien trouvé
-    if (candidates.length === 0 && namePhrases.length > 0) {
+    // Stratégie 2 : nom seul si rien trouvé (pas de contrainte de date)
+    if (candidates.length === 0) {
       candidates = upcomingPoints.filter(p =>
         namePhrases.some(phrase => p.clientName.toLowerCase().includes(phrase.toLowerCase()))
       );
     }
 
-    // Stratégie 3 : dates seules
-    if (candidates.length === 0 && allDates.length > 0) {
-      candidates = upcomingPoints.filter(p =>
-        allDates.includes(p.date.toISOString().substring(0, 10))
-      );
-    }
+    // Stratégie 3 (dates seules) désactivée en bulk — trop de faux positifs.
 
     if (candidates.length === 0) {
-      skipped.push({ numId, reason: 'aucun point correspondant trouvé' });
+      skipped.push({ numId, reason: 'aucun point correspondant au nom trouvé' });
       continue;
     }
 
