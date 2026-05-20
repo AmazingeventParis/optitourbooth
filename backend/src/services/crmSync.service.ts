@@ -763,8 +763,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         if (start === 0) {
           (result.debug!.urlResults as Record<string, any>)[urlSuffix] = {
             rowCount: rows.length, totalFiltered,
-            firstRowKeys: rows[0] ? Object.keys(rows[0]).slice(0, 10) : [],
-            firstRowSample: rows[0] ? JSON.stringify(rows[0]).slice(0, 300) : null,
+            allKeys: rows[0] ? Object.keys(rows[0]) : [],
+            firstRowFull: rows[0] ? JSON.stringify(rows[0]).slice(0, 2000) : null,
           };
         }
         if (rows.length === 0) break;
