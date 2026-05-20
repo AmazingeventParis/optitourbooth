@@ -900,6 +900,105 @@ export const triggerCrmSync = asyncHandler(async (req: Request, res: Response) =
 });
 
 /**
+ * POST /api/bookings/dedup-crm
+ * Find and delete duplicate CRM bookings (same brand + date ± 2d + matching name).
+ * Keeps the most complete booking; merges email/galleryUrl from deleted ones into keeper.
+ */
+export const dedupCrmBookings = asyncHandler(async (_req: Request, res: Response) => {
+  const bookings = await prisma.booking.findMany({
+    where: { crmBrand: { not: null } },
+    include: {
+      _count: { select: { events: true, reviewMatches: true, galleryDispatches: true } },
+    },
+    orderBy: { eventDate: 'asc' },
+  });
+
+  const normalize = (s: string | null | undefined) =>
+    (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const score = (b: typeof bookings[0]) => {
+    let s = 0;
+    if (b.customerEmail) s += 4;
+    if (b.emailSentAt) s += 3;
+    if (b.galleryUrl) s += 3;
+    if (b.rating) s += 3;
+    if (b._count.events > 0) s += 2;
+    if (b._count.reviewMatches > 0) s += 2;
+    if (b._count.galleryDispatches > 0) s += 2;
+    if (b.crmOrderId) s += 1;
+    if (b.numId) s += 1;
+    if (b.photoCount && b.photoCount > 0) s += 1;
+    if (b.status !== 'link_sent') s += 1;
+    return s;
+  };
+
+  const processed = new Set<string>();
+  const toDelete: string[] = [];
+  const merges: string[] = [];
+
+  for (const b of bookings) {
+    if (processed.has(b.id)) continue;
+
+    const bDate = b.eventDate.getTime();
+    const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
+    const bNameA = normalize(b.companyName || b.customerName);
+    const bNameB = normalize(b.contactName || b.customerName);
+
+    // Find all bookings that could be duplicates of b
+    const group = bookings.filter(other => {
+      if (other.id === b.id) return true;
+      if (processed.has(other.id)) return false;
+      if (other.crmBrand !== b.crmBrand) return false;
+      if (Math.abs(other.eventDate.getTime() - bDate) > TWO_DAYS) return false;
+      const oNameA = normalize(other.companyName || other.customerName);
+      const oNameB = normalize(other.contactName || other.customerName);
+      return (
+        (bNameA && oNameA && bNameA === oNameA) ||
+        (bNameA && oNameB && bNameA === oNameB) ||
+        (bNameB && oNameA && bNameB === oNameA)
+      );
+    });
+
+    group.forEach(g => processed.add(g.id));
+
+    if (group.length < 2) continue;
+
+    // Pick keeper (highest score)
+    group.sort((x, y) => score(y) - score(x));
+    const keeper = group[0]!;
+    const duplicates = group.slice(1);
+
+    // Merge useful data from duplicates into keeper
+    const mergeData: Record<string, unknown> = {};
+    for (const dup of duplicates) {
+      if (!keeper.customerEmail && dup.customerEmail) mergeData.customerEmail = dup.customerEmail;
+      if (!keeper.galleryUrl && dup.galleryUrl) mergeData.galleryUrl = dup.galleryUrl;
+      if (!keeper.crmOrderId && dup.crmOrderId) mergeData.crmOrderId = dup.crmOrderId;
+      if (!keeper.numId && dup.numId) mergeData.numId = dup.numId;
+      if (!keeper.photoCount && dup.photoCount) mergeData.photoCount = dup.photoCount;
+      if (!keeper.googleReviewUrl && dup.googleReviewUrl) mergeData.googleReviewUrl = dup.googleReviewUrl;
+    }
+
+    if (Object.keys(mergeData).length > 0) {
+      await prisma.booking.update({ where: { id: keeper.id }, data: mergeData });
+      merges.push(`${keeper.customerName} (${keeper.id.slice(0, 8)})`);
+    }
+
+    for (const dup of duplicates) {
+      await prisma.booking.delete({ where: { id: dup.id } });
+      toDelete.push(`${dup.customerName} (${dup.id.slice(0, 8)}) → kept ${keeper.id.slice(0, 8)}`);
+    }
+  }
+
+  return apiResponse.success(res, {
+    deleted: toDelete.length,
+    merged: merges.length,
+    deletedList: toDelete,
+    mergedList: merges,
+  });
+});
+
+/**
  * GET /api/bookings/crm-status
  * Returns the result of the last completed CRM sync (for debugging).
  */

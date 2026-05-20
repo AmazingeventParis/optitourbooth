@@ -25,6 +25,7 @@ import {
   triggerCrmSync,
   testCrmLogin,
   getCrmStatus,
+  dedupCrmBookings,
   updateReviewMatchStatus,
   getBookingStats,
 } from '../controllers/booking.controller.js';
@@ -108,6 +109,9 @@ router.post('/bookings/scan-drive-folders', authenticate, requireAdmin, triggerD
 
 // Manually trigger CRM sync (ShootNBox + Smakk → bookings)
 router.post('/bookings/sync-crm', authenticate, requireAdmin, triggerCrmSync);
+
+// Deduplicate CRM bookings (same brand + date + name)
+router.post('/bookings/dedup-crm', authenticate, requireAdmin, dedupCrmBookings);
 
 // Update review match status
 router.patch('/bookings/review-matches/:matchId/status', authenticate, requireAdmin, updateReviewMatchStatus);
