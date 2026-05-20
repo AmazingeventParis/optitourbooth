@@ -23,6 +23,9 @@ router.patch('/:id', authenticate, requireRole('admin', 'warehouse', 'superadmin
 // Sync manuelle Google Calendar
 router.post('/sync-google-calendar', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.syncGoogleCalendar));
 
+// Sync manuelle CRM → PendingPoints (source de vérité : orders_ajax.php ShootNBox)
+router.post('/sync-crm', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.syncCrmPendingPointsController));
+
 // Import logistique depuis Mail Info Client (shootnbox.fr)
 router.post('/import-crm', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.importFromCRM));
 router.post('/bulk-import-crm', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.bulkImportFromCRM));

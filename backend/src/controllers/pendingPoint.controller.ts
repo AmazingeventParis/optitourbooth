@@ -3,6 +3,7 @@ import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
 import { syncGoogleCalendarEvents } from '../services/googleCalendar.service.js';
+import { syncCrmPendingPoints } from '../services/crmSync.service.js';
 
 // ─── Helpers CRM import ──────────────────────────────────────────────────────
 
@@ -451,6 +452,20 @@ export async function syncGoogleCalendar(_req: Request, res: Response): Promise<
     apiResponse.success(res, result);
   } catch (error) {
     apiResponse.error(res, 'SYNC_ERROR', `Erreur sync Google Calendar: ${(error as Error).message}`, 500);
+  }
+}
+
+/**
+ * POST /api/pending-points/sync-crm - Sync manuelle CRM → PendingPoints
+ * Crée les points à dispatcher depuis orders_ajax.php (delivery=Livraison, hors Vegas Slim)
+ * et les enrichit avec les données du formulaire mail-info-client.
+ */
+export async function syncCrmPendingPointsController(_req: Request, res: Response): Promise<void> {
+  try {
+    const result = await syncCrmPendingPoints();
+    apiResponse.success(res, result);
+  } catch (error) {
+    apiResponse.error(res, 'SYNC_ERROR', `Erreur sync CRM PendingPoints: ${(error as Error).message}`, 500);
   }
 }
 

@@ -889,57 +889,65 @@ export async function syncGoogleCalendarEvents(): Promise<{
     }
 
     try {
-      await prisma.pendingPoint.upsert({
-        where: { externalId: `${eventId}_livraison` },
-        update: {
-          // Ne pas écraser les champs modifiés manuellement par l'utilisateur.
-          // Ne pas changer dispatched si l'utilisateur a supprimé ou édité le point.
-          ...(!livManuallyEdited && !livDeletedByUser && {
+      // Calendrier Smakk → créer/mettre à jour comme avant (pas géré par le CRM ShootNBox)
+      // Calendrier principal → mettre à jour si le point existe déjà, ne plus CRÉER (le CRM crée désormais)
+      const isSmakkCalendar = calendarId === SMAKK_CALENDAR_ID;
+
+      if (existingLiv || isSmakkCalendar) {
+        // Mettre à jour un point existant, ou créer pour Smakk
+        await prisma.pendingPoint.upsert({
+          where: { externalId: `${eventId}_livraison` },
+          update: {
+            ...(!livManuallyEdited && !livDeletedByUser && {
+              date: ensureDateUTC(startDate),
+              clientName,
+              ...(adresse !== null && { adresse }),
+              ...(produitNom !== null && { produitNom }),
+              ...(creneauLivDebut !== null && { creneauDebut: creneauLivDebut }),
+              ...(creneauLivFin !== null && { creneauFin: creneauLivFin }),
+              ...(contactNom !== null && { contactNom }),
+              ...(contactTelephone !== null && { contactTelephone }),
+              notes,
+              calendarId,
+              ...(attachments.length > 0 && { attachments }),
+              ...(!isLivraison && { dispatched: true }),
+              ...(livDispatchOverride === false && { dispatched: false }),
+            }),
+          },
+          create: {
             date: ensureDateUTC(startDate),
             clientName,
-            // Only overwrite optional fields when Calendar provides a non-null value.
-            ...(adresse !== null && { adresse }),
-            ...(produitNom !== null && { produitNom }),
-            ...(creneauLivDebut !== null && { creneauDebut: creneauLivDebut }),
-            ...(creneauLivFin !== null && { creneauFin: creneauLivFin }),
-            ...(contactNom !== null && { contactNom }),
-            ...(contactTelephone !== null && { contactTelephone }),
+            adresse,
+            type: 'livraison',
+            produitNom,
+            creneauDebut: creneauLivDebut,
+            creneauFin: creneauLivFin,
+            contactNom,
+            contactTelephone,
             notes,
+            source: 'google_calendar',
             calendarId,
-            ...(attachments.length > 0 && { attachments }),
-            ...(!isLivraison && { dispatched: true }),
-            ...(livDispatchOverride === false && { dispatched: false }),
-          }),
-        },
-        create: {
-          date: ensureDateUTC(startDate),
-          clientName,
-          adresse,
-          type: 'livraison',
-          produitNom,
-          creneauDebut: creneauLivDebut,
-          creneauFin: creneauLivFin,
-          contactNom,
-          contactTelephone,
-          notes,
-          source: 'google_calendar',
-          calendarId,
-          externalId: `${eventId}_livraison`,
-          attachments,
-          dispatched: !isLivraison || livAlreadyInTournee,
-        },
-      });
-      if (livDispatchOverride === false) {
-        console.log(`[Google Calendar] ♻️ ${clientName} livraison re-mis à dispatcher pour ${startDate}`);
-        created++;
-      } else if (!isLivraison) {
-        console.log(`[Google Calendar] ${clientName} ${startDate} → non-LIR (${tagInner}), visible prépa/galeries uniquement`);
-        created++;
-      } else if (livAlreadyInTournee) {
-        skipped++;
-        console.log(`[Google Calendar] ${clientName} livraison ${startDate} → déjà dans tournée, skip`);
+            externalId: `${eventId}_livraison`,
+            attachments,
+            dispatched: !isLivraison || livAlreadyInTournee,
+          },
+        });
+        if (livDispatchOverride === false) {
+          console.log(`[Google Calendar] ♻️ ${clientName} livraison re-mis à dispatcher pour ${startDate}`);
+          created++;
+        } else if (!isLivraison) {
+          console.log(`[Google Calendar] ${clientName} ${startDate} → non-LIR (${tagInner}), visible prépa/galeries uniquement`);
+          created++;
+        } else if (livAlreadyInTournee) {
+          skipped++;
+          console.log(`[Google Calendar] ${clientName} livraison ${startDate} → déjà dans tournée, skip`);
+        } else {
+          created++;
+        }
       } else {
-        created++;
+        // Nouvel événement ShootNBox → le CRM sync créera le PendingPoint avec le vrai nom client
+        console.log(`[Google Calendar] ${clientName} livraison ${startDate} → nouveau événement, création déléguée au CRM sync`);
+        skipped++;
       }
     } catch (e) {
       console.error(`[Google Calendar] Erreur livraison ${clientName}:`, e);
@@ -996,51 +1004,58 @@ export async function syncGoogleCalendarEvents(): Promise<{
     }
 
     try {
-      await prisma.pendingPoint.upsert({
-        where: { externalId: `${eventId}_ramassage` },
-        update: {
-          ...(!recManuallyEdited && !recDeletedByUser && {
+      if (existingRec || calendarId === SMAKK_CALENDAR_ID) {
+        // Mettre à jour un point existant, ou créer pour Smakk
+        await prisma.pendingPoint.upsert({
+          where: { externalId: `${eventId}_ramassage` },
+          update: {
+            ...(!recManuallyEdited && !recDeletedByUser && {
+              date: ensureDateUTC(endDate),
+              clientName,
+              ...(adresse !== null && { adresse }),
+              ...(produitNom !== null && { produitNom }),
+              ...(creneauRecDebut !== null && { creneauDebut: creneauRecDebut }),
+              ...(creneauRecFin !== null && { creneauFin: creneauRecFin }),
+              ...(contactNom !== null && { contactNom }),
+              ...(contactTelephone !== null && { contactTelephone }),
+              notes,
+              calendarId,
+              ...(attachments.length > 0 && { attachments }),
+              ...(!isLivraison && { dispatched: true }),
+              ...(recDispatchOverride === false && { dispatched: false }),
+            }),
+          },
+          create: {
             date: ensureDateUTC(endDate),
             clientName,
-            ...(adresse !== null && { adresse }),
-            ...(produitNom !== null && { produitNom }),
-            ...(creneauRecDebut !== null && { creneauDebut: creneauRecDebut }),
-            ...(creneauRecFin !== null && { creneauFin: creneauRecFin }),
-            ...(contactNom !== null && { contactNom }),
-            ...(contactTelephone !== null && { contactTelephone }),
+            adresse,
+            type: 'ramassage',
+            produitNom,
+            creneauDebut: creneauRecDebut,
+            creneauFin: creneauRecFin,
+            contactNom,
+            contactTelephone,
             notes,
+            source: 'google_calendar',
             calendarId,
-            ...(attachments.length > 0 && { attachments }),
-            ...(!isLivraison && { dispatched: true }),
-            ...(recDispatchOverride === false && { dispatched: false }),
-          }),
-        },
-        create: {
-          date: ensureDateUTC(endDate),
-          clientName,
-          adresse,
-          type: 'ramassage',
-          produitNom,
-          creneauDebut: creneauRecDebut,
-          creneauFin: creneauRecFin,
-          contactNom,
-          contactTelephone,
-          notes,
-          source: 'google_calendar',
-          calendarId,
-          externalId: `${eventId}_ramassage`,
-          attachments,
-          dispatched: !isLivraison || recAlreadyInTournee,
-        },
-      });
-      if (recDispatchOverride === false) {
-        console.log(`[Google Calendar] ♻️ ${clientName} ramassage re-mis à dispatcher pour ${endDate}`);
-        created++;
-      } else if (recAlreadyInTournee) {
-        skipped++;
-        console.log(`[Google Calendar] ${clientName} ramassage ${endDate} → déjà dans tournée, skip`);
+            externalId: `${eventId}_ramassage`,
+            attachments,
+            dispatched: !isLivraison || recAlreadyInTournee,
+          },
+        });
+        if (recDispatchOverride === false) {
+          console.log(`[Google Calendar] ♻️ ${clientName} ramassage re-mis à dispatcher pour ${endDate}`);
+          created++;
+        } else if (recAlreadyInTournee) {
+          skipped++;
+          console.log(`[Google Calendar] ${clientName} ramassage ${endDate} → déjà dans tournée, skip`);
+        } else {
+          created++;
+        }
       } else {
-        created++;
+        // Nouvel événement ShootNBox → délégué au CRM sync
+        console.log(`[Google Calendar] ${clientName} ramassage ${endDate} → nouveau événement, création déléguée au CRM sync`);
+        skipped++;
       }
     } catch (e) {
       console.error(`[Google Calendar] Erreur ramassage ${clientName}:`, e);
