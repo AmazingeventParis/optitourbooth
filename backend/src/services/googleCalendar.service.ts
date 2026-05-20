@@ -848,8 +848,9 @@ export async function syncGoogleCalendarEvents(): Promise<{
     let livDispatchOverride: boolean | undefined;
     let livManuallyEdited = false;
     let livDeletedByUser = false;
+    let existingLiv: { id: string; date: Date; dispatched: boolean; manuallyEdited: boolean; deletedByUser: boolean } | null = null;
     try {
-      const existingLiv = await prisma.pendingPoint.findUnique({
+      existingLiv = await prisma.pendingPoint.findUnique({
         where: { externalId: `${eventId}_livraison` },
         select: { id: true, date: true, dispatched: true, manuallyEdited: true, deletedByUser: true },
       });
@@ -963,8 +964,9 @@ export async function syncGoogleCalendarEvents(): Promise<{
     let recDispatchOverride: boolean | undefined;
     let recManuallyEdited = false;
     let recDeletedByUser = false;
+    let existingRec: { id: string; date: Date; dispatched: boolean; manuallyEdited: boolean; deletedByUser: boolean } | null = null;
     try {
-      const existingRec = await prisma.pendingPoint.findUnique({
+      existingRec = await prisma.pendingPoint.findUnique({
         where: { externalId: `${eventId}_ramassage` },
         select: { id: true, date: true, dispatched: true, manuallyEdited: true, deletedByUser: true },
       });
