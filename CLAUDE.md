@@ -1,5 +1,48 @@
 # Historique des sessions Claude - OptiTourBooth
 
+## Session du 20 mai 2026 (suite)
+
+### Intégration CRM ShootNBox → PendingPoints (remplacement Google Calendar)
+
+**Objectif** : Les futurs événements ShootNBox ne passent plus par Google Calendar. La source de vérité est `orders_ajax.php?status=2` (manager2). Seul Smakk reste sur Calendar.
+
+**Filtres CRM → PendingPoints** :
+- `delivery === 'Livraison'` (exclut Retrait boutique)
+- `box_type !== 'Vegas Slim'` (client-géré, pas de chauffeur)
+- `event_date >= aujourd'hui` (uniquement événements futurs)
+
+**externalId format** : `snb_order_{orderId}_livraison` / `snb_order_{orderId}_ramassage`
+
+**Architecture** :
+- `syncCrmPendingPoints()` dans `crmSync.service.ts` : query les deux URLs (current + `&arch=true`), filtre, crée les PendingPoints, enrichit via `otb_cfg_bulk.php`
+- `googleCalendar.service.ts` : n'upsert un point que si `existingLiv/existingRec` existe déjà OU calendrier Smakk → plus de création pour ShootNBox
+- Cron : s'exécute 5s après la sync principale, puis toutes les heures
+- `POST /api/pending-points/sync-crm` : endpoint manuel admin/superadmin
+
+**Bugs résolus en déployant** :
+1. `ensureDateUTC` non importé dans `crmSync.service.ts` → TypeScript error
+2. `existingLiv`/`existingRec` déclarés `const` dans un `try` block mais utilisés dans le suivant → portée incorrecte → levés en `let` dans le scope parent
+3. `orders_ajax.php?status=2` (non-archivé seul) retournait 0 pour certains tests → query les deux URLs
+4. `parseCustomerField` : `stripHtml` collapse les espaces → split sur double-espace ne fonctionne plus → extraction directe des balises `<b>` HTML
+
+**Résultat** :
+- **59 PendingPoints créés automatiquement** au premier démarrage (Livraison, hors Vegas Slim, date future)
+- CRM points visibles dans l'interface Points à dispatcher
+- Sync manuelle via `POST /api/pending-points/sync-crm`
+- ClientNames propres : "Denis Lecluse", "DECLERCQ ALIX", etc.
+
+**Credentials login** : `superadmin@optitour.fr / SuperAdmin1!` (seed Coolify — les autres comptes sont dans la DB)
+
+#### Commits
+
+- `67823b5` fix: missing ensureDateUTC import
+- `54572df` fix: existingLiv/existingRec scope in googleCalendar.service.ts
+- `be19ec3` fix: query both current+archived ShootNBox URLs + date filter
+- `e5c7cb1` fix: parseCustomerField uses bold tag extraction
+- `0b0f48f` fix: update existing points' clientName on each sync
+
+---
+
 ## Session du 20 mai 2026
 
 ### Refonte page galeries + fausse fenêtre Google avis (clients note ≤ 3)
