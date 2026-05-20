@@ -742,7 +742,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   try {
     // 1. Login ShootNBox
     const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox PendingPoints', controller.signal);
-    result.debug = { cookieLen: cookie.length, urlResults: {} as Record<string, any> };
+    const debugCounters: Record<string, { total: number; livraison: number; notVegasSlim: number; futureDate: number }> = {};
+    result.debug = { cookieLen: cookie.length, urlResults: {} as Record<string, any>, counters: debugCounters };
 
     // 2. Récupérer les commandes actuelles (non-archivées) : delivery=Livraison, box_type!=Vegas Slim
     const PAGE_SIZE = 500;
@@ -770,9 +771,14 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         if (rows.length === 0) break;
         total = totalFiltered;
 
+        if (!debugCounters[urlSuffix]) debugCounters[urlSuffix] = { total: 0, livraison: 0, notVegasSlim: 0, futureDate: 0 };
         for (const row of rows) {
-          if (stripHtml(String(row.delivery || '')) !== 'Livraison') continue;
+          debugCounters[urlSuffix].total++;
+          const deliveryVal = stripHtml(String(row.delivery || ''));
+          if (deliveryVal !== 'Livraison') continue;
+          debugCounters[urlSuffix].livraison++;
           if (stripHtml(String(row.box_type || '')) === 'Vegas Slim') continue;
+          debugCounters[urlSuffix].notVegasSlim++;
 
           const orderId = String(row.id || '').trim();
           if (!orderId) continue;
@@ -782,6 +788,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
 
           // Only upcoming events (event_date >= today)
           if (new Date(eventDateISO) < today) continue;
+          debugCounters[urlSuffix].futureDate++;
 
           // Deduplicate across both URL passes
           if (eligible.some(e => e.orderId === orderId)) continue;
