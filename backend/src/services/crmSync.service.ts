@@ -723,6 +723,7 @@ export interface PendingPointsSyncResult {
   skipped: number;
   errors: string[];
   completedAt?: string;
+  debug?: Record<string, any>;
 }
 
 export let lastPendingPointsSyncResult: PendingPointsSyncResult | null = null;
@@ -741,6 +742,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   try {
     // 1. Login ShootNBox
     const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox PendingPoints', controller.signal);
+    result.debug = { cookieLen: cookie.length, urlResults: {} as Record<string, any> };
 
     // 2. Récupérer les commandes actuelles (non-archivées) : delivery=Livraison, box_type!=Vegas Slim
     const PAGE_SIZE = 500;
@@ -758,6 +760,13 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         const { rows, totalFiltered } = await fetchOrdersPage(
           cookie, `${SHOOTNBOX_BASE}/${urlSuffix}`, start, PAGE_SIZE, controller.signal
         );
+        if (start === 0) {
+          (result.debug!.urlResults as Record<string, any>)[urlSuffix] = {
+            rowCount: rows.length, totalFiltered,
+            firstRowKeys: rows[0] ? Object.keys(rows[0]).slice(0, 10) : [],
+            firstRowSample: rows[0] ? JSON.stringify(rows[0]).slice(0, 300) : null,
+          };
+        }
         if (rows.length === 0) break;
         total = totalFiltered;
 
