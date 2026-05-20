@@ -114,16 +114,17 @@ function stripHtml(html: string): string {
 
 function parseCustomerField(raw: string): [string, string] {
   let text = stripHtml(raw);
-  // Cut at event metadata (straight and curly apostrophes both used in HTML)
-  for (const sep of ["Lieu de l’", "Lieu de l'", "Type d’", "Type d'", 'Retrait']) {
-    const idx = text.indexOf(sep);
-    if (idx > 0) text = text.slice(0, idx).trim();
+  // Cut at event metadata — match any apostrophe variant (straight/curly)
+  text = text.replace(/Lieu de l.(?:é|e)v[eè]nement.*$/i, ‘’).trim();
+  text = text.replace(/Type d.(?:é|e)v[eè]nement.*$/i, ‘’).trim();
+  text = text.replace(/Retrait.*$/i, ‘’).trim();
+  // Company and contact are separated by multiple spaces or newlines
+  const parts = text.split(/\s{2,}|\n/);
+  const nonEmpty = parts.map(s => s.trim()).filter(Boolean);
+  if (nonEmpty.length >= 2) {
+    return [nonEmpty[0]!, nonEmpty[1]!];
   }
-  const parts = text.split(/\s{3,}/);
-  if (parts.length >= 2) {
-    return [parts[0]!.trim(), parts[1]!.trim()];
-  }
-  return ['', parts[0]!.trim()];
+  return [‘’, nonEmpty[0] || text.trim()];
 }
 
 // ─── Generic CRM login ────────────────────────────────────────────
