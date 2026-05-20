@@ -4,6 +4,83 @@ import { apiResponse } from '../utils/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
 import { syncGoogleCalendarEvents } from '../services/googleCalendar.service.js';
 
+// ─── Helpers CRM import ──────────────────────────────────────────────────────
+
+function parseCreneau(raw: string): { debut: string; fin: string } | null {
+  const cleaned = (raw || '').replace(/\s/g, '');
+  const m = cleaned.match(/(\d{1,2})h?(\d{0,2})[–\-à](\d{1,2})h?(\d{0,2})/);
+  if (!m) return null;
+  const pad = (n: string | undefined) => (n || '0').padStart(2, '0');
+  return {
+    debut: `${pad(m[1])}:${m[2] ? m[2].padStart(2, '0') : '00'}`,
+    fin:   `${pad(m[3])}:${m[4] ? m[4].padStart(2, '0') : '00'}`,
+  };
+}
+
+function normalizeDateDMY(dmy: string): string | null {
+  // Converts "25.05.2026" or "25-05-2026" → "2026-05-25"
+  const m = (dmy || '').match(/^(\d{1,2})[.\-](\d{1,2})[.\-](\d{4})$/);
+  if (!m) return null;
+  return `${m[3]}-${(m[2] || '01').padStart(2, '0')}-${(m[1] || '01').padStart(2, '0')}`;
+}
+
+type LogisticsPayload = {
+  date: string | null;
+  adresse: string | null;
+  creneauDebut: string | null;
+  creneauFin: string | null;
+  contactNom: string | null;
+  contactTelephone: string | null;
+  notes: string | null;
+};
+
+function buildAddress(num?: string, rue?: string, cp?: string, ville?: string): string {
+  return [
+    [num, rue].filter(Boolean).join(' '),
+    [cp, ville].filter(Boolean).join(' '),
+  ].filter(Boolean).join(', ');
+}
+
+function parseLogisticsPayload(d: Record<string, string>, type: 'livraison' | 'ramassage', logType: string): LogisticsPayload | null {
+  if (logType === 'retrait') return null;
+
+  if (logType === 'chronopost') {
+    const adresse = buildAddress(d.log_chrono_rue_num, d.log_chrono_rue_nom, d.log_chrono_cp, d.log_chrono_ville);
+    const contactNom = [d.fac_prenom, d.fac_nom].filter(Boolean).join(' ') || d.log_contact || null;
+    return {
+      date: d.log_jour_liv || null,
+      adresse: adresse || null,
+      creneauDebut: null,
+      creneauFin: null,
+      contactNom,
+      contactTelephone: d.log_chrono_tel || null,
+      notes: null,
+    };
+  }
+
+  // classique / premium / spinner
+  const isRec = type === 'ramassage';
+  const useRecupAddr = isRec && d.log_recup_diff === '1' && d.log_recup_rue_nom;
+  const adresse = useRecupAddr
+    ? buildAddress(d.log_recup_rue_num, d.log_recup_rue_nom, d.log_recup_cp, d.log_recup_ville)
+    : buildAddress(d.log_rue_num, d.log_rue_nom, d.log_cp, d.log_ville);
+
+  const rawDate   = isRec ? d.log_jour_rec : d.log_jour_liv;
+  const rawCren   = isRec ? d.log_creneau_rec : d.log_creneau_liv;
+  const cren      = parseCreneau(rawCren || '');
+  const noteParts = [d.log_notes, (!isRec && d.log_etage) ? 'Étage sans ascenseur' : ''].filter(Boolean);
+
+  return {
+    date: rawDate || null,
+    adresse: adresse || null,
+    creneauDebut: cren?.debut || null,
+    creneauFin:   cren?.fin   || null,
+    contactNom:   d.log_contact    || null,
+    contactTelephone: d.log_contact_tel || null,
+    notes: noteParts.join(' / ') || null,
+  };
+}
+
 /**
  * POST /api/pending-points - Créer des points à dispatcher (appelé par Google Apps Script)
  */
@@ -375,4 +452,135 @@ export async function syncGoogleCalendar(_req: Request, res: Response): Promise<
   } catch (error) {
     apiResponse.error(res, 'SYNC_ERROR', `Erreur sync Google Calendar: ${(error as Error).message}`, 500);
   }
+}
+
+/**
+ * POST /api/pending-points/import-crm
+ * Importe les infos logistiques depuis le formulaire Mail Info Client (shootnbox.fr).
+ * Body: { numId: "FA14129", applyUpdate: false }
+ * Si applyUpdate=false → preview sans écriture.
+ * Si applyUpdate=true  → applique les mises à jour sur les PendingPoints trouvés.
+ */
+export async function importFromCRM(req: Request, res: Response): Promise<void> {
+  const { numId, applyUpdate = false } = req.body;
+
+  if (!numId || typeof numId !== 'string') {
+    apiResponse.badRequest(res, 'numId requis (ex: FA14129)');
+    return;
+  }
+
+  const lookupKey = process.env.CRM_LOOKUP_KEY || 'otb_crm_lookup_2026';
+  const lookupUrl = `https://shootnbox.fr/manager2/otb_cfg_lookup.php?key=${lookupKey}&num_id=${encodeURIComponent(numId.toUpperCase())}`;
+
+  let cfgData: any;
+  try {
+    const resp = await fetch(lookupUrl, { signal: AbortSignal.timeout(15_000) });
+    cfgData = await resp.json();
+  } catch (err) {
+    apiResponse.error(res, 'CRM_FETCH_ERROR', `Impossible de contacter shootnbox.fr: ${(err as Error).message}`, 502);
+    return;
+  }
+
+  if (cfgData?.error === 'not_found') {
+    apiResponse.error(res, 'CRM_NOT_FOUND', `Aucune config trouvée pour ${numId}`, 404);
+    return;
+  }
+  if (cfgData?.error) {
+    apiResponse.error(res, 'CRM_ERROR', cfgData.error, 400);
+    return;
+  }
+  if (!cfgData?.submitted || !cfgData?.submitted_data) {
+    apiResponse.error(res, 'NOT_SUBMITTED', `Le formulaire client pour ${numId} n'a pas encore été soumis`, 400);
+    return;
+  }
+
+  const d = cfgData.submitted_data as Record<string, string>;
+  const logType: string = cfgData.logistique_type || 'classique';
+
+  const parsedLiv = parseLogisticsPayload(d, 'livraison', logType);
+  const parsedRec = parseLogisticsPayload(d, 'ramassage', logType);
+
+  // Dates à chercher: livraison, ramassage + date de l'événement (format DD.MM.YYYY)
+  const eventDateISO = normalizeDateDMY(cfgData.event_date || '');
+  const allDates = [...new Set([
+    parsedLiv?.date,
+    parsedRec?.date,
+    eventDateISO,
+  ].filter((x): x is string => !!x))];
+
+  // Mots-clés pour le clientName
+  const nameTokens = ([cfgData.societe, cfgData.last_name, cfgData.first_name] as (string | undefined)[])
+    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+    .map((s) => s.trim().split(/\s+/)[0] || '')
+    .filter((s) => s.length >= 3);
+
+  // Construire le filtre Prisma
+  const orClauses: any[] = [];
+  if (allDates.length > 0) {
+    orClauses.push({ date: { in: allDates.map(d => ensureDateUTC(d)) } });
+  }
+  nameTokens.forEach(token => {
+    orClauses.push({ clientName: { contains: token, mode: 'insensitive' as const } });
+  });
+
+  if (orClauses.length === 0) {
+    apiResponse.error(res, 'NO_SEARCH_CRITERIA', 'Impossible de construire un critère de recherche', 400);
+    return;
+  }
+
+  const candidates = await prisma.pendingPoint.findMany({
+    where: { OR: orClauses, deletedByUser: false },
+    orderBy: { date: 'asc' },
+  });
+
+  // Calculer le payload de mise à jour pour chaque candidat
+  const updatePlan = candidates.map((point: any) => {
+    const payload = point.type === 'ramassage' ? parsedRec : parsedLiv;
+    return {
+      id:          point.id,
+      clientName:  point.clientName,
+      currentDate: point.date,
+      currentType: point.type,
+      currentAdresse: point.adresse,
+      update: payload ? {
+        adresse:          payload.adresse,
+        creneauDebut:     payload.creneauDebut,
+        creneauFin:       payload.creneauFin,
+        contactNom:       payload.contactNom,
+        contactTelephone: payload.contactTelephone,
+        notes:            payload.notes,
+      } : null,
+    };
+  });
+
+  if (!applyUpdate) {
+    apiResponse.success(res, {
+      preview: true,
+      numId,
+      logistiqueType: logType,
+      parsedLivraison: parsedLiv,
+      parsedRamassage: parsedRec,
+      candidatesFound: candidates.length,
+      updatePlan,
+    });
+    return;
+  }
+
+  // Appliquer les mises à jour
+  const updated: any[] = [];
+  for (const plan of updatePlan) {
+    if (!plan.update) continue;
+    const result = await prisma.pendingPoint.update({
+      where: { id: plan.id },
+      data: { ...plan.update, manuallyEdited: true },
+    });
+    updated.push(result);
+  }
+
+  apiResponse.success(res, {
+    applied: true,
+    numId,
+    updatedCount: updated.length,
+    points: updated,
+  });
 }

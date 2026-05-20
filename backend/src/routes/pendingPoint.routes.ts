@@ -23,4 +23,7 @@ router.patch('/:id', authenticate, requireRole('admin', 'warehouse', 'superadmin
 // Sync manuelle Google Calendar
 router.post('/sync-google-calendar', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.syncGoogleCalendar));
 
+// Import logistique depuis Mail Info Client (shootnbox.fr)
+router.post('/import-crm', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.importFromCRM));
+
 export default router;
