@@ -508,30 +508,53 @@ export async function importFromCRM(req: Request, res: Response): Promise<void> 
     eventDateISO,
   ].filter((x): x is string => !!x))];
 
-  // Mots-clés pour le clientName
-  const nameTokens = ([cfgData.societe, cfgData.last_name, cfgData.first_name] as (string | undefined)[])
-    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
-    .map((s) => s.trim().split(/\s+/)[0] || '')
-    .filter((s) => s.length >= 3);
+  // Phrases de recherche — societe en entier, puis dernier mot du last_name (unique)
+  const namePhrases = ([cfgData.societe, cfgData.last_name] as (string | undefined)[])
+    .filter((s): s is string => typeof s === 'string' && s.trim().length >= 3)
+    .map((s) => s.trim());
 
-  // Construire le filtre Prisma
-  const orClauses: any[] = [];
-  if (allDates.length > 0) {
-    orClauses.push({ date: { in: allDates.map(d => ensureDateUTC(d)) } });
-  }
-  nameTokens.forEach(token => {
-    orClauses.push({ clientName: { contains: token, mode: 'insensitive' as const } });
-  });
-
-  if (orClauses.length === 0) {
+  if (namePhrases.length === 0 && allDates.length === 0) {
     apiResponse.error(res, 'NO_SEARCH_CRITERIA', 'Impossible de construire un critère de recherche', 400);
     return;
   }
 
-  const candidates = await prisma.pendingPoint.findMany({
-    where: { OR: orClauses, deletedByUser: false },
-    orderBy: { date: 'asc' },
-  });
+  // Plage de dates : de la livraison à la récupération (bornes inclusives)
+  const dateFrom = parsedLiv?.date || parsedRec?.date || eventDateISO;
+  const dateTo   = parsedRec?.date || parsedLiv?.date || eventDateISO;
+
+  // Stratégie 1 : nom ET plage de dates (précision maximale)
+  let candidates: any[] = [];
+  if (namePhrases.length > 0 && dateFrom && dateTo) {
+    candidates = await prisma.pendingPoint.findMany({
+      where: {
+        AND: [
+          { OR: namePhrases.map(phrase => ({ clientName: { contains: phrase, mode: 'insensitive' as const } })) },
+          { date: { gte: ensureDateUTC(dateFrom), lte: ensureDateUTC(dateTo) } },
+        ],
+        deletedByUser: false,
+      },
+      orderBy: { date: 'asc' },
+    });
+  }
+
+  // Stratégie 2 : nom seul, sans contrainte de date (si rien trouvé en stratégie 1)
+  if (candidates.length === 0 && namePhrases.length > 0) {
+    candidates = await prisma.pendingPoint.findMany({
+      where: {
+        OR: namePhrases.map(phrase => ({ clientName: { contains: phrase, mode: 'insensitive' as const } })),
+        deletedByUser: false,
+      },
+      orderBy: { date: 'asc' },
+    });
+  }
+
+  // Stratégie 3 : dates seules (dernier recours)
+  if (candidates.length === 0 && allDates.length > 0) {
+    candidates = await prisma.pendingPoint.findMany({
+      where: { date: { in: allDates.map(d => ensureDateUTC(d)) }, deletedByUser: false },
+      orderBy: { date: 'asc' },
+    });
+  }
 
   // Calculer le payload de mise à jour pour chaque candidat
   const updatePlan = candidates.map((point: any) => {
