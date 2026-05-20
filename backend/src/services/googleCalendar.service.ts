@@ -890,12 +890,9 @@ export async function syncGoogleCalendarEvents(): Promise<{
     }
 
     try {
-      // Calendrier Smakk → créer/mettre à jour comme avant (pas géré par le CRM ShootNBox)
-      // Calendrier principal → mettre à jour si le point existe déjà, ne plus CRÉER (le CRM crée désormais)
-      const isSmakkCalendar = calendarId === SMAKK_CALENDAR_ID;
-
-      if (existingLiv || isSmakkCalendar) {
-        // Mettre à jour un point existant, ou créer pour Smakk
+      // CRM est la source de vérité pour ShootNBox ET Smakk → Calendar ne crée plus, seulement met à jour
+      if (existingLiv) {
+        // Mettre à jour un point existant
         await prisma.pendingPoint.upsert({
           where: { externalId: `${eventId}_livraison` },
           update: {
@@ -946,7 +943,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           created++;
         }
       } else {
-        // Nouvel événement ShootNBox → le CRM sync créera le PendingPoint avec le vrai nom client
+        // Nouvel événement → le CRM sync (ShootNBox ou Smakk) créera le PendingPoint
         console.log(`[Google Calendar] ${clientName} livraison ${startDate} → nouveau événement, création déléguée au CRM sync`);
         skipped++;
       }
@@ -1006,8 +1003,8 @@ export async function syncGoogleCalendarEvents(): Promise<{
     }
 
     try {
-      if (existingRec || calendarId === SMAKK_CALENDAR_ID) {
-        // Mettre à jour un point existant, ou créer pour Smakk
+      if (existingRec) {
+        // Mettre à jour un point existant
         await prisma.pendingPoint.upsert({
           where: { externalId: `${eventId}_ramassage` },
           update: {
@@ -1055,7 +1052,7 @@ export async function syncGoogleCalendarEvents(): Promise<{
           created++;
         }
       } else {
-        // Nouvel événement ShootNBox → délégué au CRM sync
+        // Nouvel événement → délégué au CRM sync (ShootNBox ou Smakk)
         console.log(`[Google Calendar] ${clientName} ramassage ${endDate} → nouveau événement, création déléguée au CRM sync`);
         skipped++;
       }
