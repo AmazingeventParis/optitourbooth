@@ -30,7 +30,4 @@ router.post('/sync-crm', authenticate, requireRole('admin', 'superadmin'), async
 router.post('/import-crm', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.importFromCRM));
 router.post('/bulk-import-crm', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.bulkImportFromCRM));
 
-// Route maintenance temporaire : reset dispatched=false sur les points CRM auto-dispatchés à tort
-router.post('/reset-crm-dispatched', authenticate, requireRole('superadmin'), asyncHandler(controller.resetCrmDispatched));
-
 export default router;
