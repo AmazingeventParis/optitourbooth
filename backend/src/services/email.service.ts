@@ -168,6 +168,33 @@ export async function sendReviewLinkEmail(opts: {
                     </tr>
                   </table>
 
+                  ${brand === 'SHOOTNBOX' ? `
+                  <!-- App download badges (Shootnbox only) -->
+                  <table role="presentation" style="width:100%;border-collapse:collapse;margin:0 0 20px;">
+                    <tr>
+                      <td style="text-align:center;padding:5px 0 8px;">
+                        <p style="margin:0 0 14px;color:#1a1a2e;font-size:13px;font-weight:700;letter-spacing:0.3px;">
+                          Téléchargez l'app MyShootnbox
+                        </p>
+                        <table role="presentation" style="margin:0 auto;border-collapse:collapse;">
+                          <tr>
+                            <td style="padding:0 6px;">
+                              <a href="https://apps.apple.com/app/myshootnbox/id6761745035">
+                                <img src="https://shootnbox.fr/wp-content/uploads/btn-appstore.png" alt="Télécharger sur l'App Store" width="160" style="display:block;border:0;height:auto;" />
+                              </a>
+                            </td>
+                            <td style="padding:0 6px;">
+                              <a href="https://play.google.com/store/apps/details?id=com.shootnbox.shootnbox_app">
+                                <img src="https://shootnbox.fr/wp-content/uploads/btn-googleplay.png" alt="Disponible sur Google Play" width="160" style="display:block;border:0;height:auto;" />
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                  ` : ''}
+
                   <!-- Review nudge -->
                   <table role="presentation" style="width:100%;border-collapse:collapse;background-color:#fdf2f8;border-radius:12px;">
                     <tr>
