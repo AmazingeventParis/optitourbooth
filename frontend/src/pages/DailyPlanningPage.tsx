@@ -2318,6 +2318,14 @@ export default function DailyPlanningPage() {
   useEffect(() => { tourneesRef.current = tournees; }, [tournees]);
   useEffect(() => { pendingPointsRef.current = pendingPoints; }, [pendingPoints]);
 
+  // "10H" / "10H30" / "10h30" → "10:00" / "10:30" (format HH:MM attendu par l'API)
+  const toApiHeure = (h: string | undefined): string | undefined => {
+    if (!h) return undefined;
+    const m = h.match(/^(\d{1,2})[Hh](\d{0,2})$/);
+    if (m) return `${m[1].padStart(2, '0')}:${(m[2] || '0').padStart(2, '0')}`;
+    return h;
+  };
+
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     // Reset immédiat des états de drag
     setActivePoint(null);
@@ -2513,8 +2521,8 @@ export default function DailyPlanningPage() {
       tourneesService.addPoint(targetTourneeId, {
         clientId: pendingPoint.clientId,
         type: (pendingPoint.type as 'livraison' | 'ramassage' | 'livraison_ramassage') || 'livraison',
-        creneauDebut: pendingPoint.creneauDebut || undefined,
-        creneauFin: pendingPoint.creneauFin || undefined,
+        creneauDebut: toApiHeure(pendingPoint.creneauDebut),
+        creneauFin: toApiHeure(pendingPoint.creneauFin),
         notesInternes: pendingPoint.notes || undefined,
         produits: pendingPoint.produitsIds && pendingPoint.produitsIds.length > 0
           ? pendingPoint.produitsIds.map(p => ({ produitId: p.id, quantite: 1 }))
