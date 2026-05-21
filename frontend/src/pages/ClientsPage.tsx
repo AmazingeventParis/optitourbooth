@@ -10,6 +10,9 @@ import {
   PencilIcon,
   TrashIcon,
   MapPinIcon,
+  ArrowPathIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 
 interface ClientFormData {
@@ -58,6 +61,8 @@ export default function ClientsPage() {
   const [formData, setFormData] = useState<ClientFormData>(initialFormData);
   const [formErrors, setFormErrors] = useState<Partial<ClientFormData>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodedClient, setGeocodedClient] = useState<Client | null>(null);
 
   const fetchClients = useCallback(async (page = 1) => {
     setIsLoading(true);
@@ -97,6 +102,7 @@ export default function ClientsPage() {
 
   const openEditModal = (client: Client) => {
     setSelectedClient(client);
+    setGeocodedClient(null);
     setFormData({
       nom: client.nom,
       email: client.email || '',
@@ -112,6 +118,22 @@ export default function ClientsPage() {
     });
     setFormErrors({});
     setIsModalOpen(true);
+  };
+
+  const handleGeocode = async () => {
+    if (!selectedClient) return;
+    setIsGeocoding(true);
+    try {
+      const updated = await clientsService.geocode(selectedClient.id);
+      setGeocodedClient(updated);
+      setSelectedClient(updated);
+      success('GPS recalculé', `Lat: ${updated.latitude?.toFixed(5)}, Lng: ${updated.longitude?.toFixed(5)}`);
+      fetchClients();
+    } catch (err) {
+      showError('Erreur GPS', (err as Error).message);
+    } finally {
+      setIsGeocoding(false);
+    }
   };
 
   const openDeleteDialog = (client: Client) => {
@@ -398,6 +420,60 @@ export default function ClientsPage() {
               placeholder="Instructions particulières pour l'accès..."
             />
           </div>
+
+          {/* Section GPS — visible uniquement en mode édition */}
+          {selectedClient && (
+            <div className="border-t pt-4">
+              <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                <MapPinIcon className="h-5 w-5" />
+                Coordonnées GPS
+              </h4>
+              {(() => {
+                const lat = geocodedClient?.latitude ?? selectedClient.latitude;
+                const lng = geocodedClient?.longitude ?? selectedClient.longitude;
+                return lat && lng ? (
+                  <div className="flex items-center gap-3">
+                    <CheckCircleIcon className="h-5 w-5 text-green-500 shrink-0" />
+                    <div className="text-sm text-gray-700">
+                      <span className="font-mono">{lat.toFixed(5)}, {lng.toFixed(5)}</span>
+                      <a
+                        href={`https://maps.google.com/?q=${lat},${lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 text-primary-600 underline text-xs"
+                      >
+                        Vérifier sur Maps
+                      </a>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleGeocode}
+                      isLoading={isGeocoding}
+                      title="Recalculer depuis l'adresse (utilise la BAN officielle)"
+                    >
+                      <ArrowPathIcon className="h-4 w-4 mr-1" />
+                      Recalculer
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <ExclamationTriangleIcon className="h-5 w-5 text-amber-500 shrink-0" />
+                    <span className="text-sm text-gray-500">Aucune coordonnée GPS — les liens Maps/Waze utiliseront le texte de l'adresse</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleGeocode}
+                      isLoading={isGeocoding}
+                    >
+                      <ArrowPathIcon className="h-4 w-4 mr-1" />
+                      Géocoder
+                    </Button>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>

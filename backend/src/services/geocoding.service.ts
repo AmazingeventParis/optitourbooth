@@ -13,21 +13,30 @@ interface NominatimResponse {
   display_name: string;
 }
 
+interface BanFeature {
+  geometry: { coordinates: [number, number] };
+  properties: { label: string; score: number };
+}
+
+interface BanResponse {
+  features: BanFeature[];
+}
+
 // Cache simple en mémoire pour éviter les requêtes répétées
 const geocodeCache = new Map<string, GeocodingResult>();
 
 export const geocodingService = {
   /**
    * Géocoder une adresse (convertir adresse -> coordonnées GPS)
-   * Utilise Nominatim (OpenStreetMap) - gratuit, 1 requête/seconde max
+   * Utilise en priorité la BAN (Base Adresse Nationale, France) puis Nominatim en fallback
    */
   async geocodeAddress(
     adresse: string,
     codePostal?: string,
     ville?: string,
-    pays = 'France'
+    pays = 'France',
+    forceRefresh = false
   ): Promise<GeocodingResult | null> {
-    // Construire l'adresse complète en fonction des champs disponibles
     const addressParts = [adresse];
     if (codePostal) addressParts.push(codePostal);
     if (ville) addressParts.push(ville);
@@ -35,26 +44,68 @@ export const geocodingService = {
     const fullAddress = addressParts.join(', ');
     const cacheKey = fullAddress.toLowerCase();
 
-    // Vérifier le cache
-    if (geocodeCache.has(cacheKey)) {
+    if (!forceRefresh && geocodeCache.has(cacheKey)) {
       return geocodeCache.get(cacheKey)!;
     }
 
-    // Stratégie multi-tentatives pour gérer les lieux d'intérêt (POI),
-    // adresses sans numéro, noms de lieux connus, etc.
-    const strategies = this._buildSearchStrategies(adresse, codePostal, ville, pays);
+    // 1. Essayer la BAN en priorité pour les adresses françaises
+    const isFrance = !pays || pays.toLowerCase().includes('france') || pays.toLowerCase() === 'fr';
+    if (isFrance) {
+      const banResult = await this._banSearch(adresse, codePostal, ville);
+      if (banResult) {
+        console.log(`[Geocoding] Trouvé via BAN: ${fullAddress} -> ${banResult.displayName}`);
+        geocodeCache.set(cacheKey, banResult);
+        return banResult;
+      }
+    }
 
+    // 2. Fallback Nominatim (multi-stratégies)
+    const strategies = this._buildSearchStrategies(adresse, codePostal, ville, pays);
     for (const strategy of strategies) {
       const result = await this._nominatimSearch(strategy.params);
       if (result) {
-        console.log(`[Geocoding] Trouvé via stratégie "${strategy.name}": ${fullAddress} -> ${result.displayName}`);
+        console.log(`[Geocoding] Trouvé via Nominatim "${strategy.name}": ${fullAddress} -> ${result.displayName}`);
         geocodeCache.set(cacheKey, result);
         return result;
       }
     }
 
-    console.warn(`[Geocoding] Aucun résultat après ${strategies.length} tentatives pour: ${fullAddress}`);
+    console.warn(`[Geocoding] Aucun résultat pour: ${fullAddress}`);
     return null;
+  },
+
+  /**
+   * BAN (Base Adresse Nationale) — géocodeur officiel français, plus fiable que Nominatim
+   */
+  async _banSearch(
+    adresse: string,
+    codePostal?: string,
+    ville?: string
+  ): Promise<GeocodingResult | null> {
+    try {
+      const q = [adresse, ville].filter(Boolean).join(' ');
+      const params = new URLSearchParams({ q, limit: '1' });
+      if (codePostal) params.set('postcode', codePostal);
+
+      const url = `https://api-adresse.data.gouv.fr/search/?${params.toString()}`;
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'OptiTourBooth/1.0 (contact@shootnbox.fr)' },
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (!response.ok) return null;
+
+      const data = (await response.json()) as BanResponse;
+      if (!data.features?.length) return null;
+
+      const feature = data.features[0]!;
+      if (feature.properties.score < 0.4) return null;
+
+      const [lon, lat] = feature.geometry.coordinates;
+      return { latitude: lat!, longitude: lon!, displayName: feature.properties.label };
+    } catch {
+      return null;
+    }
   },
 
   /**

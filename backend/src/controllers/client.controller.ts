@@ -296,7 +296,8 @@ export const clientController = {
       client.adresse,
       client.codePostal || undefined,
       client.ville || undefined,
-      client.pays
+      client.pays,
+      true // forceRefresh — ignore le cache pour recalcul explicite
     );
 
     if (!geocoded) {
