@@ -1286,10 +1286,9 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     result.errors.push(e.message || 'Erreur inattendue');
   }
 
-  // ── Post-processing : marquer dispatché les points CRM déjà en tournée ──
-  // Cas typique : un point créé via Google Calendar a été dispatché dans une tournée,
-  // puis le CRM crée un nouveau point pour le même événement avec un autre externalId.
-  // Ce nouveau point doit être marqué dispatché automatiquement.
+  // ── Post-processing : détecter les vrais doublons CRM ↔ Google Calendar ──
+  // Condition : un point google_calendar dispatché existe pour la même (date exacte, type, client similaire).
+  // On NE matche PAS les tournées directement pour éviter les faux positifs.
   try {
     const ppToday = new Date(); ppToday.setUTCHours(0, 0, 0, 0);
     const horizon = new Date(ppToday); horizon.setDate(horizon.getDate() + 60);
@@ -1304,38 +1303,32 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     });
 
     if (crmNonDispatched.length > 0) {
-      const tourneePoints = await prisma.point.findMany({
+      // Charger tous les points google_calendar dispatchés sur la même période
+      const gcalDispatched = await prisma.pendingPoint.findMany({
         where: {
-          tournee: { date: { gte: ppToday, lte: horizon }, statut: { not: 'annulee' } },
+          source: 'google_calendar',
+          dispatched: true,
+          date: { gte: ppToday, lte: horizon },
         },
-        include: {
-          client: { select: { nom: true, societe: true } },
-          tournee: { select: { date: true } },
-        },
+        select: { date: true, clientName: true, type: true, externalId: true },
       });
-
-      const tourneeList: { date: string; clientNorm: string; type: string }[] =
-        tourneePoints.map((pt: any) => ({
-          date: (pt.tournee.date as Date).toISOString().substring(0, 10),
-          clientNorm: normalizeForMatch((pt.client.societe || pt.client.nom || '') as string),
-          type: pt.type as string,
-        }));
 
       for (const pp of crmNonDispatched) {
         const dateStr = pp.date.toISOString().substring(0, 10);
         const clientNorm = normalizeForMatch(pp.clientName);
-        const inTournee = tourneeList.some((pt) =>
-          pt.date === dateStr && pt.type === pp.type &&
-          clientNorm && pt.clientNorm &&
-          (pt.clientNorm === clientNorm || pt.clientNorm.includes(clientNorm) || clientNorm.includes(pt.clientNorm))
-        );
-        if (inTournee) {
+        const dup = gcalDispatched.find((g: { date: Date; clientName: string; type: string; externalId: string | null }) => {
+          if (g.date.toISOString().substring(0, 10) !== dateStr) return false;
+          if (g.type !== pp.type) return false;
+          const gNorm = normalizeForMatch(g.clientName);
+          return clientNorm && gNorm && (gNorm.includes(clientNorm) || clientNorm.includes(gNorm));
+        });
+        if (dup) {
           await prisma.pendingPoint.update({ where: { id: pp.id }, data: { dispatched: true } });
           result.autoDispatched++;
-          console.log(`[CRM PendingPoints] ✓ ${pp.clientName} ${pp.type} ${dateStr} → dispatché auto (déjà en tournée)`);
+          console.log(`[CRM PendingPoints] ✓ ${pp.clientName} ${pp.type} ${dateStr} → dispatché auto (doublon GCal: ${dup.externalId})`);
         }
       }
-      if (result.autoDispatched > 0) console.log(`[CRM PendingPoints] ${result.autoDispatched} point(s) marqué(s) dispatché auto`);
+      if (result.autoDispatched > 0) console.log(`[CRM PendingPoints] ${result.autoDispatched} doublon(s) GCal auto-dispatché(s)`);
     }
   } catch (e: any) {
     console.warn('[CRM PendingPoints] Post-processing dispatched check failed:', e.message);
