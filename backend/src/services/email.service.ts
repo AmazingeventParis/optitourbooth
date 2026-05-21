@@ -156,17 +156,32 @@ export async function sendReviewLinkEmail(opts: {
                   </p>
                   ` : ''}
 
-                  <!-- CTA -->
+                  ${brand === 'SHOOTNBOX' ? `
+                  <!-- App CTA (Shootnbox) -->
+                  <table role="presentation" style="width:100%;border-collapse:collapse;margin:0 0 25px;">
+                    <tr>
+                      <td style="text-align:center;padding:10px 0 0;">
+                        <p style="margin:0;color:#1a1a2e;font-size:17px;font-weight:700;line-height:1.5;">
+                          Rendez-vous vite sur votre application<br/>
+                          <span style="color:#E60A81;">MyShootnbox</span>
+                          pour retrouver toutes vos photos&nbsp;!&nbsp;📸
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                  ` : `
+                  <!-- CTA (Smakk) -->
                   <table role="presentation" style="width:100%;border-collapse:collapse;">
                     <tr>
                       <td style="text-align:center;padding:10px 0 25px;">
                         <a href="${publicUrl}"
-                           style="display:inline-block;background:${theme.gradient};color:white;padding:16px 40px;text-decoration:none;border-radius:50px;font-weight:700;font-size:16px;letter-spacing:0.3px;box-shadow:0 4px 15px rgba(230,10,129,0.3);">
+                           style="display:inline-block;background:${theme.gradient};color:white;padding:16px 40px;text-decoration:none;border-radius:50px;font-weight:700;font-size:16px;letter-spacing:0.3px;box-shadow:0 4px 15px rgba(124,58,237,0.3);">
                           Accéder à ma galerie
                         </a>
                       </td>
                     </tr>
                   </table>
+                  `}
 
                   ${brand === 'SHOOTNBOX' ? `
                   <!-- App download badges (Shootnbox only) -->
