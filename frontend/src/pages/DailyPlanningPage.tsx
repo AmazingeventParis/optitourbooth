@@ -2488,9 +2488,10 @@ export default function DailyPlanningPage() {
       // Retirer des pending points
       const newPendingPoints = pendingPointsRef.current.filter((_, i) => i !== pendingIndex);
 
-      // Marquer comme dispatché côté backend si c'est un point Google Calendar
-      if (pendingPoint._backendId) {
-        pendingPointsService.markDispatched(pendingPoint._backendId).catch(console.error);
+      // Garde : clientId requis pour addPoint
+      if (!pendingPoint.clientId) {
+        toastError('Client non résolu', 'Ce point est en cours de résolution client, réessayez dans quelques secondes.');
+        return;
       }
 
       // Sauvegarder pour rollback
@@ -2510,7 +2511,7 @@ export default function DailyPlanningPage() {
 
       // Appel API en arrière-plan - l'API retourne maintenant la tournée complète
       tourneesService.addPoint(targetTourneeId, {
-        clientId: pendingPoint.clientId!,
+        clientId: pendingPoint.clientId,
         type: (pendingPoint.type as 'livraison' | 'ramassage' | 'livraison_ramassage') || 'livraison',
         creneauDebut: pendingPoint.creneauDebut || undefined,
         creneauFin: pendingPoint.creneauFin || undefined,
@@ -2520,6 +2521,10 @@ export default function DailyPlanningPage() {
           : pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : [],
         attachments: pendingPoint.attachments || undefined,
       }).then((updatedTournee: Tournee) => {
+        // Marquer dispatché SEULEMENT si addPoint a réussi
+        if (pendingPoint._backendId) {
+          pendingPointsService.markDispatched(pendingPoint._backendId).catch(console.error);
+        }
         // L'API retourne directement la tournée complète avec ETAs OSRM
         setTournees(current => {
           const updated = current.map(t => t.id === targetTourneeId ? updatedTournee : t);
@@ -2531,7 +2536,7 @@ export default function DailyPlanningPage() {
           return updated;
         });
       }).catch(error => {
-        // ROLLBACK
+        // ROLLBACK - markDispatched n'a pas été appelé, le point reste visible
         setTournees(rollbackTournees);
         setPendingPoints(rollbackPendingPoints);
         toastError('Erreur', (error as Error).message);
