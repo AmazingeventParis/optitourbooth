@@ -845,6 +845,7 @@ export interface PendingPointsSyncResult {
   created: number;
   enriched: number;
   skipped: number;
+  autoDispatched: number;
   errors: string[];
   completedAt?: string;
 }
@@ -852,7 +853,7 @@ export interface PendingPointsSyncResult {
 export let lastPendingPointsSyncResult: PendingPointsSyncResult | null = null;
 
 export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
-  const result: PendingPointsSyncResult = { created: 0, enriched: 0, skipped: 0, errors: [] };
+  const result: PendingPointsSyncResult = { created: 0, enriched: 0, skipped: 0, autoDispatched: 0, errors: [] };
 
   if (!SHOOTNBOX_EMAIL || !SHOOTNBOX_PASSWORD) {
     result.errors.push('ShootNBox credentials non configurés');
@@ -1320,7 +1321,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           type: pt.type as string,
         }));
 
-      let autoDispatched = 0;
       for (const pp of crmNonDispatched) {
         const dateStr = pp.date.toISOString().substring(0, 10);
         const clientNorm = normalizeForMatch(pp.clientName);
@@ -1331,11 +1331,11 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         );
         if (inTournee) {
           await prisma.pendingPoint.update({ where: { id: pp.id }, data: { dispatched: true } });
-          autoDispatched++;
+          result.autoDispatched++;
           console.log(`[CRM PendingPoints] ✓ ${pp.clientName} ${pp.type} ${dateStr} → dispatché auto (déjà en tournée)`);
         }
       }
-      if (autoDispatched > 0) console.log(`[CRM PendingPoints] ${autoDispatched} point(s) marqué(s) dispatché auto`);
+      if (result.autoDispatched > 0) console.log(`[CRM PendingPoints] ${result.autoDispatched} point(s) marqué(s) dispatché auto`);
     }
   } catch (e: any) {
     console.warn('[CRM PendingPoints] Post-processing dispatched check failed:', e.message);
@@ -1344,7 +1344,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   clearTimeout(masterTimeout);
   result.completedAt = new Date().toISOString();
   lastPendingPointsSyncResult = result;
-  console.log(`[CRM PendingPoints] Terminé: created=${result.created}, enriched=${result.enriched}, skipped=${result.skipped}, errors=${result.errors.length}`);
+  console.log(`[CRM PendingPoints] Terminé: created=${result.created}, enriched=${result.enriched}, skipped=${result.skipped}, autoDispatched=${result.autoDispatched}, errors=${result.errors.length}`);
 
   return result;
 }
