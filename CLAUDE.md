@@ -153,14 +153,35 @@ Fonction `parseDescription()` extrait automatiquement :
 - **Notes** : tout le reste
 
 ### Table `pending_points` (PendingPoint)
-Chaque evenement Google Calendar genere 2 pending points :
-- Un de type `livraison` (date de debut) avec `externalId = {googleEventId}_livraison`
-- Un de type `ramassage` (date de fin) avec `externalId = {googleEventId}_ramassage`
+Chaque source genere des pending points :
+- **Google Calendar** : 2 points par evenement (`{googleEventId}_livraison` / `_ramassage`)
+- **CRM Shootnbox** : 2 points par commande (`snb_order_{orderId}_livraison` / `_ramassage`) — source = `crm_shootnbox`
+- **CRM Smakk** : 2 points par commande (`smk_order_{orderId}_livraison` / `_ramassage`) — source = `crm_smakk`
 
 Champs cles :
 - `dispatched` : true = deja dans une tournee (recalcule a chaque sync)
 - `usedInPreparation` : true = utilise pour creer une preparation de borne
 - `produitNom` : Vegas, Ring, Smakk, Miroir, Spinner, Aircam, Playbox
+- `eventName` : nom d'evenement issu de readiness.php (Shootnbox + Smakk)
+
+### Regles de filtrage CRM → pending_points
+
+**Shootnbox** (`syncCrmPendingPoints` dans `crmSync.service.ts`) :
+- Source : `orders_ajax.php?status=2` (actif) + `?status=2&arch=true` (archives)
+- Filtre champ `delivery` (HTML strippé, lowercase) :
+  - Doit contenir `livraison` ou `installation`
+  - Si contient `retrait` ou `chronopost` → skip
+- Skip si `form.logType === 'chronopost' || 'retrait'`
+- `eventName` : issu de `readiness_ajax.php` (scrape avec session cookie)
+
+**Smakk** (`syncCrmPendingPoints` dans `crmSync.service.ts`) :
+- Source : `_otb_orders.php` (JSON API, clé `opti2026smk_x7kR9qNv`)
+- **Filtre positif** sur `delivery_options` (lowercase) :
+  - Doit contenir `livraison` ou `installation` — sinon skip
+  - `delivery_options` vide → skip (peut etre retrait boutique sans option renseignee)
+  - "Retrait Boutique", "Chronopost", "" → tous exclus
+- Nettoyage automatique a chaque sync : supprime les pending_points Smakk futurs dont l'orderId n'est plus dans la liste eligible (ex : commande passee en retrait apres import)
+- `eventName` : issu de `_otb_readiness.php` (champ `nom_event`)
 
 ### Routes API pending points
 | Methode | Route | Auth | Role |
@@ -210,7 +231,9 @@ Champs cles :
 - **Page OptiTour** : `/telemaintenance` (admin only)
 - **IMPORTANT** : Le container a ete recree manuellement avec `-p 21116:21116/udp` car Coolify ne mappait pas l'UDP. Si Coolify redeploy, il faut re-ajouter le mapping UDP.
 
-## CRM Shootnbox (scraping)
+## CRM Shootnbox + Smakk
+
+### Shootnbox
 - **URL CRM** : `https://www.shootnbox.fr/manager2/`
 - **Login** : `d26386b04e.php` (POST event=login)
 - **DB CRM** : MySQL `shoot2` (CRM) + `shoot` (WordPress)
@@ -218,6 +241,13 @@ Champs cles :
 - **Cron email sync** (`crmSync.service.ts`) : toutes les heures, scrape 3 sources (orders_ajax status=2 + archives, readiness_ajax, albums_list), match par date + fuzzy nom (societe/contact), met a jour customerEmail + customerPhone sur les bookings
 - **Cron photos sync** (`ringPhotosSync.service.ts`) : toutes les heures, scrape albums_list pour Ring+Vegas, telecharge photos depuis `shootnbox.fr/uploads/FAxxxxx/`, upload vers Google Drive via OAuth (pas service account — pas de quota). Matching Drive folders par date + nom.
 - **OAuth Drive** : utilise `GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN` (le service account n'a pas de quota d'upload)
+
+### Smakk
+- **URL CRM** : `https://www.smakk.fr/manager/`
+- **API JSON** : `https://www.smakk.fr/manager/_otb_orders.php?key=opti2026smk_x7kR9qNv` (pas de session, cle fixe)
+- **Readiness** : `https://www.smakk.fr/manager/_otb_readiness.php?key=opti2026smk_x7kR9qNv` → retourne `id`, `nom_event`, + champ livraison
+- **Cron pending_points** : toutes les heures via `syncCrmPendingPoints()` dans `crmSync.service.ts`
+- **Filtre livraison** : filtre POSITIF sur `delivery_options` — doit contenir "livraison" ou "installation". Vide ou "Retrait Boutique" → exclu. Voir section "Regles de filtrage" ci-dessus.
 
 ## Systeme email Galeries Clients
 
@@ -256,6 +286,7 @@ Champs cles :
 - Google Calendar Smakk→Vegas: evenements (LIR) sur agenda Smakk detectes comme Vegas au lieu de Smakk → calendrier Smakk rendu prioritaire sur le mapping tag par defaut
 - Google Calendar dispatched fantome: points marques dispatched a tort lors du re-sync → update recalcule dispatched selon presence reelle en tournee
 - GPS WhatsApp mauvaise adresse: Nominatim geocodait mal les adresses françaises atypiques (esplanades, rues recentes) → coordonnees stockees en DB pointaient vers un endroit different → liens Maps/Waze incorrects. Fix: BAN (api-adresse.data.gouv.fr) en geocodeur primaire + bouton "Recalculer GPS" dans fiche client pour corriger l'existant (`geocoding.service.ts` + `ClientsPage.tsx`)
+- Smakk retraits importes en points a dispatcher : filtre negatif `includes('retrait')` laissait passer les commandes avec `delivery_options=""` → remplace par filtre positif (doit contenir "livraison" ou "installation") + nettoyage auto a chaque sync (`crmSync.service.ts`)
 
 ## Ameliorations a implementer (backlog)
 
