@@ -319,42 +319,40 @@ export async function markDispatched(req: Request, res: Response): Promise<void>
 
 /**
  * GET /api/pending-points/calendar-events?calendarType=shootnbox|smakk
- * Liste les événements Google Calendar uniques (groupés par événement)
- * pour le panneau de préparations. Date: aujourd'hui → +15 jours.
- * Exclut les événements déjà utilisés dans une préparation.
+ * Liste les événements CRM (source crm_shootnbox / crm_smakk) pour la page Préparations.
+ * Date: aujourd'hui → +60 jours. Exclut les événements déjà utilisés dans une préparation.
  */
 export async function listCalendarEvents(req: Request, res: Response): Promise<void> {
   const { calendarType } = req.query;
 
   const now = new Date();
   const dateStart = ensureDateUTC(now.toISOString().substring(0, 10));
-  const dateEnd = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+  const dateEnd = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
 
-  // Filtre par calendrier source
-  const smakkCalendarId = 'faa39fa21157c487ef3a5007739b04b69a9309cffee9d8bfc4ff09c75958bbd1@group.calendar.google.com';
-  let calendarFilter: any = {};
+  // Filtre par marque CRM
+  let sourceFilter: any = { source: { in: ['crm_shootnbox', 'crm_smakk'] } };
   if (calendarType === 'smakk') {
-    calendarFilter = { calendarId: smakkCalendarId };
+    sourceFilter = { source: 'crm_smakk' };
   } else if (calendarType === 'shootnbox') {
-    calendarFilter = { OR: [{ calendarId: { not: smakkCalendarId } }, { calendarId: null }] };
+    sourceFilter = { source: 'crm_shootnbox' };
   }
 
   const points = await prisma.pendingPoint.findMany({
     where: {
-      source: 'google_calendar',
+      ...sourceFilter,
       date: { gte: dateStart, lte: dateEnd },
       usedInPreparation: false,
+      ignoredInPreparation: false,
       type: 'livraison',
-      ...calendarFilter,
     },
     orderBy: { date: 'asc' },
   });
 
-  // Retourner les événements avec date, client et suggestion de borne
   const events = points.map((p: any) => ({
     id: p.id,
     date: p.date,
     clientName: p.clientName,
+    eventName: p.eventName || null,
     produitNom: p.produitNom,
     adresse: p.adresse,
     externalId: p.externalId,

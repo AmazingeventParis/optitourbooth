@@ -211,7 +211,7 @@ export default function PreparationsPage() {
       if (machineSuggestions.length > 0) {
         setEvenements(machineSuggestions.map(sp => ({
           dateEvenement: typeof sp.date === 'string' ? sp.date.substring(0, 10) : new Date(sp.date).toISOString().substring(0, 10),
-          client: sp.clientName,
+          client: sp.eventName || sp.clientName,
           pendingPointId: sp.id,
         })));
       } else {
@@ -1169,7 +1169,7 @@ export default function PreparationsPage() {
                               : new Date(calEvt.date).toISOString().substring(0, 10);
                             newEvents[index] = {
                               dateEvenement: dateStr,
-                              client: calEvt.clientName,
+                              client: calEvt.eventName || calEvt.clientName,
                               pendingPointId: calEvt.id,
                             };
                           }
@@ -1191,9 +1191,11 @@ export default function PreparationsPage() {
                           const dateStr = typeof ce.date === 'string'
                             ? ce.date.substring(0, 10)
                             : new Date(ce.date).toISOString().substring(0, 10);
+                          const label = ce.eventName || ce.clientName;
                           return (
                             <option key={ce.id} value={ce.id}>
-                              {format(parseISO(dateStr), 'd MMM yyyy', { locale: fr })} - {ce.clientName}
+                              {format(parseISO(dateStr), 'd MMM yyyy', { locale: fr })} - {label}
+                              {ce.eventName && ce.clientName !== ce.eventName ? ` · ${ce.clientName}` : ''}
                               {ce.produitNom ? ` (${ce.produitNom})` : ''}
                             </option>
                           );

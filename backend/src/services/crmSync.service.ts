@@ -340,6 +340,27 @@ function buildAlbumRecords(
   return records;
 }
 
+// ─── Smakk readiness API ─────────────────────────────────────────
+// Returns Map<orderId, eventName> from _otb_readiness.php (mirrors readiness.php)
+
+async function fetchSmakkReadiness(signal?: AbortSignal): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  try {
+    const url = `https://www.smakk.fr/manager/_otb_readiness.php?key=${SMAKK_API_KEY}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!response.ok) return map;
+    const data = await response.json() as any;
+    for (const row of (data.data || data || [])) {
+      const id = String(row.id || '').trim();
+      const name = (row.nom_event || row.event_name || row.eventName || '').trim();
+      if (id && name) map.set(id, name);
+    }
+  } catch {
+    // Endpoint optionnel — pas bloquant
+  }
+  return map;
+}
+
 // ─── Smakk direct API ────────────────────────────────────────────
 // Smakk CRM has a dedicated lightweight API endpoint on their server
 // (_otb_orders.php) that queries the DB directly and returns JSON.
@@ -775,6 +796,10 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     // 1. Login ShootNBox
     const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox PendingPoints', controller.signal);
 
+    // 1b. Readiness map → eventName (nom d'événement pour la page Préparations)
+    const readinessMap = await scrapeShootnboxReadiness(cookie, controller.signal);
+    console.log(`[CRM PendingPoints] ${readinessMap.size} entrées readiness (noms d'événements)`);
+
     // 2. Récupérer les commandes actuelles (non-archivées) : delivery=Livraison, box_type!=Vegas Slim
     const PAGE_SIZE = 500;
     const eligible: Array<{
@@ -859,6 +884,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       const livExt = `snb_order_${order.orderId}_livraison`;
       const recExt = `snb_order_${order.orderId}_ramassage`;
 
+      const eventName = readinessMap.get(order.orderId)?.eventName || null;
+
       // ── Livraison ──
       try {
         const existingLiv = await prisma.pendingPoint.findFirst({ where: { externalId: livExt } });
@@ -872,6 +899,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             data: {
               date: ensureDateUTC(livDate),
               clientName: order.clientName,
+              eventName,
               type: 'livraison',
               produitNom: order.boxType || null,
               source: 'crm_shootnbox',
@@ -887,13 +915,13 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           });
           result.created++;
           if (form) result.enriched++;
-          console.log(`[CRM PendingPoints] + ${order.clientName} livraison ${livDate}${form ? ' (enrichi)' : ''}`);
+          console.log(`[CRM PendingPoints] + ${order.clientName}${eventName ? ` (${eventName})` : ''} livraison ${livDate}`);
         } else if (!existingLiv.manuallyEdited) {
-          // Always fix clientName (may have been created with raw HTML) + enrich if form available
           await prisma.pendingPoint.update({
             where: { id: existingLiv.id },
             data: {
               clientName: order.clientName,
+              ...(eventName && { eventName }),
               ...(form && parsedLiv && {
                 ...(parsedLiv.adresse && { adresse: parsedLiv.adresse }),
                 ...(parsedLiv.creneauDebut && { creneauDebut: parsedLiv.creneauDebut }),
@@ -915,38 +943,39 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       try {
         const existingRec = await prisma.pendingPoint.findFirst({ where: { externalId: recExt } });
         if (!existingRec) {
-          // Garde anti-doublon : si Calendar gère déjà un ramassage à cette date → on laisse Calendar
           const calendarRec = await prisma.pendingPoint.findFirst({
             where: { type: 'ramassage', calendarId: { not: null }, date: ensureDateUTC(recDate), deletedByUser: false },
           });
           if (calendarRec) { result.skipped++; }
           else {
-          await prisma.pendingPoint.create({
-            data: {
-              date: ensureDateUTC(recDate),
-              clientName: order.clientName,
-              type: 'ramassage',
-              produitNom: order.boxType || null,
-              source: 'crm_shootnbox',
-              externalId: recExt,
-              adresse: parsedRec?.adresse || null,
-              creneauDebut: parsedRec?.creneauDebut || null,
-              creneauFin: parsedRec?.creneauFin || null,
-              contactNom: parsedRec?.contactNom || null,
-              contactTelephone: parsedRec?.contactTelephone || null,
-              notes: parsedRec?.notes || null,
-              manuallyEdited: !!form,
-            },
-          });
-          result.created++;
-          if (form) result.enriched++;
-          console.log(`[CRM PendingPoints] + ${order.clientName} ramassage ${recDate}${form ? ' (enrichi)' : ''}`);
+            await prisma.pendingPoint.create({
+              data: {
+                date: ensureDateUTC(recDate),
+                clientName: order.clientName,
+                eventName,
+                type: 'ramassage',
+                produitNom: order.boxType || null,
+                source: 'crm_shootnbox',
+                externalId: recExt,
+                adresse: parsedRec?.adresse || null,
+                creneauDebut: parsedRec?.creneauDebut || null,
+                creneauFin: parsedRec?.creneauFin || null,
+                contactNom: parsedRec?.contactNom || null,
+                contactTelephone: parsedRec?.contactTelephone || null,
+                notes: parsedRec?.notes || null,
+                manuallyEdited: !!form,
+              },
+            });
+            result.created++;
+            if (form) result.enriched++;
+            console.log(`[CRM PendingPoints] + ${order.clientName}${eventName ? ` (${eventName})` : ''} ramassage ${recDate}`);
           }
         } else if (!existingRec.manuallyEdited) {
           await prisma.pendingPoint.update({
             where: { id: existingRec.id },
             data: {
               clientName: order.clientName,
+              ...(eventName && { eventName }),
               ...(form && parsedRec && {
                 ...(parsedRec.adresse && { adresse: parsedRec.adresse }),
                 ...(parsedRec.creneauDebut && { creneauDebut: parsedRec.creneauDebut }),
@@ -986,6 +1015,10 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       if (calPt) { await prisma.pendingPoint.delete({ where: { id: pt.id } }); smkCleaned++; }
     }
     if (smkCleaned > 0) console.log(`[CRM PendingPoints] 🗑️ ${smkCleaned} doublon(s) CRM Smakk supprimé(s)`);
+
+    // A2. Readiness Smakk → eventName
+    const smakkReadinessMap = await fetchSmakkReadiness(controller.signal);
+    console.log(`[CRM PendingPoints Smakk] ${smakkReadinessMap.size} entrées readiness`);
 
     // B. Fetch Smakk orders
     const SMK_PAGE_SIZE = 500;
@@ -1065,6 +1098,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       const livExt = `smk_order_${order.orderId}_livraison`;
       const recExt = `smk_order_${order.orderId}_ramassage`;
 
+      const smkEventName = smakkReadinessMap.get(order.orderId) || null;
+
       // ── Livraison Smakk ──
       try {
         const existingLiv = await prisma.pendingPoint.findFirst({ where: { externalId: livExt } });
@@ -1077,6 +1112,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             await prisma.pendingPoint.create({ data: {
               date: ensureDateUTC(order.livDateISO),
               clientName: order.clientName,
+              eventName: smkEventName,
               type: 'livraison',
               produitNom: order.boxType || null,
               source: 'crm_smakk',
@@ -1088,11 +1124,12 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               contactTelephone: order.phone,
             }});
             result.created++;
-            console.log(`[CRM PendingPoints Smakk] + ${order.clientName} livraison ${order.livDateISO}`);
+            console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} livraison ${order.livDateISO}`);
           }
         } else if (!existingLiv.manuallyEdited) {
           await prisma.pendingPoint.update({ where: { id: existingLiv.id }, data: {
             clientName: order.clientName,
+            ...(smkEventName && { eventName: smkEventName }),
             adresse: order.adresse,
             creneauDebut: order.creneauDebutLiv,
             creneauFin: order.creneauFinLiv,
@@ -1114,6 +1151,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             await prisma.pendingPoint.create({ data: {
               date: ensureDateUTC(order.recDateISO),
               clientName: order.clientName,
+              eventName: smkEventName,
               type: 'ramassage',
               produitNom: order.boxType || null,
               source: 'crm_smakk',
@@ -1125,11 +1163,12 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               contactTelephone: order.phone,
             }});
             result.created++;
-            console.log(`[CRM PendingPoints Smakk] + ${order.clientName} ramassage ${order.recDateISO}`);
+            console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} ramassage ${order.recDateISO}`);
           }
         } else if (!existingRec.manuallyEdited) {
           await prisma.pendingPoint.update({ where: { id: existingRec.id }, data: {
             clientName: order.clientName,
+            ...(smkEventName && { eventName: smkEventName }),
             adresse: order.adresse,
             creneauDebut: order.creneauDebutRec,
             creneauFin: order.creneauFinRec,

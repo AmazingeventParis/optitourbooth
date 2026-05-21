@@ -284,6 +284,7 @@ export interface SuggestedPoint {
   id: string;
   date: string;
   clientName: string;
+  eventName?: string | null;
   produitNom?: string;
   adresse?: string;
 }

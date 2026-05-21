@@ -798,6 +798,7 @@ model PendingPoint {
   notes             String?  @db.Text
   contactNom        String?  @map("contact_nom")
   contactTelephone  String?  @map("contact_telephone")
+  eventName         String?  @map("event_name")
   source            String   @default("google_calendar")
   calendarId        String?  @map("calendar_id")
   externalId        String?  @unique @map("external_id")
