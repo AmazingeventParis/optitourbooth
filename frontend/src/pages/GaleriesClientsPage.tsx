@@ -505,17 +505,19 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
   return (
     <Card className="p-4 flex flex-col justify-between">
       <div>
-        {/* Date + badges */}
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <span className="flex items-center gap-1 text-sm text-gray-500 flex-shrink-0">
-            <CalendarDaysIcon className="h-4 w-4" />
-            {formatDateRange(booking.eventDate, booking.eventEndDate)}
-          </span>
-          <div className="flex flex-wrap justify-end gap-1">
+        {/* Date */}
+        <div className="flex items-center gap-1 text-xs text-gray-500 mb-1.5 min-w-0">
+          <CalendarDaysIcon className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="truncate">{formatDateRange(booking.eventDate, booking.eventEndDate)}</span>
+        </div>
+
+        {/* Badges */}
+        {(booking.internalFeedback || badges.length > 0) && (
+          <div className="flex flex-wrap gap-1 mb-2">
             {booking.internalFeedback && (
               <span
                 title={booking.internalFeedback}
-                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-orange-100 text-orange-700 cursor-help whitespace-nowrap flex-shrink-0"
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-orange-100 text-orange-700 cursor-help whitespace-nowrap"
               >
                 <ChatBubbleLeftEllipsisIcon className="h-3 w-3" />
                 Commentaire
@@ -527,12 +529,12 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
               </span>
             ))}
           </div>
-        </div>
+        )}
 
         {/* Name */}
-        <div className="flex items-center gap-1.5 mb-2">
+        <div className="flex items-center gap-1.5 mb-2 min-w-0">
           {editing ? (
-            <div className="flex items-center gap-1 flex-1">
+            <div className="flex items-center gap-1 flex-1 min-w-0">
               <input
                 type="text"
                 value={editName}
