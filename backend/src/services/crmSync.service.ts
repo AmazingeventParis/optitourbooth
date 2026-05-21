@@ -687,7 +687,7 @@ export const syncCrmEmails = syncCrmData;
 
 // ─── CRM → PendingPoints sync ─────────────────────────────────────
 // Source de vérité pour les points à dispatcher : orders_ajax.php?status=2
-// Filtre : delivery == "Livraison" ET box_type != "Vegas Slim"
+// Filtre : delivery == "Livraison" ET box_type != "Vegas Slim" / "Smakk Slim"
 // Les informations de livraison viennent du formulaire mail-info-client (otb_cfg_bulk.php)
 
 type PendingLogistics = {
@@ -1101,6 +1101,12 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         // Vide, Retrait boutique, Chronopost → skip
         const delivOpts = (row.delivery_options || '').toLowerCase();
         if (!delivOpts.includes('livraison') && !delivOpts.includes('installation')) {
+          result.skipped++;
+          continue;
+        }
+
+        // Exclure Smakk Slim (pas géré par les chauffeurs OptiTour)
+        if ((row.box_type || '').trim() === 'Smakk Slim') {
           result.skipped++;
           continue;
         }
