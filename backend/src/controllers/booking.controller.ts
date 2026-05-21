@@ -10,6 +10,7 @@ import { fetchReview, parsePubSubMessage, isGoogleBusinessConfigured } from '../
 import { isDriveConfigured, listFolderThumbnails, scanAndMatchDriveFolders } from '../services/googleDrive.service.js';
 import { syncCrmData, lastSyncResult } from '../services/crmSync.service.js';
 import { sendReviewLinkEmail, sendGalleryDirectEmail } from '../services/email.service.js';
+import { notifyPhotosReady } from '../services/myShootnboxClient.service.js';
 
 // ===========================
 // PUBLIC ROUTES (no auth)
@@ -855,6 +856,22 @@ export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) =>
       senderBrand: brand,
     },
   });
+
+  // EN PARALLELE : notifier MyShootnbox pour declencher le pipe d'avis in-app
+  // (fire-and-forget, ne bloque pas la response). Si l'app est installee sur le tel
+  // de l'hote, il recoit une push notif "Vos photos sont pretes" + ecran 5 etoiles.
+  // Sinon (app pas installee, ou num_id non lie a un event MyShootnbox) : skip silencieux.
+  if (booking.numId && booking.galleryUrl) {
+    notifyPhotosReady({
+      num_id: booking.numId,
+      gallery_url: booking.galleryUrl,
+      photo_count: booking.photoCount ?? 0,
+      brand: brand === 'SMAKK' ? 'smakk' : 'shootnbox',
+      booking_id: booking.id,
+    }).catch(err => console.error('[Booking] notifyPhotosReady failed:', err));
+  } else {
+    console.log(`[Booking] Skip MyShootnbox notify (numId=${booking.numId}, galleryUrl=${booking.galleryUrl ? 'set' : 'null'})`);
+  }
 
   return apiResponse.success(res, {
     message: `Lien envoyé à ${email} via ${brand}`,
