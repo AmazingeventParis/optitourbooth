@@ -341,10 +341,11 @@ function buildAlbumRecords(
 }
 
 // ─── Smakk readiness API ─────────────────────────────────────────
-// Returns Map<orderId, eventName> from _otb_readiness.php (mirrors readiness.php)
+// Returns Map<orderId, { eventName, deliveryType }> from _otb_readiness.php
+// deliveryType = colonne "Livraison" de readiness.php (ex: "Livraison", "Retrait boutique", "Chronopost")
 
-async function fetchSmakkReadiness(signal?: AbortSignal): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
+async function fetchSmakkReadiness(signal?: AbortSignal): Promise<Map<string, { eventName: string; deliveryType: string }>> {
+  const map = new Map<string, { eventName: string; deliveryType: string }>();
   try {
     const url = `https://www.smakk.fr/manager/_otb_readiness.php?key=${SMAKK_API_KEY}`;
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
@@ -352,8 +353,14 @@ async function fetchSmakkReadiness(signal?: AbortSignal): Promise<Map<string, st
     const data = await response.json() as any;
     for (const row of (data.data || data || [])) {
       const id = String(row.id || '').trim();
+      if (!id) continue;
       const name = (row.nom_event || row.event_name || row.eventName || '').trim();
-      if (id && name) map.set(id, name);
+      // Colonne "Livraison" : essayer plusieurs noms de champ possibles
+      const deliveryType = (
+        row.livraison || row.delivery || row.delivery_type ||
+        row.type_livraison || row.type_delivery || ''
+      ).trim();
+      map.set(id, { eventName: name, deliveryType });
     }
   } catch {
     // Endpoint optionnel — pas bloquant
@@ -1064,7 +1071,18 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       const livExt = `smk_order_${order.orderId}_livraison`;
       const recExt = `smk_order_${order.orderId}_ramassage`;
 
-      const smkEventName = smakkReadinessMap.get(order.orderId) || null;
+      const readinessEntry = smakkReadinessMap.get(order.orderId);
+      const smkEventName = readinessEntry?.eventName || null;
+
+      // Filtre colonne "Livraison" de readiness.php :
+      // Si l'entrée readiness existe et que le type n'est pas "Livraison" → skip (Retrait boutique, Chronopost…)
+      if (readinessEntry && readinessEntry.deliveryType) {
+        const dt = readinessEntry.deliveryType.toLowerCase();
+        if (!dt.includes('livraison') && !dt.includes('installation')) {
+          result.skipped++;
+          continue;
+        }
+      }
 
       // ── Livraison Smakk ──
       try {
