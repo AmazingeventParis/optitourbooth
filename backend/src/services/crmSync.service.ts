@@ -44,12 +44,14 @@ interface SyncResult {
 // ─── Config ──────────────────────────────────────────────────────
 
 const SHOOTNBOX_BASE = 'https://shootnbox.fr/manager2';
-// Smakk uses a direct DB API endpoint (session login doesn't share credentials)
-const SMAKK_API_URL = 'https://www.smakk.fr/manager/_otb_orders.php';
+const SMAKK_MANAGER_BASE = 'https://www.smakk.fr/manager';
+const SMAKK_API_URL = `${SMAKK_MANAGER_BASE}/_otb_orders.php`;
 const SMAKK_API_KEY = 'opti2026smk_x7kR9qNv';
 
 const SHOOTNBOX_EMAIL = process.env.CRM_SHOOTNBOX_EMAIL || '';
 const SHOOTNBOX_PASSWORD = process.env.CRM_SHOOTNBOX_PASSWORD || '';
+const SMAKK_EMAIL = process.env.CRM_SMAKK_EMAIL || '';
+const SMAKK_PASSWORD = process.env.CRM_SMAKK_PASSWORD || '';
 
 // ─── Name matching ────────────────────────────────────────────────
 
@@ -760,6 +762,85 @@ function parseSmakkCreneau(raw: string): [string | null, string | null] {
   return [debut, fin];
 }
 
+// ─── Smakk Info Client (mail-infos-smk.php) ──────────────────────
+// Données remplies par le client quand il répond au mail info logistique.
+// Source de vérité prioritaire sur _otb_orders.php pour les dates et l'adresse.
+
+interface SmakkInfoClient {
+  adresse: string | null;
+  livDateISO: string | null;
+  livCreneauDebut: string | null;
+  livCreneauFin: string | null;
+  recDateISO: string | null;
+  recCreneauDebut: string | null;
+  recCreneauFin: string | null;
+  contactNom: string | null;
+  contactTelephone: string | null;
+}
+
+function parseDateDDMMYYYY(dateStr: string): string | null {
+  const m = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return null;
+  return `${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}`;
+}
+
+function parseSmakkInfoClientHtml(html: string): SmakkInfoClient {
+  const result: SmakkInfoClient = {
+    adresse: null, livDateISO: null, livCreneauDebut: null, livCreneauFin: null,
+    recDateISO: null, recCreneauDebut: null, recCreneauFin: null,
+    contactNom: null, contactTelephone: null,
+  };
+  if (!html) return result;
+
+  const rows = [...html.matchAll(/<td[^>]*>(.*?)<\/td>\s*<td[^>]*>(.*?)<\/td>/gis)];
+  for (const [, rawLabel, rawValue] of rows) {
+    const label = (rawLabel || '').replace(/<[^>]+>/g, '').replace(/&[^;]+;/g, '').trim().toLowerCase();
+    const value = (rawValue || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&[^;]+;/g, '').trim();
+    if (!label || !value) continue;
+
+    if (label.includes('adresse')) {
+      result.adresse = value;
+    } else if (label.includes('jour') && label.includes('livraison')) {
+      result.livDateISO = parseDateDDMMYYYY(value);
+    } else if (label.includes('livraison') && (label.includes('cr') && label.includes('neau'))) {
+      [result.livCreneauDebut, result.livCreneauFin] = parseSmakkCreneau(value);
+    } else if (label.includes('jour') && (label.includes('cup') || label.includes('cup'))) {
+      result.recDateISO = parseDateDDMMYYYY(value);
+    } else if ((label.includes('cup') || label.includes('cup')) && (label.includes('cr') && label.includes('neau'))) {
+      [result.recCreneauDebut, result.recCreneauFin] = parseSmakkCreneau(value);
+    } else if (label.includes('contact sur place')) {
+      // "Karim — 0644250127" or "Clara vello — 0672742769"
+      const parts = value.split(/\s*[—–]\s*/);
+      result.contactNom = parts[0]?.trim() || null;
+      result.contactTelephone = parts[1]?.trim() || null;
+    }
+  }
+  return result;
+}
+
+async function fetchSmakkInfoClients(
+  cookie: string,
+  orderIds: string[],
+  signal?: AbortSignal,
+): Promise<Map<string, SmakkInfoClient>> {
+  const map = new Map<string, SmakkInfoClient>();
+  for (const orderId of orderIds) {
+    try {
+      const resp = await fetch(
+        `${SMAKK_MANAGER_BASE}/mail-infos-smk.php?ajax=get_responses&order_id=${orderId}`,
+        { headers: { Cookie: cookie }, signal },
+      );
+      if (!resp.ok) continue;
+      const data = await resp.json() as any;
+      if (!data.html) continue;
+      map.set(orderId, parseSmakkInfoClientHtml(data.html));
+    } catch {
+      // ordre sans réponse ou erreur réseau → fallback sur _otb_orders.php
+    }
+  }
+  return map;
+}
+
 export interface PendingPointsSyncResult {
   created: number;
   enriched: number;
@@ -1069,6 +1150,21 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
 
     console.log(`[CRM PendingPoints Smakk] ${smakkEligible.length} commandes éligibles (Livraison, hors Retrait/Chronopost)`);
 
+    // A3. Login Smakk manager → récupérer les réponses "Info client" (mail-infos-smk.php)
+    // Ces réponses sont la source de vérité : dates réelles, adresse, contact, créneaux.
+    let smakkInfoClientMap = new Map<string, SmakkInfoClient>();
+    if (SMAKK_EMAIL && SMAKK_PASSWORD) {
+      try {
+        const smakkCookie = await crmLogin(SMAKK_MANAGER_BASE, SMAKK_EMAIL, SMAKK_PASSWORD, 'Smakk InfoClient', controller.signal);
+        smakkInfoClientMap = await fetchSmakkInfoClients(smakkCookie, smakkEligible.map(o => o.orderId), controller.signal);
+        console.log(`[CRM PendingPoints Smakk] ${smakkInfoClientMap.size} réponse(s) info client trouvée(s)`);
+      } catch (e: any) {
+        console.warn(`[CRM PendingPoints Smakk] Info client login/fetch failed: ${e.message}`);
+      }
+    } else {
+      console.warn('[CRM PendingPoints Smakk] CRM_SMAKK_EMAIL/PASSWORD non configurés — info client ignoré');
+    }
+
     // Nettoyage : supprimer les pending_points crm_smakk dont le orderId n'est plus éligible
     const eligibleOrderIds = new Set(smakkEligible.map(o => o.orderId));
     const existingSmakkPts = await prisma.pendingPoint.findMany({
@@ -1094,8 +1190,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       const readinessEntry = smakkReadinessMap.get(order.orderId);
       const smkEventName = readinessEntry?.eventName || null;
 
-      // Filtre colonne "Livraison" de readiness.php :
-      // Si l'entrée readiness existe et que le type n'est pas "Livraison" → skip (Retrait boutique, Chronopost…)
+      // Filtre colonne "Livraison" de readiness.php
       if (readinessEntry && readinessEntry.deliveryType) {
         const dt = readinessEntry.deliveryType.toLowerCase();
         if (!dt.includes('livraison') && !dt.includes('installation')) {
@@ -1104,35 +1199,49 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         }
       }
 
+      // Merge : info client (réponse mail) prioritaire sur _otb_orders.php
+      const ic = smakkInfoClientMap.get(order.orderId);
+      const livDateISO = ic?.livDateISO || order.livDateISO;
+      const recDateISO = ic?.recDateISO || order.recDateISO;
+      const adresse = ic?.adresse || order.adresse;
+      const contactNom = ic?.contactNom || order.takeContact;
+      const contactTelephone = ic?.contactTelephone || order.phone;
+      const creneauDebutLiv = ic?.livCreneauDebut || order.creneauDebutLiv;
+      const creneauFinLiv = ic?.livCreneauFin || order.creneauFinLiv;
+      const creneauDebutRec = ic?.recCreneauDebut || order.creneauDebutRec;
+      const creneauFinRec = ic?.recCreneauFin || order.creneauFinRec;
+      const contactNomRec = ic?.contactNom || order.returnContact || order.takeContact;
+
       // ── Livraison Smakk ──
       try {
         const existingLiv = await prisma.pendingPoint.findFirst({ where: { externalId: livExt } });
         if (!existingLiv) {
           await prisma.pendingPoint.create({ data: {
-            date: ensureDateUTC(order.livDateISO),
+            date: ensureDateUTC(livDateISO),
             clientName: order.clientName,
             eventName: smkEventName,
             type: 'livraison',
             produitNom: order.boxType || null,
             source: 'crm_smakk',
             externalId: livExt,
-            adresse: order.adresse,
-            creneauDebut: order.creneauDebutLiv,
-            creneauFin: order.creneauFinLiv,
-            contactNom: order.takeContact,
-            contactTelephone: order.phone,
+            adresse,
+            creneauDebut: creneauDebutLiv,
+            creneauFin: creneauFinLiv,
+            contactNom,
+            contactTelephone,
           }});
           result.created++;
-          console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} livraison ${order.livDateISO}`);
+          console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} livraison ${livDateISO}${ic ? ' (info client)' : ''}`);
         } else if (!existingLiv.manuallyEdited) {
           await prisma.pendingPoint.update({ where: { id: existingLiv.id }, data: {
+            date: ensureDateUTC(livDateISO),
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
-            adresse: order.adresse,
-            creneauDebut: order.creneauDebutLiv,
-            creneauFin: order.creneauFinLiv,
-            contactNom: order.takeContact,
-            contactTelephone: order.phone,
+            adresse,
+            creneauDebut: creneauDebutLiv,
+            creneauFin: creneauFinLiv,
+            contactNom,
+            contactTelephone,
           }});
         }
       } catch (e: any) { result.errors.push(`Smakk livraison ${order.orderId}: ${e.message}`); }
@@ -1142,30 +1251,31 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         const existingRec = await prisma.pendingPoint.findFirst({ where: { externalId: recExt } });
         if (!existingRec) {
           await prisma.pendingPoint.create({ data: {
-            date: ensureDateUTC(order.recDateISO),
+            date: ensureDateUTC(recDateISO),
             clientName: order.clientName,
             eventName: smkEventName,
             type: 'ramassage',
             produitNom: order.boxType || null,
             source: 'crm_smakk',
             externalId: recExt,
-            adresse: order.adresse,
-            creneauDebut: order.creneauDebutRec,
-            creneauFin: order.creneauFinRec,
-            contactNom: order.returnContact || order.takeContact,
-            contactTelephone: order.phone,
+            adresse,
+            creneauDebut: creneauDebutRec,
+            creneauFin: creneauFinRec,
+            contactNom: contactNomRec,
+            contactTelephone,
           }});
           result.created++;
-          console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} ramassage ${order.recDateISO}`);
+          console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} ramassage ${recDateISO}${ic ? ' (info client)' : ''}`);
         } else if (!existingRec.manuallyEdited) {
           await prisma.pendingPoint.update({ where: { id: existingRec.id }, data: {
+            date: ensureDateUTC(recDateISO),
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
-            adresse: order.adresse,
-            creneauDebut: order.creneauDebutRec,
-            creneauFin: order.creneauFinRec,
-            contactNom: order.returnContact || order.takeContact,
-            contactTelephone: order.phone,
+            adresse,
+            creneauDebut: creneauDebutRec,
+            creneauFin: creneauFinRec,
+            contactNom: contactNomRec,
+            contactTelephone,
           }});
         }
       } catch (e: any) { result.errors.push(`Smakk ramassage ${order.orderId}: ${e.message}`); }
