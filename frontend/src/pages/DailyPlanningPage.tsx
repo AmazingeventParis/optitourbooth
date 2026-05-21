@@ -1747,6 +1747,11 @@ export default function DailyPlanningPage() {
   const [tourneeToDelete, setTourneeToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Dialog suppression définitive pending point
+  const [isDeletePendingDialogOpen, setIsDeletePendingDialogOpen] = useState(false);
+  const [pendingPointToDelete, setPendingPointToDelete] = useState<string | null>(null);
+  const [isDeletingPending, setIsDeletingPending] = useState(false);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -3585,6 +3590,23 @@ export default function DailyPlanningPage() {
     }
   };
 
+  const confirmDeletePendingPoint = async () => {
+    if (!pendingPointToDelete) return;
+    setIsDeletingPending(true);
+    try {
+      await pendingPointsService.delete(pendingPointToDelete);
+      setPendingPoints(current => current.filter(p => p._backendId !== pendingPointToDelete));
+      setSelectedPendingIndex(null);
+      setIsDeletePendingDialogOpen(false);
+      setPendingPointToDelete(null);
+      toastSuccess('Point supprimé', 'Ce point ne réapparaîtra plus lors des syncs automatiques.');
+    } catch (error) {
+      toastError('Erreur', (error as Error).message);
+    } finally {
+      setIsDeletingPending(false);
+    }
+  };
+
   const chauffeurOptions = useMemo(() => [
     { value: '', label: 'Sélectionner un chauffeur' },
     ...chauffeurs.map((c) => ({
@@ -4052,6 +4074,18 @@ export default function DailyPlanningPage() {
                               >
                                 <DocumentDuplicateIcon className="h-4 w-4" />
                               </button>
+                              {point._backendId && (
+                                <button
+                                  onClick={() => {
+                                    setPendingPointToDelete(point._backendId!);
+                                    setIsDeletePendingDialogOpen(true);
+                                  }}
+                                  className="text-gray-400 hover:text-red-600 p-1 rounded transition-colors"
+                                  title="Supprimer définitivement ce point"
+                                >
+                                  <TrashIcon className="h-4 w-4" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => setSelectedPendingIndex(null)}
                                 className="text-gray-400 hover:text-gray-600 text-lg leading-none p-1"
@@ -5253,6 +5287,21 @@ export default function DailyPlanningPage() {
         confirmText="Supprimer"
         variant="danger"
         isLoading={isDeleting}
+      />
+
+      {/* Dialog suppression définitive pending point */}
+      <ConfirmDialog
+        isOpen={isDeletePendingDialogOpen}
+        onClose={() => {
+          setIsDeletePendingDialogOpen(false);
+          setPendingPointToDelete(null);
+        }}
+        onConfirm={confirmDeletePendingPoint}
+        title="Supprimer définitivement ce point"
+        message="Ce point sera supprimé définitivement et ne réapparaîtra plus, même après les syncs automatiques. La seule façon de le retrouver sera de le créer manuellement. Confirmez-vous ?"
+        confirmText="Supprimer définitivement"
+        variant="danger"
+        isLoading={isDeletingPending}
       />
 
       {/* Modal réattribution chauffeur */}
