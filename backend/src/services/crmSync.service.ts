@@ -1015,10 +1015,13 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       if (smkRows.length === 0) break;
 
       for (const row of smkRows) {
-        // Exclure Retrait boutique (pas de chauffeur) et Chronopost
+        // Filtre positif : uniquement les livraisons/installations explicites
+        // Vide, Retrait boutique, Chronopost → skip
         const delivOpts = (row.delivery_options || '').toLowerCase();
-        if (delivOpts.includes('retrait')) { result.skipped++; continue; }
-        if (delivOpts.includes('chronopost')) { result.skipped++; continue; }
+        if (!delivOpts.includes('livraison') && !delivOpts.includes('installation')) {
+          result.skipped++;
+          continue;
+        }
 
         // Date de livraison : take_date en priorité, sinon event_date
         const livDateRaw = (row.take_date || '').trim() || (row.event_date || '').trim();
@@ -1065,6 +1068,23 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     } while (smkPage * SMK_PAGE_SIZE < smkTotal);
 
     console.log(`[CRM PendingPoints Smakk] ${smakkEligible.length} commandes éligibles (Livraison, hors Retrait/Chronopost)`);
+
+    // Nettoyage : supprimer les pending_points crm_smakk dont le orderId n'est plus éligible
+    const eligibleOrderIds = new Set(smakkEligible.map(o => o.orderId));
+    const existingSmakkPts = await prisma.pendingPoint.findMany({
+      where: { source: 'crm_smakk', date: { gte: today } },
+      select: { id: true, externalId: true },
+    });
+    for (const pt of existingSmakkPts) {
+      if (!pt.externalId) continue;
+      const match = pt.externalId.match(/^smk_order_(\d+)_/);
+      if (!match) continue;
+      const orderId = match[1];
+      if (!eligibleOrderIds.has(orderId)) {
+        await prisma.pendingPoint.delete({ where: { id: pt.id } });
+        console.log(`[CRM PendingPoints Smakk] - supprimé retrait/inéligible externalId=${pt.externalId}`);
+      }
+    }
 
     // C. Créer / mettre à jour les PendingPoints Smakk
     for (const order of smakkEligible) {
