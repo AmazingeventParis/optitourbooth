@@ -1174,7 +1174,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     for (const pt of existingSmakkPts) {
       if (!pt.externalId) continue;
       const match = pt.externalId.match(/^smk_order_(\d+)_/);
-      if (!match) continue;
+      if (!match || !match[1]) continue;
       const orderId = match[1];
       if (!eligibleOrderIds.has(orderId)) {
         await prisma.pendingPoint.delete({ where: { id: pt.id } });
