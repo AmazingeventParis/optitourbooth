@@ -678,7 +678,7 @@ function BrandActions({ brand, sending, hasEmail, hasGallery, onSendDrive, onCop
       </button>
       <button onClick={onSendUrl} disabled={sending || !hasEmail}
         className={clsx('w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold transition-colors', outlineCls)}>
-        <PaperAirplaneIcon className="h-3.5 w-3.5" /> Envoyer URL avis
+        <PaperAirplaneIcon className="h-3.5 w-3.5" /> Envoyer Avis
       </button>
     </div>
   );
