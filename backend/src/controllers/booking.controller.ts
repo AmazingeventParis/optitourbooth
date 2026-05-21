@@ -473,7 +473,7 @@ export const getBookingDetail = asyncHandler(async (req: Request, res: Response)
  */
 export const updateBooking = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { customerName, customerEmail, customerPhone, eventDate, galleryUrl, googleReviewUrl, status, senderBrand, rating, numId } = req.body;
+  const { customerName, customerEmail, customerPhone, eventDate, galleryUrl, googleReviewUrl, status, senderBrand, rating, numId, internalFeedback } = req.body;
 
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) {
@@ -493,6 +493,7 @@ export const updateBooking = asyncHandler(async (req: Request, res: Response) =>
       ...(senderBrand !== undefined && { senderBrand }),
       ...(rating !== undefined && { rating }),
       ...(numId !== undefined && { numId }),
+      ...(internalFeedback !== undefined && { internalFeedback: internalFeedback || null }),
     },
   });
 
