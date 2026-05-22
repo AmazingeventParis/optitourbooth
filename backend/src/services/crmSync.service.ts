@@ -343,38 +343,31 @@ function buildAlbumRecords(
 }
 
 // ─── Smakk readiness API ─────────────────────────────────────────
-// Returns Map<orderId, { eventName, deliveryType, borne }> from _otb_readiness.php
-// deliveryType = colonne "Livraison" (ex: "Livraison", "Retrait boutique", "Chronopost")
-// borne        = colonne "N" = IDs de bornes assignées (ex: "S01,S02" → 2 machines)
+// Uses readiness_ajax.php (même format que Shootnbox, accessible sans auth).
+// Champs clés : box_id = colonne "N" (IDs bornes ex: "R3/P,S1/P"), delivery = type HTML
 
 async function fetchSmakkReadiness(signal?: AbortSignal): Promise<Map<string, { eventName: string; deliveryType: string; borne: string }>> {
   const map = new Map<string, { eventName: string; deliveryType: string; borne: string }>();
   try {
-    const url = `https://www.smakk.fr/manager/_otb_readiness.php?key=${SMAKK_API_KEY}`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const response = await fetch(`${SMAKK_MANAGER_BASE}/readiness_ajax.php`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'draw=1&start=0&length=500',
+      signal: AbortSignal.timeout(8000),
+    });
     if (!response.ok) return map;
     const data = await response.json() as any;
-    const rows: any[] = data.data || data || [];
-    // Log the available fields from the first row to identify the N column
-    if (rows.length > 0) {
-      console.log('[CRM PendingPoints Smakk] readiness fields:', Object.keys(rows[0]));
-      console.log('[CRM PendingPoints Smakk] readiness row[0]:', JSON.stringify(rows[0]));
-    }
+    const rows: any[] = data.aaData || data.data || [];
     for (const row of rows) {
       const id = String(row.id || '').trim();
       if (!id) continue;
-      const name = (row.nom_event || row.event_name || row.eventName || '').trim();
-      // Colonne "Livraison" : essayer plusieurs noms de champ possibles
-      const deliveryType = (
-        row.livraison || row.delivery || row.delivery_type ||
-        row.type_livraison || row.type_delivery || ''
-      ).trim();
-      // Colonne "N" = bornes assignées : essayer plusieurs noms de champ possibles
-      const borne = String(
-        row.box_id || row.bornes || row.machines || row.borne ||
-        row.num_borne || row.machine_ids || row.n || ''
-      ).trim();
-      map.set(id, { eventName: name, deliveryType, borne });
+      // box_id = colonne "N" = IDs de bornes assignées (ex: "R3/P" ou "S1/P,S2/P")
+      const borne = String(row.box_id || '').trim();
+      // delivery = HTML du type de livraison (ex: "<center...>Livraison</center>")
+      const deliveryType = stripHtml(String(row.delivery || '')).trim();
+      // Pas de nom_event dans readiness_ajax.php — utiliser societe comme fallback
+      const eventName = '';
+      map.set(id, { eventName, deliveryType, borne });
     }
   } catch {
     // Endpoint optionnel — pas bloquant
