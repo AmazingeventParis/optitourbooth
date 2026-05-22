@@ -1302,6 +1302,9 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   // ── Post-processing A : CRM prime sur GCal (Option B) ──
   // Si un point CRM (non-dispatché) existe pour (date, type, clientName) → dispatcher tous les points
   // google_calendar correspondants non-dispatchés (doublons multi-bornes, ex: 4 events GCal → 1 point CRM ×4)
+  // On mémorise les IDs dispatchés ici pour que Post-processing B ne les réutilise pas comme prétexte
+  // pour dispatcher en retour les points CRM.
+  const gcalDispatchedByDedupA = new Set<string>();
   try {
     const ppToday2 = new Date(); ppToday2.setUTCHours(0, 0, 0, 0);
     const horizon2 = new Date(ppToday2); horizon2.setDate(horizon2.getDate() + 60);
@@ -1343,6 +1346,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           where: { id: { in: toDispatch } },
           data: { dispatched: true },
         });
+        toDispatch.forEach(id => gcalDispatchedByDedupA.add(id));
         result.autoDispatched += toDispatch.length;
         console.log(`[CRM PendingPoints] ✓ ${toDispatch.length} point(s) GCal dispatchés (remplacés par point CRM multi-bornes)`);
       }
@@ -1352,8 +1356,9 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   }
 
   // ── Post-processing B : détecter les vrais doublons CRM ↔ Google Calendar ──
-  // Condition : un point google_calendar dispatché existe pour la même (date exacte, type, client similaire).
-  // On NE matche PAS les tournées directement pour éviter les faux positifs.
+  // Condition : un point google_calendar dispatché (réellement en tournée) existe pour la même
+  // (date exacte, type, client similaire). Exclut les points dispatchés par Post-processing A
+  // pour éviter de dispatcher en retour les points CRM qu'on vient de créer.
   try {
     const ppToday = new Date(); ppToday.setUTCHours(0, 0, 0, 0);
     const horizon = new Date(ppToday); horizon.setDate(horizon.getDate() + 60);
@@ -1368,12 +1373,14 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     });
 
     if (crmNonDispatched.length > 0) {
-      // Charger tous les points google_calendar dispatchés sur la même période
+      // Charger les points google_calendar dispatchés, en excluant ceux dispatchés par Post-processing A
+      const excludeIds = [...gcalDispatchedByDedupA];
       const gcalDispatched = await prisma.pendingPoint.findMany({
         where: {
           source: 'google_calendar',
           dispatched: true,
           date: { gte: ppToday, lte: horizon },
+          ...(excludeIds.length > 0 && { id: { notIn: excludeIds } }),
         },
         select: { date: true, clientName: true, type: true, externalId: true },
       });
