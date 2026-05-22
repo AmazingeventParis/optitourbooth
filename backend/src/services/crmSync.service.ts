@@ -695,6 +695,24 @@ export const syncCrmEmails = syncCrmData;
 // Filtre : delivery == "Livraison" ET box_type != "Vegas Slim" / "Smakk Slim"
 // Les informations de livraison viennent du formulaire mail-info-client (otb_cfg_bulk.php)
 
+// Mapping CRM box_type → OptiTour produitNom
+const CRM_BOX_TYPE_MAP: Record<string, string> = {
+  'karaoké': 'Playbox',  // "Karaoké" dans Shootnbox manager2
+  'karaoke':     'Playbox',
+  'playbox':     'Playbox',
+  'vegas':       'Vegas',
+  'ring':        'Ring',
+  'smakk':       'Smakk',
+  'miroir':      'Miroir',
+  'spinner':     'Spinner',
+  'aircam':      'Aircam',
+};
+
+function normalizeBoxType(raw: string): string {
+  const key = raw.toLowerCase().trim();
+  return CRM_BOX_TYPE_MAP[key] ?? raw;
+}
+
 type PendingLogistics = {
   date: string | null;
   adresse: string | null;
@@ -902,16 +920,30 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
 
         for (const row of rows) {
           const deliveryVal = stripHtml(String(row.delivery || '')).toLowerCase();
-          // Exclure Retrait boutique et Chronopost (pas de chauffeur)
-          if (!deliveryVal.includes('livraison') && !deliveryVal.includes('installation')) continue;
-          if (deliveryVal.includes('retrait') || deliveryVal.includes('chronopost')) continue;
-          if (stripHtml(String(row.box_type || '')) === 'Vegas Slim') continue;
-
+          const rawBoxType = stripHtml(String(row.box_type || ''));
           const orderId = String(row.id || '').trim();
+          const numIdMatch = stripHtml(String(row.facture || '')).match(/FA\d+/);
+          const numId = numIdMatch ? numIdMatch[0] : null;
+          const debugId = numId || orderId || '?';
+
+          // Exclure Retrait boutique et Chronopost (pas de chauffeur)
+          if (!deliveryVal.includes('livraison') && !deliveryVal.includes('installation')) {
+            console.log(`[CRM PendingPoints] SKIP ${debugId} — delivery non éligible: "${deliveryVal}"`);
+            continue;
+          }
+          if (deliveryVal.includes('retrait') || deliveryVal.includes('chronopost')) {
+            console.log(`[CRM PendingPoints] SKIP ${debugId} — retrait/chronopost: "${deliveryVal}"`);
+            continue;
+          }
+          if (rawBoxType === 'Vegas Slim') continue;
+
           if (!orderId) continue;
 
           const eventDateISO = pendingDateDMY(stripHtml(String(row.event_date || '')));
-          if (!eventDateISO) continue;
+          if (!eventDateISO) {
+            console.log(`[CRM PendingPoints] SKIP ${debugId} — date non parseable: "${row.event_date}"`);
+            continue;
+          }
 
           // Only upcoming events (event_date >= today)
           if (new Date(eventDateISO) < today) continue;
@@ -921,11 +953,11 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
 
           const [company, contactName] = parseCustomerField(String(row.customer || ''));
           const clientName = company || contactName || `Commande ${orderId}`;
-          const boxType = stripHtml(String(row.box_type || ''));
+          const boxType = normalizeBoxType(rawBoxType);
           const returnDateISO = pendingDateDMY(stripHtml(String(row.return_date || '')));
-          const numIdMatch = stripHtml(String(row.facture || '')).match(/FA\d+/);
+          // numIdMatch / numId déjà calculés plus haut
 
-          eligible.push({ orderId, numId: numIdMatch ? numIdMatch[0] : null, clientName, boxType, eventDateISO, returnDateISO });
+          eligible.push({ orderId, numId, clientName, boxType, eventDateISO, returnDateISO });
         }
         start += PAGE_SIZE;
       } while (start < total);
