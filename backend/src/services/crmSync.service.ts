@@ -263,7 +263,7 @@ async function scrapeShootnboxReadiness(cookie: string, signal?: AbortSignal): P
       contactName: stripHtml(String(row.name || '')),
       eventName: stripHtml(String(row.nom_event || '')),
       eventDate,
-      borne: stripHtml(String(row.borne || '')),
+      borne: String(row.box_id || ''),  // colonne "N" = numéros de bornes assignées (ex: "V1/P,V2/P,V3/P,V4/P")
     });
   }
 
