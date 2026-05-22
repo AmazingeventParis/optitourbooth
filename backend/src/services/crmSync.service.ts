@@ -740,7 +740,9 @@ function pendingParseLogistics(
   const useRecupAddr = isRec && d.log_recup_diff === '1' && d.log_recup_rue_nom;
   const adresse = useRecupAddr
     ? pendingBuildAddress(d.log_recup_rue_num, d.log_recup_rue_nom, d.log_recup_cp, d.log_recup_ville)
-    : pendingBuildAddress(d.log_rue_num, d.log_rue_nom, d.log_cp, d.log_ville);
+    : isRec
+      ? null  // ramassage sans adresse recup distincte → null, pas copie de la livraison
+      : pendingBuildAddress(d.log_rue_num, d.log_rue_nom, d.log_cp, d.log_ville);
 
   const rawDate = isRec ? d.log_jour_rec : d.log_jour_liv;
   const rawCren = isRec ? d.log_creneau_rec : d.log_creneau_liv;
@@ -1005,8 +1007,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               ...(eventName && { eventName }),
               quantiteBornes,
               dispatched: false,
+              ...(form && parsedLiv?.adresse && { adresse: parsedLiv.adresse }),
               ...(!existingLiv.manuallyEdited && form && parsedLiv && {
-                ...(parsedLiv.adresse && { adresse: parsedLiv.adresse }),
                 ...(parsedLiv.creneauDebut && { creneauDebut: parsedLiv.creneauDebut }),
                 ...(parsedLiv.creneauFin && { creneauFin: parsedLiv.creneauFin }),
                 ...(parsedLiv.contactNom && { contactNom: parsedLiv.contactNom }),
@@ -1036,7 +1038,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
                 produitNom: order.boxType || null,
                 source: 'crm_shootnbox',
                 externalId: recExt,
-                adresse: parsedRec?.adresse || null,
+                adresse: parsedRec?.adresse ?? parsedLiv?.adresse ?? null,
                 creneauDebut: parsedRec?.creneauDebut || null,
                 creneauFin: parsedRec?.creneauFin || null,
                 contactNom: parsedRec?.contactNom || null,
@@ -1058,8 +1060,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               ...(eventName && { eventName }),
               quantiteBornes,
               dispatched: false,
+              ...(form && parsedRec?.adresse && { adresse: parsedRec.adresse }),
               ...(!existingRec.manuallyEdited && form && parsedRec && {
-                ...(parsedRec.adresse && { adresse: parsedRec.adresse }),
                 ...(parsedRec.creneauDebut && { creneauDebut: parsedRec.creneauDebut }),
                 ...(parsedRec.creneauFin && { creneauFin: parsedRec.creneauFin }),
                 ...(parsedRec.contactNom && { contactNom: parsedRec.contactNom }),
