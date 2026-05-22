@@ -258,6 +258,134 @@ export async function sendReviewLinkEmail(opts: {
 }
 
 /**
+ * Send the old-style review email: photo preview grid + "Accéder à ma galerie" CTA button
+ * (version avant l'ajout de la phrase MyShootnbox et des badges App Store/Google Play)
+ */
+export async function sendOldStyleReviewLinkEmail(opts: {
+  to: string;
+  customerName: string;
+  publicUrl: string;
+  galleryUrl?: string | null;
+  brand: Brand;
+}): Promise<void> {
+  const { to, customerName, publicUrl, galleryUrl, brand } = opts;
+  const brandConfig = config.email.brands[brand];
+  const theme = BRAND_THEMES[brand];
+  const transporter = getTransporter(brand);
+
+  const { thumbnails, totalCount } = await fetchThumbnails(galleryUrl);
+  const photoGrid = buildThumbnailGrid(thumbnails);
+  const hasPhotos = thumbnails.length > 0;
+  const remainingCount = totalCount - Math.min(thumbnails.length, 6);
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+    <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:'Raleway',Arial,sans-serif;">
+      <table role="presentation" style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="padding:20px 10px;">
+            <table role="presentation" style="max-width:600px;margin:0 auto;border-collapse:collapse;width:100%;">
+
+              <!-- Header -->
+              <tr>
+                <td style="background-color:white;padding:35px 30px 20px;border-radius:16px 16px 0 0;text-align:center;border-bottom:3px solid ${theme.primary};">
+                  ${theme.logoUrl
+                    ? `<img src="${theme.logoUrl}" alt="${theme.logo}" style="max-width:220px;height:auto;display:inline-block;" />`
+                    : `<h1 style="margin:0;color:${theme.primary};font-size:28px;font-weight:800;">${theme.logo}</h1>`
+                  }
+                  <p style="margin:10px 0 0;color:#6b7280;font-size:13px;font-style:italic;letter-spacing:0.5px;">
+                    Créateur de souvenirs
+                  </p>
+                </td>
+              </tr>
+
+              <!-- Body -->
+              <tr>
+                <td style="background-color:white;padding:35px 30px;">
+
+                  <!-- Greeting -->
+                  <h2 style="margin:0 0 5px;color:#1a1a2e;font-size:22px;font-weight:700;">
+                    Bonjour ${customerName} !
+                  </h2>
+                  <p style="margin:0 0 25px;color:#6b7280;font-size:15px;line-height:1.6;">
+                    Merci d'avoir fait confiance à <strong style="color:${theme.primary};">${brandConfig.name}</strong> pour votre événement ! Nous espérons que vous avez passé un moment inoubliable.
+                  </p>
+
+                  ${hasPhotos ? `
+                  <!-- Photo preview -->
+                  <div style="margin:0 0 10px;">
+                    <p style="margin:0 0 8px;color:#1a1a2e;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
+                      Aperçu de vos photos
+                    </p>
+                  </div>
+                  ${photoGrid}
+                  <p style="margin:0 0 25px;color:#9ca3af;font-size:12px;text-align:center;font-style:italic;">
+                    ${remainingCount > 0 ? `et ${remainingCount} autres photos vous attendent...` : 'Vos souvenirs vous attendent !'}
+                  </p>
+                  ` : ''}
+
+                  <!-- CTA -->
+                  <table role="presentation" style="width:100%;border-collapse:collapse;">
+                    <tr>
+                      <td style="text-align:center;padding:10px 0 25px;">
+                        <a href="${publicUrl}"
+                           style="display:inline-block;background:${theme.gradient};color:white;padding:16px 40px;text-decoration:none;border-radius:50px;font-weight:700;font-size:16px;letter-spacing:0.3px;box-shadow:0 4px 15px rgba(230,10,129,0.3);">
+                          Accéder à ma galerie
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <!-- Review nudge -->
+                  <table role="presentation" style="width:100%;border-collapse:collapse;background-color:#fdf2f8;border-radius:12px;">
+                    <tr>
+                      <td style="padding:20px;text-align:center;">
+                        <p style="margin:0 0 5px;color:${theme.primary};font-size:14px;font-weight:700;">
+                          Votre avis compte !
+                        </p>
+                        <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5;">
+                          En partageant votre expérience, vous soutenez notre travail et aidez de futurs clients à nous découvrir. En remerciement, recevez vos photos instantanément !
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td style="background-color:#1a1a2e;padding:25px 30px;border-radius:0 0 16px 16px;text-align:center;">
+                  <p style="margin:0 0 8px;color:rgba(255,255,255,0.7);font-size:13px;">
+                    ${brandConfig.name} — ${theme.website}
+                  </p>
+                  <p style="margin:0;color:rgba(255,255,255,0.4);font-size:11px;">
+                    ${brandConfig.email}
+                  </p>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+
+  await transporter.sendMail({
+    from: `"${brandConfig.name}" <${brandConfig.email}>`,
+    to,
+    subject: `${brandConfig.name} — Vos photos vous attendent ! 📸`,
+    html,
+  });
+
+  console.log(`[Email] Mail avis (galerie) envoyé à ${to} via ${brand}`);
+}
+
+/**
  * Send the gallery link directly (no review page)
  */
 export async function sendGalleryDirectEmail(opts: {

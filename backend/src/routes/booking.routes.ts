@@ -20,6 +20,7 @@ import {
   deleteBooking,
   manualSendGallery,
   sendLinkEmail,
+  sendMailAvis,
   resetGalleryUrls,
   resetAllRatings,
   triggerDriveScan,
@@ -101,6 +102,9 @@ router.post('/bookings/:id/send-gallery', authenticate, requireAdmin, manualSend
 
 // Send review link email to customer
 router.post('/bookings/:id/send-link-email', authenticate, requireAdmin, sendLinkEmail);
+
+// Send old-style review email (photo preview + CTA "Accéder à ma galerie", sans app MyShootnbox)
+router.post('/bookings/:id/send-mail-avis', authenticate, requireAdmin, sendMailAvis);
 
 // Reset all gallery URLs (to force Drive folder recreation in monthly subfolders)
 router.post('/bookings/reset-gallery-urls', authenticate, requireAdmin, resetGalleryUrls);

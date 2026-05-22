@@ -194,6 +194,19 @@ export default function GaleriesClientsPage() {
     }
   };
 
+  const doSendMailAvis = async (booking: GalleryBooking, brand: 'SHOOTNBOX' | 'SMAKK', email: string) => {
+    setSending(true);
+    try {
+      await bookingsService.sendMailAvis(booking.id, email, brand);
+      toast.success(`Mail avis envoyé à ${email}`);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Erreur lors de l'envoi");
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleSaveEmail = async (booking: GalleryBooking, email: string) => {
     try {
       await bookingsService.update(booking.id, { customerEmail: email } as any);
@@ -401,7 +414,7 @@ export default function GaleriesClientsPage() {
               onCopyDrive={() => booking.galleryUrl && handleCopyDrive(booking.galleryUrl)}
               onCopyBrandUrl={(brand) => handleCopyBrandUrl(booking, brand)}
               onSendBrand={(brand, email) => handleSend(booking, brand, email)}
-              onSendMailAvis={(brand, email) => doSendReview(booking, brand, email)}
+              onSendMailAvis={(brand, email) => doSendMailAvis(booking, brand, email)}
               onSendDrive={(brand) => handleSendDrive(booking, brand)}
               onSaveEmail={(email) => handleSaveEmail(booking, email)}
               onSaveGalleryUrl={(url) => handleSaveGalleryUrl(booking, url)}

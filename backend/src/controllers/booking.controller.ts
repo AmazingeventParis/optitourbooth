@@ -9,7 +9,7 @@ import { processNewReview } from '../services/reviewMatching.service.js';
 import { fetchReview, parsePubSubMessage, isGoogleBusinessConfigured } from '../services/googleBusiness.service.js';
 import { isDriveConfigured, listFolderThumbnails, scanAndMatchDriveFolders } from '../services/googleDrive.service.js';
 import { syncCrmData, lastSyncResult } from '../services/crmSync.service.js';
-import { sendReviewLinkEmail, sendGalleryDirectEmail } from '../services/email.service.js';
+import { sendReviewLinkEmail, sendOldStyleReviewLinkEmail, sendGalleryDirectEmail } from '../services/email.service.js';
 import { notifyPhotosReady } from '../services/myShootnboxClient.service.js';
 
 // ===========================
@@ -879,6 +879,48 @@ export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) =>
     message: `Lien envoyé à ${email} via ${brand}`,
     publicUrl,
   });
+});
+
+/**
+ * POST /api/bookings/:id/send-mail-avis
+ * Envoie l'ancien mail avis (preview photos + bouton "Accéder à ma galerie")
+ * sans mention de l'app MyShootnbox ni badges stores.
+ */
+export const sendMailAvis = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { email, senderBrand } = req.body;
+
+  if (!email) {
+    return apiResponse.badRequest(res, 'Email requis');
+  }
+
+  const booking = await prisma.booking.findUnique({ where: { id } });
+  if (!booking) {
+    return apiResponse.notFound(res, 'Réservation introuvable');
+  }
+
+  const publicUrl = `${config.reviewSystem.publicBaseUrl}/${booking.publicToken}`;
+  const brand = (senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
+
+  try {
+    await sendOldStyleReviewLinkEmail({
+      to: email,
+      customerName: booking.customerName,
+      publicUrl,
+      galleryUrl: booking.galleryUrl,
+      brand,
+    });
+  } catch (err) {
+    console.error(`[Booking] Erreur envoi mail avis:`, err);
+    return apiResponse.serverError(res, `Erreur lors de l'envoi: ${(err as Error).message}`);
+  }
+
+  await prisma.booking.update({
+    where: { id },
+    data: { customerEmail: email },
+  });
+
+  return apiResponse.success(res, { message: `Mail avis envoyé à ${email} via ${brand}` });
 });
 
 /**
