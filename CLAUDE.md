@@ -245,7 +245,7 @@ Champs cles :
 ### Smakk
 - **URL CRM** : `https://www.smakk.fr/manager/`
 - **API JSON** : `https://www.smakk.fr/manager/_otb_orders.php?key=opti2026smk_x7kR9qNv` (pas de session, cle fixe)
-- **Readiness** : `https://www.smakk.fr/manager/_otb_readiness.php?key=opti2026smk_x7kR9qNv` → retourne `id`, `nom_event`, + champ livraison
+- **Readiness** : `POST https://smakk.fr/manager/readiness_ajax.php` (draw=1&start=0&length=500, sans auth) — champ `box_id` = colonne N (IDs bornes assignees ex: "R3/P"), champ `delivery` = type HTML. `_otb_readiness.php` n'existe PAS (retourne WordPress).
 - **Cron pending_points** : toutes les heures via `syncCrmPendingPoints()` dans `crmSync.service.ts`
 - **Filtre livraison** : filtre POSITIF sur `delivery_options` — doit contenir "livraison" ou "installation". Vide ou "Retrait Boutique" → exclu. Voir section "Regles de filtrage" ci-dessus.
 
@@ -255,6 +255,18 @@ Champs cles :
 - **Service** : `backend/src/services/email.service.ts`
 - **SMTP** : `smtp.office365.com:587` (STARTTLS) — partage entre les deux marques
 - **Deux marques** : `SHOOTNBOX` et `SMAKK`, chacune avec ses propres credentials
+
+### Fonctions email (email.service.ts)
+| Fonction | Bouton /galeries | Contenu |
+|----------|-----------------|---------|
+| `sendReviewLinkEmail` | **Envoyer Avis APP** | Shootnbox : phrase MyShootnbox + badges App Store/Google Play. Smakk : bouton CTA galerie. Met a jour emailSentAt + notifie MyShootnbox. |
+| `sendOldStyleReviewLinkEmail` | **Envoyer Avis Mail** | Les deux marques : preview photos + "et X autres photos vous attendent..." + bouton CTA "Acceder a ma galerie". Pas de mention app. |
+| `sendGalleryDirectEmail` | Envoyer Drive | Lien direct Drive (sans page avis) |
+
+### Endpoints backend
+- `POST /api/bookings/:id/send-link-email` → `sendReviewLinkEmail`
+- `POST /api/bookings/:id/send-mail-avis` → `sendOldStyleReviewLinkEmail`
+- `POST /api/bookings/:id/send-gallery` → `sendGalleryDirectEmail`
 
 ### Variables d'environnement (Coolify)
 | Variable | Valeur |
