@@ -343,17 +343,24 @@ function buildAlbumRecords(
 }
 
 // ─── Smakk readiness API ─────────────────────────────────────────
-// Returns Map<orderId, { eventName, deliveryType }> from _otb_readiness.php
-// deliveryType = colonne "Livraison" de readiness.php (ex: "Livraison", "Retrait boutique", "Chronopost")
+// Returns Map<orderId, { eventName, deliveryType, borne }> from _otb_readiness.php
+// deliveryType = colonne "Livraison" (ex: "Livraison", "Retrait boutique", "Chronopost")
+// borne        = colonne "N" = IDs de bornes assignées (ex: "S01,S02" → 2 machines)
 
-async function fetchSmakkReadiness(signal?: AbortSignal): Promise<Map<string, { eventName: string; deliveryType: string }>> {
-  const map = new Map<string, { eventName: string; deliveryType: string }>();
+async function fetchSmakkReadiness(signal?: AbortSignal): Promise<Map<string, { eventName: string; deliveryType: string; borne: string }>> {
+  const map = new Map<string, { eventName: string; deliveryType: string; borne: string }>();
   try {
     const url = `https://www.smakk.fr/manager/_otb_readiness.php?key=${SMAKK_API_KEY}`;
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) return map;
     const data = await response.json() as any;
-    for (const row of (data.data || data || [])) {
+    const rows: any[] = data.data || data || [];
+    // Log the available fields from the first row to identify the N column
+    if (rows.length > 0) {
+      console.log('[CRM PendingPoints Smakk] readiness fields:', Object.keys(rows[0]));
+      console.log('[CRM PendingPoints Smakk] readiness row[0]:', JSON.stringify(rows[0]));
+    }
+    for (const row of rows) {
       const id = String(row.id || '').trim();
       if (!id) continue;
       const name = (row.nom_event || row.event_name || row.eventName || '').trim();
@@ -362,7 +369,12 @@ async function fetchSmakkReadiness(signal?: AbortSignal): Promise<Map<string, { 
         row.livraison || row.delivery || row.delivery_type ||
         row.type_livraison || row.type_delivery || ''
       ).trim();
-      map.set(id, { eventName: name, deliveryType });
+      // Colonne "N" = bornes assignées : essayer plusieurs noms de champ possibles
+      const borne = String(
+        row.box_id || row.bornes || row.machines || row.borne ||
+        row.num_borne || row.machine_ids || row.n || ''
+      ).trim();
+      map.set(id, { eventName: name, deliveryType, borne });
     }
   } catch {
     // Endpoint optionnel — pas bloquant
@@ -1205,6 +1217,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
 
       const readinessEntry = smakkReadinessMap.get(order.orderId);
       const smkEventName = readinessEntry?.eventName || null;
+      const smkBorneRaw = readinessEntry?.borne || '';
+      const smkQuantiteBornes = smkBorneRaw ? smkBorneRaw.split(',').filter(Boolean).length : 1;
 
       // Filtre colonne "Livraison" de readiness.php
       if (readinessEntry && readinessEntry.deliveryType) {
@@ -1245,19 +1259,24 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             creneauFin: creneauFinLiv,
             contactNom,
             contactTelephone,
+            quantiteBornes: smkQuantiteBornes,
           }});
           result.created++;
-          console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} livraison ${livDateISO}${ic ? ' (info client)' : ''}`);
-        } else if (!existingLiv.manuallyEdited) {
+          console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} livraison ${livDateISO} (×${smkQuantiteBornes})${ic ? ' (info client)' : ''}`);
+        } else {
           await prisma.pendingPoint.update({ where: { id: existingLiv.id }, data: {
-            date: ensureDateUTC(livDateISO),
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
-            adresse,
-            creneauDebut: creneauDebutLiv,
-            creneauFin: creneauFinLiv,
-            contactNom,
-            contactTelephone,
+            quantiteBornes: smkQuantiteBornes,
+            dispatched: false,
+            ...(!existingLiv.manuallyEdited && {
+              date: ensureDateUTC(livDateISO),
+              adresse,
+              creneauDebut: creneauDebutLiv,
+              creneauFin: creneauFinLiv,
+              contactNom,
+              contactTelephone,
+            }),
           }});
         }
       } catch (e: any) { result.errors.push(`Smakk livraison ${order.orderId}: ${e.message}`); }
@@ -1279,19 +1298,24 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             creneauFin: creneauFinRec,
             contactNom: contactNomRec,
             contactTelephone,
+            quantiteBornes: smkQuantiteBornes,
           }});
           result.created++;
-          console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} ramassage ${recDateISO}${ic ? ' (info client)' : ''}`);
-        } else if (!existingRec.manuallyEdited) {
+          console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} ramassage ${recDateISO} (×${smkQuantiteBornes})${ic ? ' (info client)' : ''}`);
+        } else {
           await prisma.pendingPoint.update({ where: { id: existingRec.id }, data: {
-            date: ensureDateUTC(recDateISO),
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
-            adresse,
-            creneauDebut: creneauDebutRec,
-            creneauFin: creneauFinRec,
-            contactNom: contactNomRec,
-            contactTelephone,
+            quantiteBornes: smkQuantiteBornes,
+            dispatched: false,
+            ...(!existingRec.manuallyEdited && {
+              date: ensureDateUTC(recDateISO),
+              adresse,
+              creneauDebut: creneauDebutRec,
+              creneauFin: creneauFinRec,
+              contactNom: contactNomRec,
+              contactTelephone,
+            }),
           }});
         }
       } catch (e: any) { result.errors.push(`Smakk ramassage ${order.orderId}: ${e.message}`); }
