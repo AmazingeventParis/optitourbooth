@@ -860,17 +860,19 @@ export const sendLinkEmail = asyncHandler(async (req: Request, res: Response) =>
   // EN PARALLELE : notifier MyShootnbox pour declencher le pipe d'avis in-app
   // (fire-and-forget, ne bloque pas la response). Si l'app est installee sur le tel
   // de l'hote, il recoit une push notif "Vos photos sont pretes" + ecran 5 etoiles.
-  // Sinon (app pas installee, ou num_id non lie a un event MyShootnbox) : skip silencieux.
-  if (booking.numId && booking.galleryUrl) {
+  // On n'exige plus la galleryUrl (qui peut etre vide pour les anciennes reservations
+  // ou si Drive n'est pas encore prêt) : on utilise un fallback "tbd" (côté app, la
+  // gallery_url n'est plus affichée nulle part — l'user voit ses photos dans l'app).
+  if (booking.numId) {
     notifyPhotosReady({
       num_id: booking.numId,
-      gallery_url: booking.galleryUrl,
+      gallery_url: booking.galleryUrl || 'pending_in_app',
       photo_count: booking.photoCount ?? 0,
       brand: brand === 'SMAKK' ? 'smakk' : 'shootnbox',
       booking_id: booking.id,
     }).catch(err => console.error('[Booking] notifyPhotosReady failed:', err));
   } else {
-    console.log(`[Booking] Skip MyShootnbox notify (numId=${booking.numId}, galleryUrl=${booking.galleryUrl ? 'set' : 'null'})`);
+    console.log(`[Booking] Skip MyShootnbox notify (numId vide)`);
   }
 
   return apiResponse.success(res, {
