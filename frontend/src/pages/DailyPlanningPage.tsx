@@ -365,6 +365,11 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
             R
           </span>
         )}
+        {point.quantiteBornes && point.quantiteBornes > 1 && (
+          <span className="px-1 py-0.5 text-[9px] font-bold rounded flex-shrink-0 bg-purple-100 text-purple-700 border border-purple-300" title={`${point.quantiteBornes} bornes`}>
+            ×{point.quantiteBornes}
+          </span>
+        )}
         {point.attachments && point.attachments.length > 0 && (
           <PaperClipIcon className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" title={`${point.attachments.length} pièce(s) jointe(s)`} />
         )}
@@ -1882,6 +1887,7 @@ export default function DailyPlanningPage() {
           produitFound: !!matchedProduit,
           errors: !matchedProduit && bp.produitNom ? [`Produit "${bp.produitNom}" non trouvé`] : [],
           _backendId: bp.id,
+          quantiteBornes: bp.quantiteBornes && bp.quantiteBornes > 1 ? bp.quantiteBornes : undefined,
           attachments: Array.isArray(bp.attachments) ? bp.attachments : [],
         };
       });

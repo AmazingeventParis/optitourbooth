@@ -104,6 +104,7 @@ export interface ImportParsedPoint {
   produitFound: boolean;
   errors: string[];
   _backendId?: string; // ID du PendingPoint backend (Google Calendar, etc.)
+  quantiteBornes?: number;
   attachments?: Array<{ fileId: string | null; title: string; mimeType: string; iconLink: string | null; fileUrl: string | null }>;
 }
 

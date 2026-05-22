@@ -961,7 +961,10 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       const livExt = `snb_order_${order.orderId}_livraison`;
       const recExt = `snb_order_${order.orderId}_ramassage`;
 
-      const eventName = readinessMap.get(order.orderId)?.eventName || null;
+      const readinessEntry = readinessMap.get(order.orderId);
+      const eventName = readinessEntry?.eventName || null;
+      const borneRaw = readinessEntry?.borne || '';
+      const quantiteBornes = borneRaw ? borneRaw.split(',').filter(Boolean).length : 1;
 
       // ── Livraison ──
       try {
@@ -982,18 +985,20 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               contactNom: parsedLiv?.contactNom || null,
               contactTelephone: parsedLiv?.contactTelephone || null,
               notes: parsedLiv?.notes || null,
+              quantiteBornes,
               manuallyEdited: !!form,
             },
           });
           result.created++;
           if (form) result.enriched++;
-          console.log(`[CRM PendingPoints] + ${order.clientName}${eventName ? ` (${eventName})` : ''} livraison ${livDate}`);
+          console.log(`[CRM PendingPoints] + ${order.clientName}${eventName ? ` (${eventName})` : ''} livraison ${livDate} (×${quantiteBornes})`);
         } else if (!existingLiv.manuallyEdited) {
           await prisma.pendingPoint.update({
             where: { id: existingLiv.id },
             data: {
               clientName: order.clientName,
               ...(eventName && { eventName }),
+              quantiteBornes,
               ...(form && parsedLiv && {
                 ...(parsedLiv.adresse && { adresse: parsedLiv.adresse }),
                 ...(parsedLiv.creneauDebut && { creneauDebut: parsedLiv.creneauDebut }),
@@ -1031,12 +1036,13 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
                 contactNom: parsedRec?.contactNom || null,
                 contactTelephone: parsedRec?.contactTelephone || null,
                 notes: parsedRec?.notes || null,
+                quantiteBornes,
                 manuallyEdited: !!form,
               },
             });
             result.created++;
             if (form) result.enriched++;
-            console.log(`[CRM PendingPoints] + ${order.clientName}${eventName ? ` (${eventName})` : ''} ramassage ${recDate}`);
+            console.log(`[CRM PendingPoints] + ${order.clientName}${eventName ? ` (${eventName})` : ''} ramassage ${recDate} (×${quantiteBornes})`);
           }
         } else if (!existingRec.manuallyEdited) {
           await prisma.pendingPoint.update({
@@ -1044,6 +1050,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             data: {
               clientName: order.clientName,
               ...(eventName && { eventName }),
+              quantiteBornes,
               ...(form && parsedRec && {
                 ...(parsedRec.adresse && { adresse: parsedRec.adresse }),
                 ...(parsedRec.creneauDebut && { creneauDebut: parsedRec.creneauDebut }),
@@ -1292,7 +1299,59 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     result.errors.push(e.message || 'Erreur inattendue');
   }
 
-  // ── Post-processing : détecter les vrais doublons CRM ↔ Google Calendar ──
+  // ── Post-processing A : CRM prime sur GCal (Option B) ──
+  // Si un point CRM (non-dispatché) existe pour (date, type, clientName) → dispatcher tous les points
+  // google_calendar correspondants non-dispatchés (doublons multi-bornes, ex: 4 events GCal → 1 point CRM ×4)
+  try {
+    const ppToday2 = new Date(); ppToday2.setUTCHours(0, 0, 0, 0);
+    const horizon2 = new Date(ppToday2); horizon2.setDate(horizon2.getDate() + 60);
+
+    const crmActive = await prisma.pendingPoint.findMany({
+      where: {
+        source: { in: ['crm_shootnbox', 'crm_smakk'] },
+        dispatched: false,
+        date: { gte: ppToday2, lte: horizon2 },
+      },
+      select: { date: true, clientName: true, type: true },
+    });
+
+    if (crmActive.length > 0) {
+      const gcalPending = await prisma.pendingPoint.findMany({
+        where: {
+          source: 'google_calendar',
+          dispatched: false,
+          date: { gte: ppToday2, lte: horizon2 },
+        },
+        select: { id: true, date: true, clientName: true, type: true, externalId: true },
+      });
+
+      const toDispatch: string[] = [];
+      for (const gc of gcalPending) {
+        const gcDate = gc.date.toISOString().substring(0, 10);
+        const gcNorm = normalizeForMatch(gc.clientName);
+        const hasCrmMatch = crmActive.some((c: { date: Date; clientName: string; type: string }) => {
+          if (c.date.toISOString().substring(0, 10) !== gcDate) return false;
+          if (c.type !== gc.type) return false;
+          const cNorm = normalizeForMatch(c.clientName);
+          return gcNorm && cNorm && (gcNorm.includes(cNorm) || cNorm.includes(gcNorm));
+        });
+        if (hasCrmMatch) toDispatch.push(gc.id);
+      }
+
+      if (toDispatch.length > 0) {
+        await prisma.pendingPoint.updateMany({
+          where: { id: { in: toDispatch } },
+          data: { dispatched: true },
+        });
+        result.autoDispatched += toDispatch.length;
+        console.log(`[CRM PendingPoints] ✓ ${toDispatch.length} point(s) GCal dispatchés (remplacés par point CRM multi-bornes)`);
+      }
+    }
+  } catch (e: any) {
+    console.warn('[CRM PendingPoints] Post-processing CRM→GCal dedup failed:', e.message);
+  }
+
+  // ── Post-processing B : détecter les vrais doublons CRM ↔ Google Calendar ──
   // Condition : un point google_calendar dispatché existe pour la même (date exacte, type, client similaire).
   // On NE matche PAS les tournées directement pour éviter les faux positifs.
   try {

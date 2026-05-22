@@ -807,6 +807,7 @@ model PendingPoint {
   manuallyEdited    Boolean  @default(false) @map("manually_edited")
   usedInPreparation    Boolean  @default(false) @map("used_in_preparation")
   ignoredInPreparation Boolean  @default(false) @map("ignored_in_preparation")
+  quantiteBornes       Int      @default(1) @map("quantite_bornes")
   suggestedMachineId   String?  @map("suggested_machine_id")
   suggestedMachine     Machine? @relation(fields: [suggestedMachineId], references: [id])
   attachments          Json?    @default("[]")
