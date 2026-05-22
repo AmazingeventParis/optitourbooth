@@ -14,6 +14,7 @@ import {
   XMarkIcon,
   MagnifyingGlassIcon,
   ChatBubbleLeftEllipsisIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
@@ -400,6 +401,7 @@ export default function GaleriesClientsPage() {
               onCopyDrive={() => booking.galleryUrl && handleCopyDrive(booking.galleryUrl)}
               onCopyBrandUrl={(brand) => handleCopyBrandUrl(booking, brand)}
               onSendBrand={(brand, email) => handleSend(booking, brand, email)}
+              onSendMailAvis={(brand, email) => doSendReview(booking, brand, email)}
               onSendDrive={(brand) => handleSendDrive(booking, brand)}
               onSaveEmail={(email) => handleSaveEmail(booking, email)}
               onSaveGalleryUrl={(url) => handleSaveGalleryUrl(booking, url)}
@@ -447,12 +449,13 @@ export default function GaleriesClientsPage() {
   );
 }
 
-function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, onSendDrive, onSaveEmail, onSaveGalleryUrl, sending }: {
+function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand, onSendMailAvis, onSendDrive, onSaveEmail, onSaveGalleryUrl, sending }: {
   booking: GalleryBooking;
   onRename: (newName: string) => void;
   onCopyDrive: () => void;
   onCopyBrandUrl: (brand: 'SHOOTNBOX' | 'SMAKK') => void;
   onSendBrand: (brand: 'SHOOTNBOX' | 'SMAKK', email: string) => void;
+  onSendMailAvis: (brand: 'SHOOTNBOX' | 'SMAKK', email: string) => void;
   onSendDrive: (brand: 'SHOOTNBOX' | 'SMAKK') => void;
   onSaveEmail: (email: string) => void;
   onSaveGalleryUrl: (url: string) => void;
@@ -600,6 +603,7 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
             onSendDrive={() => onSendDrive('SHOOTNBOX')}
             onCopyUrl={() => onCopyBrandUrl('SHOOTNBOX')}
             onSendUrl={() => handleSendBrand('SHOOTNBOX')}
+            onSendMailAvis={() => { const email = emailValue.trim(); if (!email) { toast.error("Saisissez un email d'abord"); return; } onSendMailAvis('SHOOTNBOX', email); }}
           />
         ) : (
           <BrandActions
@@ -610,6 +614,7 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
             onSendDrive={() => onSendDrive('SMAKK')}
             onCopyUrl={() => onCopyBrandUrl('SMAKK')}
             onSendUrl={() => handleSendBrand('SMAKK')}
+            onSendMailAvis={() => { const email = emailValue.trim(); if (!email) { toast.error("Saisissez un email d'abord"); return; } onSendMailAvis('SMAKK', email); }}
           />
         )}
 
@@ -646,7 +651,7 @@ function EventCard({ booking, onRename, onCopyDrive, onCopyBrandUrl, onSendBrand
   );
 }
 
-function BrandActions({ brand, sending, hasEmail, hasGallery, onSendDrive, onCopyUrl, onSendUrl }: {
+function BrandActions({ brand, sending, hasEmail, hasGallery, onSendDrive, onCopyUrl, onSendUrl, onSendMailAvis }: {
   brand: 'SHOOTNBOX' | 'SMAKK';
   sending: boolean;
   hasEmail: boolean;
@@ -654,6 +659,7 @@ function BrandActions({ brand, sending, hasEmail, hasGallery, onSendDrive, onCop
   onSendDrive: () => void;
   onCopyUrl: () => void;
   onSendUrl: () => void;
+  onSendMailAvis: () => void;
 }) {
   const isSnb = brand === 'SHOOTNBOX';
   const label = isSnb ? 'Shootnbox' : 'Smakk';
@@ -679,6 +685,10 @@ function BrandActions({ brand, sending, hasEmail, hasGallery, onSendDrive, onCop
       <button onClick={onSendUrl} disabled={sending || !hasEmail}
         className={clsx('w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold transition-colors', outlineCls)}>
         <PaperAirplaneIcon className="h-3.5 w-3.5" /> Envoyer Avis
+      </button>
+      <button onClick={onSendMailAvis} disabled={sending || !hasEmail}
+        className={clsx('w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold transition-colors', outlineCls)}>
+        <EnvelopeIcon className="h-3.5 w-3.5" /> Envoyer Mail Avis
       </button>
     </div>
   );
