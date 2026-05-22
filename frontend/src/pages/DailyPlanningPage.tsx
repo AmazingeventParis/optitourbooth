@@ -1628,6 +1628,9 @@ export default function DailyPlanningPage() {
   // Cache des coordonnées clients pour les points à dispatcher
   const clientCoordsCacheRef = useRef<Map<string, { latitude: number; longitude: number }>>(new Map());
   const [clientCoordsVersion, setClientCoordsVersion] = useState(0); // Force re-render when cache updates
+  // Cache géocodage par adresse (livraison/ramassage peuvent avoir des adresses différentes pour le même client)
+  const adresseCoordsRef = useRef<Map<string, { latitude: number; longitude: number }>>(new Map());
+  const [adresseCoordsVersion, setAdresseCoordsVersion] = useState(0);
 
   // Modal création tournée
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -2090,6 +2093,40 @@ export default function DailyPlanningPage() {
     };
   }, [token, setConnected, updateChauffeurPosition, setAllPositions]);
 
+  // Géocoder les adresses spécifiques des pending points via BAN (indépendant du cache client)
+  useEffect(() => {
+    const cache = adresseCoordsRef.current;
+    const adressesToLoad = pendingPoints
+      .filter(p => p.adresse && !cache.has(p.adresse))
+      .map(p => p.adresse!)
+      .filter((a, i, arr) => arr.indexOf(a) === i);
+
+    if (adressesToLoad.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      let updated = false;
+      for (const adresse of adressesToLoad) {
+        if (cancelled) break;
+        try {
+          const params = new URLSearchParams({ q: adresse, limit: '1' });
+          const res = await fetch(`https://api-adresse.data.gouv.fr/search/?${params}`);
+          if (!res.ok) continue;
+          const data = await res.json() as { features?: Array<{ geometry: { coordinates: [number, number] } }> };
+          const feat = data.features?.[0];
+          if (feat) {
+            const [lng, lat] = feat.geometry.coordinates;
+            cache.set(adresse, { latitude: lat, longitude: lng });
+            updated = true;
+          }
+        } catch { /* ignore */ }
+      }
+      if (updated && !cancelled) setAdresseCoordsVersion(v => v + 1);
+    })();
+
+    return () => { cancelled = true; };
+  }, [pendingPoints]);
+
   // Charger les coordonnées des clients pour les points à dispatcher
   useEffect(() => {
     const loadClientCoords = async () => {
@@ -2139,13 +2176,15 @@ export default function DailyPlanningPage() {
 
   // Créer les points à dispatcher avec coordonnées pour la carte
   const pendingPointsWithCoords = useMemo((): PendingPointWithCoords[] => {
-    // clientCoordsVersion force le recalcul quand le cache est mis à jour
     void clientCoordsVersion;
-    const cache = clientCoordsCacheRef.current;
+    void adresseCoordsVersion;
+    const clientCache = clientCoordsCacheRef.current;
+    const adresseCache = adresseCoordsRef.current;
     const result: PendingPointWithCoords[] = [];
     pendingPoints.forEach((point, index) => {
       if (!point.clientId || !point.clientFound) return;
-      const coords = cache.get(point.clientId);
+      // Préférer les coordonnées de l'adresse spécifique (livraison ≠ ramassage pour le même client)
+      const coords = (point.adresse && adresseCache.get(point.adresse)) || clientCache.get(point.clientId);
       if (!coords) return;
 
       result.push({
@@ -2162,7 +2201,7 @@ export default function DailyPlanningPage() {
       });
     });
     return result;
-  }, [pendingPoints, clientCoordsVersion]);
+  }, [pendingPoints, clientCoordsVersion, adresseCoordsVersion]);
 
   // Transformer les positions des chauffeurs avec infos pour la carte
   const chauffeurPositionsWithInfo = useMemo((): ChauffeurPositionWithInfo[] => {
