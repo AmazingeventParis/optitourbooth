@@ -992,14 +992,15 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           result.created++;
           if (form) result.enriched++;
           console.log(`[CRM PendingPoints] + ${order.clientName}${eventName ? ` (${eventName})` : ''} livraison ${livDate} (×${quantiteBornes})`);
-        } else if (!existingLiv.manuallyEdited) {
+        } else {
           await prisma.pendingPoint.update({
             where: { id: existingLiv.id },
             data: {
               clientName: order.clientName,
               ...(eventName && { eventName }),
               quantiteBornes,
-              ...(form && parsedLiv && {
+              dispatched: false,
+              ...(!existingLiv.manuallyEdited && form && parsedLiv && {
                 ...(parsedLiv.adresse && { adresse: parsedLiv.adresse }),
                 ...(parsedLiv.creneauDebut && { creneauDebut: parsedLiv.creneauDebut }),
                 ...(parsedLiv.creneauFin && { creneauFin: parsedLiv.creneauFin }),
@@ -1044,14 +1045,15 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             if (form) result.enriched++;
             console.log(`[CRM PendingPoints] + ${order.clientName}${eventName ? ` (${eventName})` : ''} ramassage ${recDate} (×${quantiteBornes})`);
           }
-        } else if (!existingRec.manuallyEdited) {
+        } else {
           await prisma.pendingPoint.update({
             where: { id: existingRec.id },
             data: {
               clientName: order.clientName,
               ...(eventName && { eventName }),
               quantiteBornes,
-              ...(form && parsedRec && {
+              dispatched: false,
+              ...(!existingRec.manuallyEdited && form && parsedRec && {
                 ...(parsedRec.adresse && { adresse: parsedRec.adresse }),
                 ...(parsedRec.creneauDebut && { creneauDebut: parsedRec.creneauDebut }),
                 ...(parsedRec.creneauFin && { creneauFin: parsedRec.creneauFin }),
@@ -1300,11 +1302,10 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   }
 
   // ── Post-processing A : CRM prime sur GCal (Option B) ──
-  // Si un point CRM (non-dispatché) existe pour (date, type, clientName) → dispatcher tous les points
+  // Si un point CRM (non-dispatché) existe pour (date, type, clientName) → soft-delete les points
   // google_calendar correspondants non-dispatchés (doublons multi-bornes, ex: 4 events GCal → 1 point CRM ×4)
-  // On mémorise les IDs dispatchés ici pour que Post-processing B ne les réutilise pas comme prétexte
-  // pour dispatcher en retour les points CRM.
-  const gcalDispatchedByDedupA = new Set<string>();
+  // On marque deletedByUser=true pour que Post-processing B (qui filtre sur deletedByUser=false)
+  // ne les utilise jamais comme prétexte pour dispatcher les points CRM en retour.
   try {
     const ppToday2 = new Date(); ppToday2.setUTCHours(0, 0, 0, 0);
     const horizon2 = new Date(ppToday2); horizon2.setDate(horizon2.getDate() + 60);
@@ -1323,12 +1324,13 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         where: {
           source: 'google_calendar',
           dispatched: false,
+          deletedByUser: false,
           date: { gte: ppToday2, lte: horizon2 },
         },
         select: { id: true, date: true, clientName: true, type: true, externalId: true },
       });
 
-      const toDispatch: string[] = [];
+      const toSupersede: string[] = [];
       for (const gc of gcalPending) {
         const gcDate = gc.date.toISOString().substring(0, 10);
         const gcNorm = normalizeForMatch(gc.clientName);
@@ -1338,17 +1340,16 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           const cNorm = normalizeForMatch(c.clientName);
           return gcNorm && cNorm && (gcNorm.includes(cNorm) || cNorm.includes(gcNorm));
         });
-        if (hasCrmMatch) toDispatch.push(gc.id);
+        if (hasCrmMatch) toSupersede.push(gc.id);
       }
 
-      if (toDispatch.length > 0) {
+      if (toSupersede.length > 0) {
         await prisma.pendingPoint.updateMany({
-          where: { id: { in: toDispatch } },
-          data: { dispatched: true },
+          where: { id: { in: toSupersede } },
+          data: { dispatched: true, deletedByUser: true },
         });
-        toDispatch.forEach(id => gcalDispatchedByDedupA.add(id));
-        result.autoDispatched += toDispatch.length;
-        console.log(`[CRM PendingPoints] ✓ ${toDispatch.length} point(s) GCal dispatchés (remplacés par point CRM multi-bornes)`);
+        result.autoDispatched += toSupersede.length;
+        console.log(`[CRM PendingPoints] ✓ ${toSupersede.length} point(s) GCal supprimés (remplacés par point CRM multi-bornes)`);
       }
     }
   } catch (e: any) {
@@ -1356,9 +1357,9 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   }
 
   // ── Post-processing B : détecter les vrais doublons CRM ↔ Google Calendar ──
-  // Condition : un point google_calendar dispatché (réellement en tournée) existe pour la même
-  // (date exacte, type, client similaire). Exclut les points dispatchés par Post-processing A
-  // pour éviter de dispatcher en retour les points CRM qu'on vient de créer.
+  // Condition : un point google_calendar réellement en tournée (dispatched=true, deletedByUser=false)
+  // existe pour la même (date exacte, type, client similaire).
+  // deletedByUser=false exclut les points soft-deletés par Post-processing A.
   try {
     const ppToday = new Date(); ppToday.setUTCHours(0, 0, 0, 0);
     const horizon = new Date(ppToday); horizon.setDate(horizon.getDate() + 60);
@@ -1373,14 +1374,13 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     });
 
     if (crmNonDispatched.length > 0) {
-      // Charger les points google_calendar dispatchés, en excluant ceux dispatchés par Post-processing A
-      const excludeIds = [...gcalDispatchedByDedupA];
+      // Charger uniquement les points GCal réellement en tournée (dispatched=true, deletedByUser=false)
       const gcalDispatched = await prisma.pendingPoint.findMany({
         where: {
           source: 'google_calendar',
           dispatched: true,
+          deletedByUser: false,
           date: { gte: ppToday, lte: horizon },
-          ...(excludeIds.length > 0 && { id: { notIn: excludeIds } }),
         },
         select: { date: true, clientName: true, type: true, externalId: true },
       });

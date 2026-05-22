@@ -265,7 +265,7 @@ export async function deletePendingPoint(req: Request, res: Response): Promise<v
  */
 export async function updatePendingPoint(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
-  const { clientName, adresse, type, date, creneauDebut, creneauFin, contactNom, contactTelephone, notes, produitNom, dispatched } = req.body;
+  const { clientName, adresse, type, date, creneauDebut, creneauFin, contactNom, contactTelephone, notes, produitNom, dispatched, quantiteBornes } = req.body;
 
   try {
     const updated = await prisma.pendingPoint.update({
@@ -282,6 +282,7 @@ export async function updatePendingPoint(req: Request, res: Response): Promise<v
         ...(notes !== undefined && { notes }),
         ...(produitNom !== undefined && { produitNom }),
         ...(dispatched !== undefined && { dispatched }),
+        ...(quantiteBornes !== undefined && { quantiteBornes }),
         // Dès qu'un utilisateur modifie un champ, verrouiller contre la sync automatique
         manuallyEdited: true,
       },
