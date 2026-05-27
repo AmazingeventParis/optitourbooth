@@ -147,11 +147,11 @@ const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus
   const client = point.client as Client | undefined;
   const produits = point.produits as PointProduit[] | undefined;
 
-  const typeConfig = {
+  const typeConfig = ({
     livraison: { letter: 'L', color: 'text-green-700 bg-green-100' },
     ramassage: { letter: 'R', color: 'text-blue-700 bg-blue-100' },
     livraison_ramassage: { letter: 'L+R', color: 'text-purple-700 bg-purple-100' },
-  }[point.type];
+  } as Record<string, { letter: string; color: string }>)[point.type] ?? { letter: 'L', color: 'text-green-700 bg-green-100' };
 
   // Obtenir le premier produit
   const firstProduct = produits?.[0]?.produit as Produit | undefined;
