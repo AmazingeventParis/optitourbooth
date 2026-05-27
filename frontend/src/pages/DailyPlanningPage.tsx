@@ -122,11 +122,10 @@ interface TimelinePointProps {
   isSelected?: boolean;
   isHorsForfait?: boolean;
   hasHfEntry?: boolean;
-  isRecuperation?: boolean;
   onSelect?: (pointId: string) => void;
 }
 
-const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus, isOverlay, isSelected, isHorsForfait, hasHfEntry, isRecuperation, onSelect }: TimelinePointProps) {
+const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus, isOverlay, isSelected, isHorsForfait, hasHfEntry, onSelect }: TimelinePointProps) {
   const {
     attributes,
     listeners,
@@ -213,11 +212,7 @@ const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus
             HF
           </span>
         )}
-        {isRecuperation && (
-          <span className="px-1 py-0.5 text-[9px] font-bold rounded flex-shrink-0 bg-indigo-500 text-white" title="Récupération">
-            R
-          </span>
-        )}
+
       </div>
       {/* Ligne 2: produit + créneau */}
       <div className="flex items-center gap-1.5 mt-1 text-[11px] text-gray-600">
@@ -763,35 +758,6 @@ const isPointHorsForfait = (
   }
 };
 
-const isPointRecuperation = (
-  point: Point,
-  chauffeurId: string,
-  billingConfigs: UserBillingConfig[]
-): boolean => {
-  const config = billingConfigs.find(c => c.userId === chauffeurId);
-  if (!config) return false;
-
-  const timeStr = point.creneauDebut || point.heureArriveeEstimee || point.creneauFin;
-  if (!timeStr) return false;
-
-  const pointMinutes = timeToMinutes(timeStr);
-  if (pointMinutes === null) return false;
-
-  const ranges: Array<{ debut: string; fin: string }> = [];
-  if (config.config.recuperationDebut && config.config.recuperationFin) {
-    ranges.push({ debut: config.config.recuperationDebut, fin: config.config.recuperationFin });
-  }
-  if (config.config.recuperationDebut2 && config.config.recuperationFin2) {
-    ranges.push({ debut: config.config.recuperationDebut2, fin: config.config.recuperationFin2 });
-  }
-
-  for (const r of ranges) {
-    const rd = timeToMinutes(r.debut);
-    const rf = timeToMinutes(r.fin);
-    if (rd !== null && rf !== null && pointMinutes >= rd && pointMinutes <= rf) return true;
-  }
-  return false;
-};
 
 // Formate l'ETA du backend en "HHhMM"
 const formatETAFromBackend = (heureArriveeEstimee: string | undefined): string | null => {
@@ -1202,7 +1168,6 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
                   point.creneauFin
                 );
                 const hf = billingConfigs ? isPointHorsForfait(point, tournee.chauffeurId, billingConfigs) : false;
-                const recup = billingConfigs ? isPointRecuperation(point, tournee.chauffeurId, billingConfigs) : false;
                 return (
                   <TimelinePoint
                     key={point.id}
@@ -1212,7 +1177,6 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
                     isSelected={selectedPointId === point.id}
                     isHorsForfait={hf}
                     hasHfEntry={!!pointHfEntries?.[point.id]}
-                    isRecuperation={recup}
                     onSelect={(id) => onSelectPoint?.(selectedPointId === id ? null : id)}
                   />
                 );
