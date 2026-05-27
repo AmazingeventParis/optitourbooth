@@ -1038,7 +1038,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               clientName: order.clientName,
               ...(eventName && { eventName }),
               quantiteBornes,
-              dispatched: false,
               ...(form && parsedLiv?.adresse && { adresse: parsedLiv.adresse }),
               ...(!existingLiv.manuallyEdited && form && parsedLiv && {
                 ...(parsedLiv.creneauDebut && { creneauDebut: parsedLiv.creneauDebut }),
@@ -1091,7 +1090,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               clientName: order.clientName,
               ...(eventName && { eventName }),
               quantiteBornes,
-              dispatched: false,
               ...(form && parsedRec?.adresse && { adresse: parsedRec.adresse }),
               ...(!existingRec.manuallyEdited && form && parsedRec && {
                 ...(parsedRec.creneauDebut && { creneauDebut: parsedRec.creneauDebut }),
@@ -1295,7 +1293,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
             quantiteBornes: smkQuantiteBornes,
-            dispatched: false,
             ...(!existingLiv.manuallyEdited && {
               date: ensureDateUTC(livDateISO),
               adresse,
@@ -1334,7 +1331,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
             quantiteBornes: smkQuantiteBornes,
-            dispatched: false,
             ...(!existingRec.manuallyEdited && {
               date: ensureDateUTC(recDateISO),
               adresse,
