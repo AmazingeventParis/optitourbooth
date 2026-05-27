@@ -148,9 +148,9 @@ const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus
   const produits = point.produits as PointProduit[] | undefined;
 
   const typeConfig = {
-    livraison: { label: 'Liv.', icon: ArrowDownTrayIcon, color: 'text-green-600 bg-green-50' },
-    ramassage: { label: 'Ram.', icon: ArrowUpTrayIcon, color: 'text-blue-600 bg-blue-50' },
-    livraison_ramassage: { label: 'L+R', icon: WrenchScrewdriverIcon, color: 'text-purple-600 bg-purple-50' },
+    livraison: { letter: 'L', color: 'text-green-700 bg-green-100' },
+    ramassage: { letter: 'R', color: 'text-blue-700 bg-blue-100' },
+    livraison_ramassage: { letter: 'L+R', color: 'text-purple-700 bg-purple-100' },
   }[point.type];
 
   // Obtenir le premier produit
@@ -196,12 +196,12 @@ const TimelinePoint = memo(function TimelinePoint({ point, tourneeId, timeStatus
         <div className="font-medium text-xs truncate flex-1">
           {client?.nom || 'Client inconnu'}
         </div>
-        <div className={clsx(
-          'flex items-center font-medium px-1 py-0.5 rounded flex-shrink-0',
+        <span className={clsx(
+          'px-1 py-0.5 text-[10px] font-bold rounded flex-shrink-0',
           typeConfig.color
         )}>
-          <typeConfig.icon className="h-3.5 w-3.5" />
-        </div>
+          {typeConfig.letter}
+        </span>
         {isHorsForfait && (
           <span className={clsx(
             'px-1 py-0.5 text-[9px] font-bold rounded flex-shrink-0',
@@ -259,9 +259,9 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
   };
 
   const typeConfigs = {
-    livraison: { label: 'Liv.', icon: ArrowDownTrayIcon, color: 'text-green-600 bg-green-50' },
-    ramassage: { label: 'Ram.', icon: ArrowUpTrayIcon, color: 'text-blue-600 bg-blue-50' },
-    livraison_ramassage: { label: 'L+R', icon: WrenchScrewdriverIcon, color: 'text-purple-600 bg-purple-50' },
+    livraison: { letter: 'L', color: 'text-green-700 bg-green-100' },
+    ramassage: { letter: 'R', color: 'text-blue-700 bg-blue-100' },
+    livraison_ramassage: { letter: 'L+R', color: 'text-purple-700 bg-purple-100' },
   };
   const typeConfig = typeConfigs[point.type as keyof typeof typeConfigs] || typeConfigs.livraison;
 
@@ -273,15 +273,13 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
 
   const productColor = point.produitCouleur;
 
-  // Detect HF/recovery based on point time vs all billing configs
+  // Detect HF based on point time vs all billing configs
   let pendingHf = false;
-  let pendingRecup = false;
   if (billingConfigs && point.creneauDebut) {
     const ptMinutes = timeToMinutes(point.creneauDebut);
     if (ptMinutes !== null) {
       for (const uc of billingConfigs) {
         const cfg = uc.config;
-        // HF check
         if (!pendingHf && cfg.tarifPointHorsForfait > 0) {
           if (cfg.isIndependent) {
             pendingHf = true;
@@ -293,21 +291,7 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
             }
           }
         }
-        // Recovery check
-        if (!pendingRecup) {
-          const ranges: Array<{ debut: string; fin: string }> = [];
-          if (cfg.recuperationDebut && cfg.recuperationFin) ranges.push({ debut: cfg.recuperationDebut, fin: cfg.recuperationFin });
-          if (cfg.recuperationDebut2 && cfg.recuperationFin2) ranges.push({ debut: cfg.recuperationDebut2, fin: cfg.recuperationFin2 });
-          for (const r of ranges) {
-            const rd = timeToMinutes(r.debut);
-            const rf = timeToMinutes(r.fin);
-            if (rd !== null && rf !== null && ptMinutes >= rd && ptMinutes <= rf) {
-              pendingRecup = true;
-              break;
-            }
-          }
-        }
-        if (pendingHf && pendingRecup) break;
+        if (pendingHf) break;
       }
     }
   }
@@ -344,20 +328,15 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
         <div className="font-medium text-xs truncate flex-1">
           {point.clientName}
         </div>
-        <div className={clsx(
-          'flex items-center font-medium px-1 py-0.5 rounded flex-shrink-0',
+        <span className={clsx(
+          'px-1 py-0.5 text-[10px] font-bold rounded flex-shrink-0',
           typeConfig.color
         )}>
-          <typeConfig.icon className="h-3.5 w-3.5" />
-        </div>
+          {typeConfig.letter}
+        </span>
         {pendingHf && (
           <span className="px-1 py-0.5 text-[9px] font-bold rounded flex-shrink-0 bg-orange-100 text-orange-700 border border-orange-300" title="Hors forfait potentiel">
             HF
-          </span>
-        )}
-        {pendingRecup && (
-          <span className="px-1 py-0.5 text-[9px] font-bold rounded flex-shrink-0 bg-indigo-100 text-indigo-700 border border-indigo-300" title="Récupération potentielle">
-            R
           </span>
         )}
         {point.quantiteBornes && point.quantiteBornes > 1 && (
