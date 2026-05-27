@@ -3697,17 +3697,17 @@ export default function DailyPlanningPage() {
                   setSyncProgress(p => Math.min(p + Math.random() * 15, 90));
                 }, 300);
                 try {
-                  const result = await pendingPointsService.syncGoogleCalendar();
+                  const result = await pendingPointsService.syncCrm();
                   clearInterval(interval);
                   setSyncProgress(100);
-                  toastSuccess(`Sync : ${result.created} créés, ${result.updated} mis à jour, ${result.found} événements`);
+                  toastSuccess(`CRM : ${result.created} créés, ${result.enriched} enrichis, ${result.skipped} ignorés`);
                   loadTournees();
                   setTimeout(() => { setSyncing(false); setSyncProgress(0); }, 1000);
                 } catch {
                   clearInterval(interval);
                   setSyncProgress(0);
                   setSyncing(false);
-                  toastError('Erreur sync Google Calendar');
+                  toastError('Erreur sync CRM');
                 }
               }}
             >

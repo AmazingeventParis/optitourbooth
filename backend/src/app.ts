@@ -141,8 +141,8 @@ async function startServer(): Promise<void> {
       console.log('🚀 =====================================');
       console.log('');
 
-      // Démarrer la sync Google Calendar
-      startGoogleCalendarSync();
+      // Google Calendar sync désactivée — source unique : CRM Shootnbox + Smakk
+      // startGoogleCalendarSync();
 
       // Démarrer le scan Drive (matching dossiers photos)
       startDriveFolderSync();

@@ -443,15 +443,10 @@ export async function restoreSuggestion(req: Request, res: Response): Promise<vo
 }
 
 /**
- * POST /api/pending-points/sync-google-calendar - Lancer une sync manuelle
+ * POST /api/pending-points/sync-google-calendar - Désactivé (CRM est la seule source)
  */
 export async function syncGoogleCalendar(_req: Request, res: Response): Promise<void> {
-  try {
-    const result = await syncGoogleCalendarEvents();
-    apiResponse.success(res, result);
-  } catch (error) {
-    apiResponse.error(res, 'SYNC_ERROR', `Erreur sync Google Calendar: ${(error as Error).message}`, 500);
-  }
+  apiResponse.success(res, { message: 'Google Calendar sync désactivée — source unique : CRM Shootnbox + Smakk', found: 0, created: 0, updated: 0 });
 }
 
 /**

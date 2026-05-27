@@ -85,8 +85,12 @@ export const pendingPointsService = {
     await api.delete(`/pending-points/${id}`);
   },
 
-  async syncGoogleCalendar(): Promise<{ found: number; created: number; updated: number; errors: number }> {
-    const response = await api.post<ApiResponse<{ found: number; created: number; updated: number; errors: number }>>('/pending-points/sync-google-calendar');
+  async syncCrm(): Promise<{ created: number; enriched: number; skipped: number; errors: string[] }> {
+    const response = await api.post<ApiResponse<{ created: number; enriched: number; skipped: number; errors: string[] }>>(
+      '/pending-points/sync-crm',
+      {},
+      { timeout: 90000 },
+    );
     return response.data.data;
   },
 };
