@@ -1357,10 +1357,12 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     const ppToday2 = new Date(); ppToday2.setUTCHours(0, 0, 0, 0);
     const horizon2 = new Date(ppToday2); horizon2.setDate(horizon2.getDate() + 60);
 
+    // Inclut les points CRM déjà dispatchés : un point CRM en tournée doit quand même
+    // supprimer son twin GCal non-dispatché (évite qu'il réapparaisse comme point à dispatcher).
     const crmActive = await prisma.pendingPoint.findMany({
       where: {
         source: { in: ['crm_shootnbox', 'crm_smakk'] },
-        dispatched: false,
+        deletedByUser: false,
         date: { gte: ppToday2, lte: horizon2 },
       },
       select: { date: true, clientName: true, type: true },
