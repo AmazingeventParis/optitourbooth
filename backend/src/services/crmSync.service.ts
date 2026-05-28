@@ -899,14 +899,32 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     const readinessMap = await scrapeShootnboxReadiness(cookie, controller.signal);
     console.log(`[CRM PendingPoints] ${readinessMap.size} entrées readiness (noms d'événements)`);
 
-    // 2. Récupérer les commandes actuelles (non-archivées) : delivery=Livraison, box_type!=Vegas Slim
+    // 2. Formulaires mail-info-client soumis — fetch AVANT le filtre orders pour pouvoir
+    //    utiliser logType comme fallback quand le champ delivery d'orders_ajax est vide.
+    const lookupKey = process.env.CRM_LOOKUP_KEY || 'otb_crm_lookup_2026';
+    const formByNumId = new Map<string, { d: Record<string, string>; logType: string }>();
+    try {
+      const resp = await fetch(`https://shootnbox.fr/manager2/otb_cfg_bulk.php?key=${lookupKey}`, { signal: controller.signal });
+      const body = await resp.json() as any[];
+      for (const cfg of (Array.isArray(body) ? body : [])) {
+        if (cfg.num_id && cfg.submitted_data) {
+          formByNumId.set(cfg.num_id, { d: cfg.submitted_data, logType: cfg.logistique_type || 'classique' });
+        }
+      }
+      console.log(`[CRM PendingPoints] ${formByNumId.size} formulaires disponibles pour enrichissement`);
+    } catch (e) {
+      console.warn('[CRM PendingPoints] Formulaires inaccessibles:', e);
+    }
+
+    // 3. Récupérer les commandes actuelles et archivées : delivery=Livraison, box_type!=Vegas Slim
+    // Fallback : si delivery est vide dans orders_ajax mais que le formulaire client indique
+    // logType=classique (ni chronopost ni retrait), on inclut quand même la commande.
     const PAGE_SIZE = 500;
     const eligible: Array<{
       orderId: string; numId: string | null; clientName: string;
       boxType: string; eventDateISO: string; returnDateISO: string | null;
     }> = [];
 
-    // Query both current and archived orders (future events may be in either)
     const today = new Date(); today.setUTCHours(0, 0, 0, 0);
     for (const urlSuffix of ['orders_ajax.php?status=2', 'orders_ajax.php?status=2&arch=true']) {
       let start = 0;
@@ -926,17 +944,25 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           const numId = numIdMatch ? numIdMatch[0] : null;
           const debugId = numId || orderId || '?';
 
-          // Exclure Retrait boutique et Chronopost (pas de chauffeur)
-          if (!deliveryVal.includes('livraison') && !deliveryVal.includes('installation')) {
-            console.log(`[CRM PendingPoints] SKIP ${debugId} — delivery non éligible: "${deliveryVal}"`);
-            continue;
-          }
+          // Exclure explicitement Retrait et Chronopost
           if (deliveryVal.includes('retrait') || deliveryVal.includes('chronopost')) {
             console.log(`[CRM PendingPoints] SKIP ${debugId} — retrait/chronopost: "${deliveryVal}"`);
             continue;
           }
-          if (rawBoxType === 'Vegas Slim') continue;
 
+          // Filtre positif sur delivery — OU fallback sur logType du formulaire client
+          const form = numId ? formByNumId.get(numId) : undefined;
+          const deliveryOk = deliveryVal.includes('livraison') || deliveryVal.includes('installation');
+          const formOk = form && form.logType !== 'chronopost' && form.logType !== 'retrait';
+          if (!deliveryOk && !formOk) {
+            console.log(`[CRM PendingPoints] SKIP ${debugId} — delivery non éligible: "${deliveryVal}" (pas de formulaire client éligible)`);
+            continue;
+          }
+          if (!deliveryOk && formOk) {
+            console.log(`[CRM PendingPoints] INCLUDE ${debugId} — delivery vide mais formulaire client logType="${form!.logType}"`);
+          }
+
+          if (rawBoxType === 'Vegas Slim') continue;
           if (!orderId) continue;
 
           const eventDateISO = pendingDateDMY(stripHtml(String(row.event_date || '')));
@@ -955,7 +981,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           const clientName = company || contactName || `Commande ${orderId}`;
           const boxType = normalizeBoxType(rawBoxType);
           const returnDateISO = pendingDateDMY(stripHtml(String(row.return_date || '')));
-          // numIdMatch / numId déjà calculés plus haut
 
           eligible.push({ orderId, numId, clientName, boxType, eventDateISO, returnDateISO });
         }
@@ -964,22 +989,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     }
 
     console.log(`[CRM PendingPoints] ${eligible.length} commandes éligibles (Livraison, hors Vegas Slim)`);
-
-    // 3. Formulaires mail-info-client soumis (enrichissement)
-    const lookupKey = process.env.CRM_LOOKUP_KEY || 'otb_crm_lookup_2026';
-    const formByNumId = new Map<string, { d: Record<string, string>; logType: string }>();
-    try {
-      const resp = await fetch(`https://shootnbox.fr/manager2/otb_cfg_bulk.php?key=${lookupKey}`, { signal: controller.signal });
-      const body = await resp.json() as any[];
-      for (const cfg of (Array.isArray(body) ? body : [])) {
-        if (cfg.num_id && cfg.submitted_data) {
-          formByNumId.set(cfg.num_id, { d: cfg.submitted_data, logType: cfg.logistique_type || 'classique' });
-        }
-      }
-      console.log(`[CRM PendingPoints] ${formByNumId.size} formulaires disponibles pour enrichissement`);
-    } catch (e) {
-      console.warn('[CRM PendingPoints] Formulaires inaccessibles:', e);
-    }
 
     // 4. Créer / enrichir les PendingPoints
     for (const order of eligible) {
