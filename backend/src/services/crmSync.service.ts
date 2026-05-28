@@ -1048,7 +1048,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               ...(eventName && { eventName }),
               quantiteBornes,
               // Restaurer si soft-deleted (deletedByUser=true) ou dispatché sans tournée
-              ...(existingLiv.deletedByUser && { deletedByUser: false, dispatched: false }),
               ...(form && parsedLiv?.adresse && { adresse: parsedLiv.adresse }),
               ...(!existingLiv.manuallyEdited && form && parsedLiv && {
                 ...(parsedLiv.creneauDebut && { creneauDebut: parsedLiv.creneauDebut }),
@@ -1101,7 +1100,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               clientName: order.clientName,
               ...(eventName && { eventName }),
               quantiteBornes,
-              ...(existingRec.deletedByUser && { deletedByUser: false, dispatched: false }),
               ...(form && parsedRec?.adresse && { adresse: parsedRec.adresse }),
               ...(!existingRec.manuallyEdited && form && parsedRec && {
                 ...(parsedRec.creneauDebut && { creneauDebut: parsedRec.creneauDebut }),
@@ -1318,7 +1316,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
             quantiteBornes: smkQuantiteBornes,
-            ...(existingLiv.deletedByUser && { deletedByUser: false, dispatched: false }),
             ...(!existingLiv.manuallyEdited && {
               date: ensureDateUTC(livDateISO),
               adresse,
@@ -1357,7 +1354,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
             quantiteBornes: smkQuantiteBornes,
-            ...(existingRec.deletedByUser && { deletedByUser: false, dispatched: false }),
             ...(!existingRec.manuallyEdited && {
               date: ensureDateUTC(recDateISO),
               adresse,
