@@ -778,13 +778,11 @@ function pendingParseLogistics(
   };
 }
 
-// Parse Smakk créneau string "9h30 - 14h" or "14h00" → [debut, fin]
+// Parse Smakk créneau "9h30 - 14h" or "10H-13H" → ["09:30", "14:00"]
 function parseSmakkCreneau(raw: string): [string | null, string | null] {
-  if (!raw) return [null, null];
-  const parts = raw.split(/\s*[-–]\s*/);
-  const debut = parts[0]?.trim() || null;
-  const fin = parts[1]?.trim() || null;
-  return [debut, fin];
+  const cren = pendingParseCreneau(raw);
+  if (cren) return [cren.debut, cren.fin];
+  return [null, null];
 }
 
 // ─── Smakk Info Client (mail-infos-smk.php) ──────────────────────
@@ -792,6 +790,7 @@ function parseSmakkCreneau(raw: string): [string | null, string | null] {
 // Source de vérité prioritaire sur _otb_orders.php pour les dates et l'adresse.
 
 interface SmakkInfoClient {
+  logType: 'livraison' | 'retrait' | 'chronopost' | null;
   adresse: string | null;
   livDateISO: string | null;
   livCreneauDebut: string | null;
@@ -811,6 +810,7 @@ function parseDateDDMMYYYY(dateStr: string): string | null {
 
 function parseSmakkInfoClientHtml(html: string): SmakkInfoClient {
   const result: SmakkInfoClient = {
+    logType: null,
     adresse: null, livDateISO: null, livCreneauDebut: null, livCreneauFin: null,
     recDateISO: null, recCreneauDebut: null, recCreneauFin: null,
     contactNom: null, contactTelephone: null,
@@ -823,15 +823,22 @@ function parseSmakkInfoClientHtml(html: string): SmakkInfoClient {
     const value = (rawValue || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&[^;]+;/g, '').trim();
     if (!label || !value) continue;
 
-    if (label.includes('adresse')) {
+    const v = value.toLowerCase();
+    if (label === 'type') {
+      // "Retrait boutique — adresse" or "Livraison — adresse"
+      if (v.includes('retrait')) result.logType = 'retrait';
+      else if (v.includes('chronopost') || v.includes('tnt')) result.logType = 'chronopost';
+      else if (v.includes('livraison')) result.logType = 'livraison';
+    } else if (label.includes('adresse')) {
       result.adresse = value;
+      if (!result.logType) result.logType = 'livraison'; // champ adresse implique livraison
     } else if (label.includes('jour') && label.includes('livraison')) {
       result.livDateISO = parseDateDDMMYYYY(value);
-    } else if (label.includes('livraison') && (label.includes('cr') && label.includes('neau'))) {
+    } else if (label.includes('livraison') && label.includes('cr') && label.includes('neau')) {
       [result.livCreneauDebut, result.livCreneauFin] = parseSmakkCreneau(value);
-    } else if (label.includes('jour') && (label.includes('cup') || label.includes('cup'))) {
+    } else if (label.includes('jour') && label.includes('cup')) {
       result.recDateISO = parseDateDDMMYYYY(value);
-    } else if ((label.includes('cup') || label.includes('cup')) && (label.includes('cr') && label.includes('neau'))) {
+    } else if (label.includes('cup') && label.includes('cr') && label.includes('neau')) {
       [result.recCreneauDebut, result.recCreneauFin] = parseSmakkCreneau(value);
     } else if (label.includes('contact sur place')) {
       // "Karim — 0644250127" or "Clara vello — 0672742769"
@@ -1156,8 +1163,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         const delivOpts = (row.delivery_options || '').toLowerCase();
         const orderId = String(row.id || '').trim();
 
-        // Exclure explicitement Retrait et Chronopost
-        if (delivOpts.includes('retrait') || delivOpts.includes('chronopost')) {
+        // Exclure explicitement Retrait, Chronopost et livraisons transporteur (TNT, Colissimo)
+        if (delivOpts.includes('retrait') || delivOpts.includes('chronopost') || delivOpts.includes('tnt') || delivOpts.includes('colissimo')) {
           result.skipped++;
           continue;
         }
@@ -1279,6 +1286,11 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
 
       // Merge : info client (réponse mail) prioritaire sur _otb_orders.php
       const ic = smakkInfoClientMap.get(order.orderId);
+      if (ic?.logType === 'retrait' || ic?.logType === 'chronopost') {
+        result.skipped++;
+        continue;
+      }
+      const hasInfoClient = !!ic && (!!ic.adresse || !!ic.livCreneauDebut || !!ic.livDateISO);
       const livDateISO = ic?.livDateISO || order.livDateISO;
       const recDateISO = ic?.recDateISO || order.recDateISO;
       const adresse = ic?.adresse || order.adresse;
@@ -1308,6 +1320,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             contactNom,
             contactTelephone,
             quantiteBornes: smkQuantiteBornes,
+            manuallyEdited: hasInfoClient,
           }});
           result.created++;
           console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} livraison ${livDateISO} (×${smkQuantiteBornes})${ic ? ' (info client)' : ''}`);
@@ -1323,8 +1336,10 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               creneauFin: creneauFinLiv,
               contactNom,
               contactTelephone,
+              ...(hasInfoClient && { manuallyEdited: true }),
             }),
           }});
+          if (!existingLiv.manuallyEdited && hasInfoClient) result.enriched++;
         }
       } catch (e: any) { result.errors.push(`Smakk livraison ${order.orderId}: ${e.message}`); }
 
@@ -1346,6 +1361,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             contactNom: contactNomRec,
             contactTelephone,
             quantiteBornes: smkQuantiteBornes,
+            manuallyEdited: hasInfoClient,
           }});
           result.created++;
           console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} ramassage ${recDateISO} (×${smkQuantiteBornes})${ic ? ' (info client)' : ''}`);
@@ -1361,8 +1377,10 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               creneauFin: creneauFinRec,
               contactNom: contactNomRec,
               contactTelephone,
+              ...(hasInfoClient && { manuallyEdited: true }),
             }),
           }});
+          if (!existingRec.manuallyEdited && hasInfoClient) result.enriched++;
         }
       } catch (e: any) { result.errors.push(`Smakk ramassage ${order.orderId}: ${e.message}`); }
     }
