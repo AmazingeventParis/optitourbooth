@@ -1152,12 +1152,25 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       if (smkRows.length === 0) break;
 
       for (const row of smkRows) {
-        // Filtre positif : uniquement les livraisons/installations explicites
-        // Vide, Retrait boutique, Chronopost → skip
         const delivOpts = (row.delivery_options || '').toLowerCase();
-        if (!delivOpts.includes('livraison') && !delivOpts.includes('installation')) {
+        const orderId = String(row.id || '').trim();
+
+        // Exclure explicitement Retrait et Chronopost
+        if (delivOpts.includes('retrait') || delivOpts.includes('chronopost')) {
           result.skipped++;
           continue;
+        }
+
+        // Filtre positif sur delivery_options — OU fallback sur take_date renseigné
+        // Si delivery_options est vide mais qu'une date de livraison est planifiée → livraison
+        const deliveryOk = delivOpts.includes('livraison') || delivOpts.includes('installation');
+        const takeDateSet = !!(row.take_date || '').trim();
+        if (!deliveryOk && !takeDateSet) {
+          result.skipped++;
+          continue;
+        }
+        if (!deliveryOk && takeDateSet) {
+          console.log(`[CRM PendingPoints Smakk] INCLUDE ${orderId} — delivery_options vide mais take_date renseigné`);
         }
 
         // Exclure Smakk Slim (pas géré par les chauffeurs OptiTour)
