@@ -3643,7 +3643,11 @@ export default function DailyPlanningPage() {
                   const result = await pendingPointsService.syncCrm();
                   clearInterval(interval);
                   setSyncProgress(100);
-                  toastSuccess(`CRM : ${result.created} créés, ${result.enriched} enrichis, ${result.skipped} ignorés`);
+                  if (result.errors && result.errors.length > 0) {
+                    toastError(`Erreurs sync CRM : ${result.errors.join(' | ')}`);
+                  } else {
+                    toastSuccess(`CRM : ${result.created} créés, ${result.enriched} enrichis, ${result.skipped} ignorés`);
+                  }
                   loadTournees();
                   setTimeout(() => { setSyncing(false); setSyncProgress(0); }, 1000);
                 } catch {
