@@ -121,15 +121,15 @@ export default function AgendaPage() {
     }
   };
 
-  // Sync Google Calendar
+  // Sync CRM (Shootnbox + Smakk) — source unique des pending_points
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const result = await pendingPointsService.syncGoogleCalendar();
-      toast.success(`Sync : ${result.created} créé(s), ${result.updated} mis à jour`);
+      const result = await pendingPointsService.syncCrm();
+      toast.success(`Sync CRM : ${result.created} créé(s), ${result.enriched} enrichi(s), ${result.skipped} ignoré(s)`);
       loadData();
     } catch {
-      toast.error('Erreur sync Google Calendar');
+      toast.error('Erreur sync CRM');
     } finally {
       setSyncing(false);
     }

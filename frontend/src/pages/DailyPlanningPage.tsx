@@ -48,7 +48,6 @@ import {
   PencilIcon,
   TruckIcon,
   MapIcon,
-  WrenchScrewdriverIcon,
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
   PlusIcon,
