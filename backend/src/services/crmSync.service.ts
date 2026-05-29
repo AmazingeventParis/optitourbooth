@@ -1128,6 +1128,30 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       }
     }
 
+    // Nettoyage : supprimer les pending_points crm_shootnbox dont l'orderId n'est
+    // plus dans la liste éligible (commande passée en demande/retrait, annulée ou
+    // supprimée du CRM). Garde-fou : on ne touche QUE les points non-dispatchés et
+    // non supprimés manuellement — un point déjà placé dans une tournée (un humain
+    // l'a validé) est conservé.
+    try {
+      const eligibleSnbOrderIds = new Set(eligible.map(o => o.orderId));
+      const existingSnbPts = await prisma.pendingPoint.findMany({
+        where: { source: 'crm_shootnbox', date: { gte: today }, dispatched: false, deletedByUser: false },
+        select: { id: true, externalId: true },
+      });
+      for (const pt of existingSnbPts) {
+        if (!pt.externalId) continue;
+        const match = pt.externalId.match(/^snb_order_(\d+)_/);
+        if (!match || !match[1]) continue;
+        if (!eligibleSnbOrderIds.has(match[1])) {
+          await prisma.pendingPoint.delete({ where: { id: pt.id } });
+          console.log(`[CRM PendingPoints] - supprimé (commande non éligible) externalId=${pt.externalId}`);
+        }
+      }
+    } catch (e: any) {
+      result.errors.push(`Nettoyage Shootnbox: ${e.message}`);
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // SMAKK CRM → PendingPoints
     // Source: _otb_orders.php (direct DB query via smakk.fr/manager/)
