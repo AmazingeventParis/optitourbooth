@@ -1,6 +1,10 @@
 # OptiTourBooth - Etat du projet
 
 > Derniere mise a jour : 24 fevrier 2026
+>
+> **Historique des gros travaux** : voir `CHANGELOG.md` (le plus recent en haut).
+> Derniere session 2026-05-29 : fiabilite import CRM (points fantomes, dates),
+> race condition affichage planning, reparation du build frontend casse.
 
 ## Statut global : ~80% termine
 
