@@ -1808,9 +1808,16 @@ export default function DailyPlanningPage() {
   useEffect(() => {
     isDateChanging.current = true;
 
+    // Garde anti-réponse-périmée : si la date change (ou le composant se démonte)
+    // avant que cette requête réponde, on ignore le résultat pour ne pas écraser
+    // l'affichage de la nouvelle date avec des données obsolètes.
+    let cancelled = false;
+    const requestedDate = selectedDate;
+
     // Charger les points backend (Google Calendar, imports manuels, etc.)
     const localPoints: ImportParsedPoint[] = [];
     pendingPointsService.listByDate(selectedDate).then(async (backendPoints) => {
+      if (cancelled || requestedDate !== selectedDate) return;
       // Convertir les points backend sans résolution client (rapide, pas d'erreur possible)
       const converted: ImportParsedPoint[] = backendPoints.map((bp) => {
         const matchedProduit = bp.produitNom
@@ -1876,6 +1883,7 @@ export default function DailyPlanningPage() {
       const resolvedPoints = [...allPoints];
       let changed = false;
       for (let idx = localPoints.length; idx < resolvedPoints.length; idx++) {
+        if (cancelled || requestedDate !== selectedDate) return;
         const bp = resolvedPoints[idx];
         if (!bp || bp.clientId) continue;
         const client = await resolveClient(bp.clientName, bp.adresse || undefined);
@@ -1884,14 +1892,17 @@ export default function DailyPlanningPage() {
           changed = true;
         }
       }
-      if (changed) {
+      if (changed && !cancelled && requestedDate === selectedDate) {
         setPendingPoints(resolvedPoints);
       }
     }).catch((err) => {
+      if (cancelled || requestedDate !== selectedDate) return;
       console.error('Erreur chargement pending points:', err);
       setPendingPoints(localPoints);
       setTimeout(() => { isDateChanging.current = false; }, 0);
     });
+
+    return () => { cancelled = true; };
   }, [selectedDate, produits]);
 
   // Helper : ajouter un pending point et le sync vers le backend
@@ -1963,7 +1974,10 @@ export default function DailyPlanningPage() {
   }, []);
 
   // Charger les tournées
-  const loadTournees = useCallback(async () => {
+  // staleRef : si la date demandée n'est plus la date courante quand la réponse
+  // arrive, on ignore le résultat (évite l'écrasement par une réponse périmée
+  // lors d'une navigation rapide entre dates).
+  const loadTournees = useCallback(async (isStale?: () => boolean) => {
     setLoading(true);
     try {
       const tourneesResult = await tourneesService.list({ date: selectedDate, limit: 50 });
@@ -1972,17 +1986,21 @@ export default function DailyPlanningPage() {
       const tourneesWithPoints = await Promise.all(
         activeTournees.map(t => tourneesService.getById(t.id))
       );
+      if (isStale?.()) return;
       setTournees(tourneesWithPoints);
     } catch (error) {
+      if (isStale?.()) return;
       console.error('Erreur chargement données:', error);
       toastError('Erreur', 'Impossible de charger les données');
     } finally {
-      setLoading(false);
+      if (!isStale?.()) setLoading(false);
     }
   }, [selectedDate, toastError]);
 
   useEffect(() => {
-    loadTournees();
+    let cancelled = false;
+    loadTournees(() => cancelled);
+    return () => { cancelled = true; };
   }, [loadTournees]);
 
   // Charger les entrées HF existantes pour les points des tournées
