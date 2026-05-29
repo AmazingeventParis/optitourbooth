@@ -32,6 +32,79 @@ function parseTime(timeStr: string): { hours: number; minutes: number } {
   };
 }
 
+// ─── Réouverture des pending_points quand un point quitte une tournée ─────────
+// Quand un point est retiré d'une tournée (suppression d'un point, suppression
+// ou annulation d'une tournée), on remet le PendingPoint correspondant en
+// « à dispatcher » (dispatched=false) pour qu'il réapparaisse dans le planning.
+// Le rapprochement se fait par date + type + nom (même logique que l'audit qui a
+// correctement identifié les points fantômes). On ne touche jamais les points
+// supprimés manuellement (deletedByUser=true). Purement additif : ne modifie ni
+// les tournées ni les points, seulement le flag dispatched des pending_points.
+
+function normalizePendingName(s: string | null | undefined): string {
+  return (s || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function pendingNameMatches(pendingName: string, societe: string | null, nom: string | null): boolean {
+  const p = normalizePendingName(pendingName);
+  if (!p) return false;
+  for (const c of [normalizePendingName(societe), normalizePendingName(nom)]) {
+    if (!c) continue;
+    if (p === c || p.includes(c) || c.includes(p)) return true;
+  }
+  return false;
+}
+
+interface DepartedPoint {
+  date: Date;
+  type: string;
+  clientNom: string | null;
+  clientSociete: string | null;
+}
+
+async function reopenPendingForDepartedPoints(points: DepartedPoint[]): Promise<void> {
+  if (points.length === 0) return;
+
+  const dates = [...new Set(points.map((p) => p.date.toISOString().slice(0, 10)))];
+  const types = [...new Set(points.map((p) => p.type))];
+
+  // Candidats : pending dispatchés, non supprimés, dates/types concernés
+  const candidates = await prisma.pendingPoint.findMany({
+    where: {
+      dispatched: true,
+      deletedByUser: false,
+      type: { in: types },
+      date: { in: dates.map((d) => new Date(d)) },
+    },
+    select: { id: true, date: true, type: true, clientName: true },
+  });
+  if (candidates.length === 0) return;
+
+  const toReopen = new Set<string>();
+  for (const pt of points) {
+    const ptDate = pt.date.toISOString().slice(0, 10);
+    for (const c of candidates) {
+      if (c.date.toISOString().slice(0, 10) !== ptDate) continue;
+      if (c.type !== pt.type) continue;
+      if (pendingNameMatches(c.clientName, pt.clientSociete, pt.clientNom)) {
+        toReopen.add(c.id);
+      }
+    }
+  }
+
+  if (toReopen.size > 0) {
+    await prisma.pendingPoint.updateMany({
+      where: { id: { in: [...toReopen] } },
+      data: { dispatched: false },
+    });
+  }
+}
+
 // Helper pour récupérer une tournée complète avec tous les détails (utilisé après modifications)
 async function getFullTournee(tourneeId: string) {
   return prisma.tournee.findUnique({
@@ -761,6 +834,9 @@ export const tourneeController = {
 
     const tournee = await prisma.tournee.findUnique({
       where: { id },
+      include: {
+        points: { include: { client: { select: { nom: true, societe: true } } } },
+      },
     });
 
     if (!tournee) {
@@ -768,10 +844,21 @@ export const tourneeController = {
       return;
     }
 
+    // Mémoriser les points avant suppression pour rouvrir leurs pending_points
+    const departed: DepartedPoint[] = tournee.points.map((p) => ({
+      date: tournee.date,
+      type: p.type,
+      clientNom: p.client.nom,
+      clientSociete: p.client.societe,
+    }));
+
     // Supprimer la tournée (cascade supprimera les points)
     await prisma.tournee.delete({
       where: { id },
     });
+
+    // Les points quittent la tournée → leurs pending_points redeviennent « à dispatcher »
+    await reopenPendingForDepartedPoints(departed).catch(console.error);
 
     // Invalider le cache
     const tourneeDate = tournee.date.toISOString().split('T')[0]!;
@@ -789,6 +876,9 @@ export const tourneeController = {
 
     const tournee = await prisma.tournee.findUnique({
       where: { id },
+      include: {
+        points: { include: { client: { select: { nom: true, societe: true } } } },
+      },
     });
 
     if (!tournee) {
@@ -806,6 +896,14 @@ export const tourneeController = {
       return;
     }
 
+    // Mémoriser les points avant annulation pour rouvrir leurs pending_points
+    const departed: DepartedPoint[] = tournee.points.map((p) => ({
+      date: tournee.date,
+      type: p.type,
+      clientNom: p.client.nom,
+      clientSociete: p.client.societe,
+    }));
+
     // Annuler la tournée et tous ses points
     await prisma.$transaction([
       prisma.point.updateMany({
@@ -817,6 +915,9 @@ export const tourneeController = {
         data: { statut: 'annulee' },
       }),
     ]);
+
+    // La tournée annulée n'est plus active → ses points redeviennent « à dispatcher »
+    await reopenPendingForDepartedPoints(departed).catch(console.error);
 
     const updated = await prisma.tournee.findUnique({
       where: { id },
@@ -1650,7 +1751,10 @@ export const tourneeController = {
 
     const point = await prisma.point.findFirst({
       where: { id: pointId, tourneeId: id },
-      include: { tournee: true },
+      include: {
+        tournee: true,
+        client: { select: { nom: true, societe: true } },
+      },
     });
 
     if (!point) {
@@ -1665,6 +1769,14 @@ export const tourneeController = {
 
     // Supprimer le point (cascade supprimera produits, options, photos)
     await prisma.point.delete({ where: { id: pointId } });
+
+    // Le point quitte la tournée → son PendingPoint redevient « à dispatcher »
+    await reopenPendingForDepartedPoints([{
+      date: point.tournee.date,
+      type: point.type,
+      clientNom: point.client.nom,
+      clientSociete: point.client.societe,
+    }]).catch(console.error);
 
     // Réordonner les points restants
     const remainingPoints = await prisma.point.findMany({
