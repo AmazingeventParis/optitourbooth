@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
-import { asyncHandler } from '../middleware/asyncHandler.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 /**
  * Route de maintenance TEMPORAIRE — à supprimer après usage.
