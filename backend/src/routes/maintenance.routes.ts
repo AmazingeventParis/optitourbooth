@@ -5,13 +5,15 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 
 /**
  * Route de maintenance TEMPORAIRE — à supprimer après usage.
- * Protégée par un token simple passé en query (?token=...).
+ * Protégée par un token simple (?token=...).
  *
- * Objectif : détecter et réparer les "points fantômes" — des pending_points
- * marqués dispatched=true alors qu'ils ne correspondent à AUCUN point dans une
- * tournée active. Ils sont invisibles partout (ni dans "à dispatcher", ni dans
- * une tournée). Cause : suppression d'un point/tournée sans remise à
- * dispatched=false (pas de lien Point↔PendingPoint en base — corrigé en phase 2).
+ * "Points fantômes" = pending_points dispatched=true sans Point correspondant
+ * dans une tournée active (match date+type+nom). Invisibles partout.
+ *  - source CRM (crm_shootnbox/crm_smakk) : prestations réelles actuelles
+ *    → on les remet en "à dispatcher" (dispatched=false).
+ *  - source google_calendar : legacy (GCal désactivé le 2026-05-27), souvent
+ *    doublons d'entrées CRM → on les soft-delete (deletedByUser=true) pour ne
+ *    pas polluer le planning.
  */
 
 const MAINTENANCE_TOKEN = 'otb-ghost-fix-2026-temp';
@@ -26,7 +28,6 @@ function checkToken(req: Request, res: Response): boolean {
   return true;
 }
 
-// Normalise un nom pour le matching (minuscule, sans accents/espaces superflus)
 function norm(s: string | null | undefined): string {
   return (s || '')
     .normalize('NFD')
@@ -36,22 +37,16 @@ function norm(s: string | null | undefined): string {
     .trim();
 }
 
-// Un pending est "couvert" par un point de tournée si même date + même type + nom compatible
 function nameMatches(pendingName: string, societe: string | null, nom: string | null): boolean {
   const p = norm(pendingName);
   if (!p) return false;
-  const candidates = [norm(societe), norm(nom)].filter(Boolean);
-  for (const c of candidates) {
+  for (const c of [norm(societe), norm(nom)]) {
     if (!c) continue;
     if (p === c || p.includes(c) || c.includes(p)) return true;
   }
   return false;
 }
 
-/**
- * Calcule la liste des fantômes : pending_points dispatched=true, non supprimés,
- * date >= aujourd'hui, sans point correspondant dans une tournée active.
- */
 async function findGhosts() {
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
@@ -60,15 +55,11 @@ async function findGhosts() {
     where: { dispatched: true, deletedByUser: false, date: { gte: today } },
     select: { id: true, date: true, type: true, clientName: true, externalId: true, source: true },
   });
-
   if (dispatched.length === 0) return { ghosts: [], scanned: 0 };
 
-  // Charger tous les points des tournées actives sur la plage de dates concernée
   const minDate = dispatched.reduce((m, p) => (p.date < m ? p.date : m), dispatched[0]!.date);
   const points = await prisma.point.findMany({
-    where: {
-      tournee: { date: { gte: minDate }, statut: { not: 'annulee' } },
-    },
+    where: { tournee: { date: { gte: minDate }, statut: { not: 'annulee' } } },
     select: {
       type: true,
       tournee: { select: { date: true } },
@@ -78,61 +69,53 @@ async function findGhosts() {
 
   const ghosts = dispatched.filter((pp) => {
     const ppDate = pp.date.toISOString().slice(0, 10);
-    const covered = points.some(
+    return !points.some(
       (pt) =>
         pt.tournee.date.toISOString().slice(0, 10) === ppDate &&
         pt.type === pp.type &&
         nameMatches(pp.clientName, pt.client.societe, pt.client.nom)
     );
-    return !covered;
   });
-
   return { ghosts, scanned: dispatched.length };
 }
 
-// GET /api/maintenance/ghost-points?token=... → audit (dry-run, ne modifie rien)
+// GET audit (dry-run)
 router.get(
   '/ghost-points',
   asyncHandler(async (req: Request, res: Response) => {
     if (!checkToken(req, res)) return;
     const { ghosts, scanned } = await findGhosts();
+    const crm = ghosts.filter((g) => g.source === 'crm_shootnbox' || g.source === 'crm_smakk');
+    const gcal = ghosts.filter((g) => g.source === 'google_calendar');
     apiResponse.success(res, {
       scannedDispatched: scanned,
       ghostCount: ghosts.length,
-      ghosts: ghosts.map((g) => ({
-        id: g.id,
-        date: g.date.toISOString().slice(0, 10),
-        type: g.type,
-        clientName: g.clientName,
-        externalId: g.externalId,
-        source: g.source,
-      })),
+      crmCount: crm.length,
+      gcalCount: gcal.length,
+      crm: crm.map((g) => ({ date: g.date.toISOString().slice(0, 10), type: g.type, clientName: g.clientName, externalId: g.externalId, source: g.source })),
     });
   })
 );
 
-// POST /api/maintenance/ghost-points/repair?token=... → remet dispatched=false
+// POST repair : CRM → un-dispatch ; GCal → soft-delete
 router.post(
   '/ghost-points/repair',
   asyncHandler(async (req: Request, res: Response) => {
     if (!checkToken(req, res)) return;
     const { ghosts, scanned } = await findGhosts();
-    const ids = ghosts.map((g) => g.id);
-    if (ids.length > 0) {
-      await prisma.pendingPoint.updateMany({
-        where: { id: { in: ids } },
-        data: { dispatched: false },
-      });
+    const crmIds = ghosts.filter((g) => g.source === 'crm_shootnbox' || g.source === 'crm_smakk').map((g) => g.id);
+    const gcalIds = ghosts.filter((g) => g.source === 'google_calendar').map((g) => g.id);
+
+    if (crmIds.length > 0) {
+      await prisma.pendingPoint.updateMany({ where: { id: { in: crmIds } }, data: { dispatched: false } });
+    }
+    if (gcalIds.length > 0) {
+      await prisma.pendingPoint.updateMany({ where: { id: { in: gcalIds } }, data: { deletedByUser: true } });
     }
     apiResponse.success(res, {
       scannedDispatched: scanned,
-      repaired: ids.length,
-      ghosts: ghosts.map((g) => ({
-        date: g.date.toISOString().slice(0, 10),
-        type: g.type,
-        clientName: g.clientName,
-        externalId: g.externalId,
-      })),
+      crmRedispatched: crmIds.length,
+      gcalSoftDeleted: gcalIds.length,
     });
   })
 );
