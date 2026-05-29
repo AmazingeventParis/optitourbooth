@@ -1054,7 +1054,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               clientName: order.clientName,
               ...(eventName && { eventName }),
               quantiteBornes,
-              // Restaurer si soft-deleted (deletedByUser=true) ou dispatché sans tournée
+              // Resynchroniser la date depuis le CRM/formulaire tant que le point n'a pas été édité manuellement
+              ...(!existingLiv.manuallyEdited && { date: ensureDateUTC(livDate) }),
               ...(form && parsedLiv?.adresse && { adresse: parsedLiv.adresse }),
               ...(!existingLiv.manuallyEdited && form && parsedLiv && {
                 ...(parsedLiv.creneauDebut && { creneauDebut: parsedLiv.creneauDebut }),
@@ -1107,6 +1108,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               clientName: order.clientName,
               ...(eventName && { eventName }),
               quantiteBornes,
+              // Resynchroniser la date depuis le CRM/formulaire tant que le point n'a pas été édité manuellement
+              ...(!existingRec.manuallyEdited && { date: ensureDateUTC(recDate) }),
               ...(form && parsedRec?.adresse && { adresse: parsedRec.adresse }),
               ...(!existingRec.manuallyEdited && form && parsedRec && {
                 ...(parsedRec.creneauDebut && { creneauDebut: parsedRec.creneauDebut }),
