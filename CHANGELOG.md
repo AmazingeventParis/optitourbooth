@@ -66,13 +66,20 @@ Session de debug suite à des prestations manquantes dans OptiTour
   aujourd'hui. Seul filtre de date = le passé est exclu (`event_date < today`,
   côté Shootnbox `crmSync.service.ts:982` et Smakk `:1197`).
 
-### ⏳ Reste à faire (Bug C)
-- Le sync **Shootnbox** ne nettoie PAS les `pending_points` dont l'orderId a
-  disparu du CRM (Smakk le fait déjà, `crmSync.service.ts` ~1252-1266) →
-  résidus type CIC `snb_order_22329`.
+### 🐛 Bug C — Résidus Shootnbox (commande disparue du CRM) — CORRIGÉ
+- **Symptôme** : une presta repassée en « demande » / retrait / annulée côté
+  CRM Shootnbox reste visible dans OptiTour. Cas : Denis Lecluse
+  (`snb_order_17054`, 01-02/06), CIC `snb_order_22329`.
+- **Cause** : le nettoyage des `pending_points` dont l'orderId n'est plus
+  éligible existait pour Smakk mais PAS pour Shootnbox.
+- **Fix** (commit `6a3b8a8`) : symétrie avec Smakk — à chaque sync, suppression
+  des points `crm_shootnbox` dont l'orderId n'est plus dans la liste éligible.
+  **Garde-fou** (plus prudent que Smakk) : uniquement les points
+  `dispatched=false` ET `deletedByUser=false` — un point déjà dans une tournée
+  est conservé. Testé en prod : points Lecluse retirés au sync suivant.
 
 ### Commits de la session
 `95aec88` (resync date + route maintenance) → `220e14f` (fix import build) →
 `9b5710e` (repair différencié CRM/GCal) → `ddbd773` (retrait route) →
 `2ffe44a` (réouverture pending au retrait) → `9f6302b` (race condition) →
-`9b85ead` (réparation build frontend).
+`9b85ead` (réparation build frontend) → `6a3b8a8` (cleanup Shootnbox Bug C).
