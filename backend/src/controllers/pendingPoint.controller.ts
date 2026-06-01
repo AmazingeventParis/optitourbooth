@@ -3,7 +3,7 @@ import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
 import { syncGoogleCalendarEvents } from '../services/googleCalendar.service.js';
-import { syncCrmPendingPoints } from '../services/crmSync.service.js';
+import { syncCrmPendingPoints, triggerCrmSyncDebounced } from '../services/crmSync.service.js';
 
 // ─── Helpers CRM import ──────────────────────────────────────────────────────
 
@@ -461,6 +461,27 @@ export async function syncCrmPendingPointsController(_req: Request, res: Respons
   } catch (error) {
     apiResponse.error(res, 'SYNC_ERROR', `Erreur sync CRM PendingPoints: ${(error as Error).message}`, 500);
   }
+}
+
+/**
+ * POST /api/pending-points/crm-webhook
+ * Appelé par le CRM (Shootnbox/Smakk) dès qu'une info est créée/modifiée
+ * (nouvelle commande, formulaire client soumis...). Auth par clé API (x-api-key).
+ *
+ * Réponse IMMÉDIATE (202) : on ne fait pas attendre le CRM le temps du scrape.
+ * La sync est planifiée en débounce (coalesce les rafales) côté service.
+ * Body optionnel : { source?: 'shootnbox'|'smakk', orderId?, numId? } — purement
+ * informatif pour les logs ; la sync reste globale (idempotente par externalId).
+ */
+export async function crmWebhook(req: Request, res: Response): Promise<void> {
+  const { source, orderId, numId } = (req.body || {}) as {
+    source?: string; orderId?: string | number; numId?: string;
+  };
+  const label = [source, numId || (orderId != null ? `order ${orderId}` : '')]
+    .filter(Boolean).join(' ') || 'webhook';
+  triggerCrmSyncDebounced(`webhook ${label}`);
+  // 202 Accepted : reçu, traitement asynchrone.
+  apiResponse.success(res, { accepted: true, scheduled: true }, 'Sync planifiée', 202);
 }
 
 /**

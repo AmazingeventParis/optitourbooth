@@ -9,6 +9,9 @@ const router = Router();
 // API externe (Google Apps Script) - authentification par clé API
 router.post('/', apiKeyAuth, asyncHandler(controller.createPendingPoints));
 
+// Webhook CRM (Shootnbox/Smakk) — déclenche une sync temps réel. Clé API (x-api-key).
+router.post('/crm-webhook', apiKeyAuth, asyncHandler(controller.crmWebhook));
+
 // API interne (Frontend) - authentification JWT
 router.post('/manual', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.createManualPendingPoint));
 router.get('/', authenticate, requireRole('preparateur', 'admin', 'warehouse', 'superadmin'), asyncHandler(controller.listPendingPoints));

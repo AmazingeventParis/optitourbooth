@@ -1435,6 +1435,58 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   return result;
 }
 
+// ─── Déclenchement temps réel (webhook CRM) ──────────────────────
+// Le CRM (Shootnbox/Smakk) appelle POST /api/pending-points/crm-webhook dès qu'une
+// info est créée/modifiée → on synchronise sans attendre le cron horaire.
+//
+// Garde-fous :
+//  - Verrou : un seul syncCrmPendingPoints() à la fois (les appels concurrents
+//    ne relancent pas un 2e scrape lourd).
+//  - Débounce : si plusieurs webhooks arrivent en rafale (ex. 10 clients en même
+//    temps), on coalesce en une seule sync planifiée ~3s plus tard.
+//  - Coalescing : si un webhook arrive pendant une sync en cours, on en replanifie
+//    une juste après (pour capter l'info arrivée trop tard dans le scrape courant).
+
+let syncInProgress = false;
+let pendingRerun = false;
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+const WEBHOOK_DEBOUNCE_MS = 3_000;
+
+async function runPendingPointsSyncGuarded(reason: string): Promise<void> {
+  if (syncInProgress) {
+    // Une sync tourne déjà → marquer qu'il faut la relancer après pour capter
+    // l'info qui vient d'arriver.
+    pendingRerun = true;
+    return;
+  }
+  syncInProgress = true;
+  try {
+    console.log(`[CRM Webhook] Sync déclenchée (${reason})`);
+    await syncCrmPendingPoints();
+  } catch (e) {
+    console.error('[CRM Webhook] Sync error:', e);
+  } finally {
+    syncInProgress = false;
+    if (pendingRerun) {
+      pendingRerun = false;
+      // Relance immédiate (sans débounce) pour traiter ce qui est arrivé pendant.
+      void runPendingPointsSyncGuarded('rerun post-sync');
+    }
+  }
+}
+
+/**
+ * Appelé par le webhook CRM. Ne bloque pas l'appelant : planifie une sync
+ * débouncée et répond tout de suite. Retourne immédiatement.
+ */
+export function triggerCrmSyncDebounced(reason = 'webhook'): void {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    void runPendingPointsSyncGuarded(reason);
+  }, WEBHOOK_DEBOUNCE_MS);
+}
+
 // ─── Cron control ─────────────────────────────────────────────────
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
@@ -1447,7 +1499,13 @@ export function startCrmSync(): void {
   }
 
   const brands = [hasShootnbox && 'ShootNBox', 'Smakk'].filter(Boolean).join(' + ');
-  const intervalMs = 60 * 60 * 1000;
+  // Filet de sécurité : polling court (10 min) au cas où un webhook CRM se perd.
+  // Le temps réel est assuré par le webhook (triggerCrmSyncDebounced).
+  const intervalMs = 10 * 60 * 1000;
+  // La sync bookings (emails/photos) reste horaire — elle est lourde et non liée
+  // aux points à dispatcher. On ne la passe pas à 10 min.
+  const bookingsSyncEveryNTicks = 6; // 6 × 10 min = 60 min
+  let tick = 0;
 
   setTimeout(async () => {
     try {
@@ -1467,21 +1525,26 @@ export function startCrmSync(): void {
   }, 30_000);
 
   syncInterval = setInterval(async () => {
-    try {
-      const result = await syncCrmData();
-      console.log(
-        `[CRM Sync] Sync (${brands}): snb_orders=${result.shootnbox.scrapedOrders}, ` +
-        `smakk_orders=${result.smakk.scrapedOrders}, matched=${result.matched}, updated=${result.updated}`
-      );
-      if (result.errors.length > 0) console.warn('[CRM Sync] Errors:', result.errors);
-    } catch (e) {
-      console.error('[CRM Sync] Sync error:', e);
+    tick++;
+    // Sync bookings (emails/photos) seulement toutes les 60 min (lourde).
+    if (tick % bookingsSyncEveryNTicks === 0) {
+      try {
+        const result = await syncCrmData();
+        console.log(
+          `[CRM Sync] Sync (${brands}): snb_orders=${result.shootnbox.scrapedOrders}, ` +
+          `smakk_orders=${result.smakk.scrapedOrders}, matched=${result.matched}, updated=${result.updated}`
+        );
+        if (result.errors.length > 0) console.warn('[CRM Sync] Errors:', result.errors);
+      } catch (e) {
+        console.error('[CRM Sync] Sync error:', e);
+      }
     }
-    // PendingPoints sync dans la même fenêtre horaire
-    try { await syncCrmPendingPoints(); } catch (e) { console.error('[CRM PendingPoints] Sync error:', e); }
+    // PendingPoints sync toutes les 10 min (filet de sécurité du webhook),
+    // via le même verrou pour ne pas chevaucher un sync déclenché par webhook.
+    await runPendingPointsSyncGuarded('cron 10min');
   }, intervalMs);
 
-  console.log(`⏰ CRON: CRM sync (${brands}) + PendingPoints every 60 min`);
+  console.log(`⏰ CRON: PendingPoints every 10 min (filet webhook) + bookings every 60 min — ${brands}`);
 }
 
 export function stopCrmSync(): void {
