@@ -21,7 +21,6 @@ import attachmentRoutes from './attachment.routes.js';
 import googleAuthRoutes from './googleAuth.routes.js';
 import agendaRoutes from './agenda.routes.js';
 import chronopostRoutes from './chronopost.routes.js';
-import maintenanceRoutes from './maintenance.routes.js'; // TEMP — déverrouillage CRM
 
 const router = Router();
 
@@ -182,7 +181,6 @@ router.use('/agenda', agendaRoutes);
 router.use('/attachments', attachmentRoutes);
 router.use('/google-auth', googleAuthRoutes);
 router.use('/chronopost', chronopostRoutes);
-router.use('/maintenance', maintenanceRoutes); // TEMP — déverrouillage CRM
 
 // Booking / Review system routes (public + internal + admin)
 router.use('/', bookingRoutes);
