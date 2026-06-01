@@ -1041,7 +1041,9 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               contactTelephone: parsedLiv?.contactTelephone || null,
               notes: parsedLiv?.notes || null,
               quantiteBornes,
-              manuallyEdited: !!form,
+              // manuallyEdited réservé aux éditions via l'UI (PATCH). Le sync ne le
+              // pose jamais → le formulaire client reste re-synchronisable.
+              manuallyEdited: false,
             },
           });
           result.created++;
@@ -1054,7 +1056,9 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               clientName: order.clientName,
               ...(eventName && { eventName }),
               quantiteBornes,
-              // Resynchroniser la date depuis le CRM/formulaire tant que le point n'a pas été édité manuellement
+              // Re-synchroniser depuis le CRM/formulaire à CHAQUE sync tant que le
+              // point n'a pas été édité manuellement via l'UI. Si le client met à
+              // jour son formulaire dans manager2, OptiTour suit automatiquement.
               ...(!existingLiv.manuallyEdited && { date: ensureDateUTC(livDate) }),
               ...(form && parsedLiv?.adresse && { adresse: parsedLiv.adresse }),
               ...(!existingLiv.manuallyEdited && form && parsedLiv && {
@@ -1063,7 +1067,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
                 ...(parsedLiv.contactNom && { contactNom: parsedLiv.contactNom }),
                 ...(parsedLiv.contactTelephone && { contactTelephone: parsedLiv.contactTelephone }),
                 ...(parsedLiv.notes && { notes: parsedLiv.notes }),
-                manuallyEdited: true,
               }),
             },
           });
@@ -1094,7 +1097,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
                 contactTelephone: parsedRec?.contactTelephone || null,
                 notes: parsedRec?.notes || null,
                 quantiteBornes,
-                manuallyEdited: !!form,
+                // manuallyEdited réservé aux éditions UI — pas posé par le sync.
+                manuallyEdited: false,
               },
             });
             result.created++;
@@ -1108,7 +1112,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               clientName: order.clientName,
               ...(eventName && { eventName }),
               quantiteBornes,
-              // Resynchroniser la date depuis le CRM/formulaire tant que le point n'a pas été édité manuellement
+              // Re-sync depuis le CRM/formulaire à chaque passage tant que non édité via l'UI.
               ...(!existingRec.manuallyEdited && { date: ensureDateUTC(recDate) }),
               ...(form && parsedRec?.adresse && { adresse: parsedRec.adresse }),
               ...(!existingRec.manuallyEdited && form && parsedRec && {
@@ -1117,7 +1121,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
                 ...(parsedRec.contactNom && { contactNom: parsedRec.contactNom }),
                 ...(parsedRec.contactTelephone && { contactTelephone: parsedRec.contactTelephone }),
                 ...(parsedRec.notes && { notes: parsedRec.notes }),
-                manuallyEdited: true,
               }),
             },
           });
@@ -1347,7 +1350,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             contactNom,
             contactTelephone,
             quantiteBornes: smkQuantiteBornes,
-            manuallyEdited: hasInfoClient,
+            // manuallyEdited réservé aux éditions UI — pas posé par le sync.
+            manuallyEdited: false,
           }});
           result.created++;
           console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} livraison ${livDateISO} (×${smkQuantiteBornes})${ic ? ' (info client)' : ''}`);
@@ -1356,6 +1360,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
             quantiteBornes: smkQuantiteBornes,
+            // Re-sync depuis le CRM/info client à chaque passage tant que non édité via l'UI.
             ...(!existingLiv.manuallyEdited && {
               date: ensureDateUTC(livDateISO),
               adresse,
@@ -1363,7 +1368,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               creneauFin: creneauFinLiv,
               contactNom,
               contactTelephone,
-              ...(hasInfoClient && { manuallyEdited: true }),
             }),
           }});
           if (!existingLiv.manuallyEdited && hasInfoClient) result.enriched++;
@@ -1388,7 +1392,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             contactNom: contactNomRec,
             contactTelephone,
             quantiteBornes: smkQuantiteBornes,
-            manuallyEdited: hasInfoClient,
+            // manuallyEdited réservé aux éditions UI — pas posé par le sync.
+            manuallyEdited: false,
           }});
           result.created++;
           console.log(`[CRM PendingPoints Smakk] + ${order.clientName}${smkEventName ? ` (${smkEventName})` : ''} ramassage ${recDateISO} (×${smkQuantiteBornes})${ic ? ' (info client)' : ''}`);
@@ -1397,6 +1402,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
             quantiteBornes: smkQuantiteBornes,
+            // Re-sync depuis le CRM/info client à chaque passage tant que non édité via l'UI.
             ...(!existingRec.manuallyEdited && {
               date: ensureDateUTC(recDateISO),
               adresse,
@@ -1404,7 +1410,6 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               creneauFin: creneauFinRec,
               contactNom: contactNomRec,
               contactTelephone,
-              ...(hasInfoClient && { manuallyEdited: true }),
             }),
           }});
           if (!existingRec.manuallyEdited && hasInfoClient) result.enriched++;
