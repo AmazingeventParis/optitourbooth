@@ -4,6 +4,28 @@ Journal des gros travaux. Le plus récent en haut.
 
 ---
 
+## 2026-06-01 (suite) — Verrou manuallyEdited à la réouverture de tournée
+
+### 🐛 Point CRM revenu d'une tournée supprimée restait verrouillé — CORRIGÉ
+- **Symptôme** : un point dispatché dans une tournée, puis tournée supprimée →
+  le point remonte en « à dispatcher » (OK, Bug A), MAIS il ignore les mises à
+  jour du formulaire client CRM. Cas : Da Silva Sarah (FA14140, snb_order_17241).
+- **Cause** : le point était `manuallyEdited=true` (faux verrou de l'ancien bug).
+  Le déverrouillage global du matin n'avait traité que les points
+  `dispatched=false` ; celui-ci était dispatché à ce moment. La réouverture
+  (`reopenPendingForDepartedPoints`) remettait `dispatched=false` mais PAS
+  `manuallyEdited` → point revenu mais toujours verrouillé.
+- **Fix** (commit `62e071d`) : à la réouverture (deletePoint / delete / cancel
+  tournée), on remet aussi `manuallyEdited=false` sur les points **CRM** (sources
+  crm_*) → ils resuivent le formulaire client. Points manuels non touchés.
+- **Réparation existant** : route maintenance temp `/unlock-all` (déverrouille
+  les CRM verrouillés restants, dispatchés ou non) → **19 points** déverrouillés,
+  sync `enriched=54`. Da Silva repris au formulaire (liv 23/05, rec 24/05).
+  ⚠️ Ses dates formulaire sont dans le passé (presta reportée) — pour la replanifier,
+  mettre à jour le formulaire CRM, le sync suivra.
+
+---
+
 ## 2026-06-01 (suite) — Sync CRM temps réel (webhook)
 
 ### ⚡ Webhook temps réel + polling 10 min — DÉPLOYÉ (OptiTour + CRM)
