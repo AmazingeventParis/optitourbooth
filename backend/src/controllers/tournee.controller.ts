@@ -81,11 +81,15 @@ async function reopenPendingForDepartedPoints(points: DepartedPoint[]): Promise<
       type: { in: types },
       date: { in: dates.map((d) => new Date(d)) },
     },
-    select: { id: true, date: true, type: true, clientName: true },
+    select: { id: true, date: true, type: true, clientName: true, source: true },
   });
   if (candidates.length === 0) return;
 
   const toReopen = new Set<string>();
+  // Points CRM réouverts → on lève aussi le verrou manuallyEdited pour qu'ils
+  // resuivent le formulaire client à jour (un point qui revient doit refléter le
+  // CRM). On limite aux sources CRM ; les points manuels gardent leur état.
+  const toUnlock = new Set<string>();
   for (const pt of points) {
     const ptDate = pt.date.toISOString().slice(0, 10);
     for (const c of candidates) {
@@ -93,6 +97,9 @@ async function reopenPendingForDepartedPoints(points: DepartedPoint[]): Promise<
       if (c.type !== pt.type) continue;
       if (pendingNameMatches(c.clientName, pt.clientSociete, pt.clientNom)) {
         toReopen.add(c.id);
+        if (c.source === 'crm_shootnbox' || c.source === 'crm_smakk') {
+          toUnlock.add(c.id);
+        }
       }
     }
   }
@@ -101,6 +108,12 @@ async function reopenPendingForDepartedPoints(points: DepartedPoint[]): Promise<
     await prisma.pendingPoint.updateMany({
       where: { id: { in: [...toReopen] } },
       data: { dispatched: false },
+    });
+  }
+  if (toUnlock.size > 0) {
+    await prisma.pendingPoint.updateMany({
+      where: { id: { in: [...toUnlock] } },
+      data: { manuallyEdited: false },
     });
   }
 }
