@@ -1804,19 +1804,18 @@ export default function DailyPlanningPage() {
   }, []);
 
   // Charger les pending points au montage et quand la date change
-  useEffect(() => {
+  // Chargement des points à dispatcher pour la date courante.
+  // `isStale()` permet d'ignorer une réponse périmée (navigation rapide).
+  // Réutilisé par l'effet de changement de date ET par le bouton Sync.
+  const loadPendingPoints = useCallback((isStale?: () => boolean): void => {
     isDateChanging.current = true;
-
-    // Garde anti-réponse-périmée : si la date change (ou le composant se démonte)
-    // avant que cette requête réponde, on ignore le résultat pour ne pas écraser
-    // l'affichage de la nouvelle date avec des données obsolètes.
-    let cancelled = false;
     const requestedDate = selectedDate;
+    const stale = () => (isStale?.() ?? false) || requestedDate !== selectedDate;
 
     // Charger les points backend (Google Calendar, imports manuels, etc.)
     const localPoints: ImportParsedPoint[] = [];
     pendingPointsService.listByDate(selectedDate).then(async (backendPoints) => {
-      if (cancelled || requestedDate !== selectedDate) return;
+      if (stale()) return;
       // Convertir les points backend sans résolution client (rapide, pas d'erreur possible)
       const converted: ImportParsedPoint[] = backendPoints.map((bp) => {
         const matchedProduit = bp.produitNom
@@ -1882,7 +1881,7 @@ export default function DailyPlanningPage() {
       const resolvedPoints = [...allPoints];
       let changed = false;
       for (let idx = localPoints.length; idx < resolvedPoints.length; idx++) {
-        if (cancelled || requestedDate !== selectedDate) return;
+        if (stale()) return;
         const bp = resolvedPoints[idx];
         if (!bp || bp.clientId) continue;
         const client = await resolveClient(bp.clientName, bp.adresse || undefined);
@@ -1891,18 +1890,23 @@ export default function DailyPlanningPage() {
           changed = true;
         }
       }
-      if (changed && !cancelled && requestedDate === selectedDate) {
+      if (changed && !stale()) {
         setPendingPoints(resolvedPoints);
       }
     }).catch((err) => {
-      if (cancelled || requestedDate !== selectedDate) return;
+      if (stale()) return;
       console.error('Erreur chargement pending points:', err);
       setPendingPoints(localPoints);
       setTimeout(() => { isDateChanging.current = false; }, 0);
     });
-
-    return () => { cancelled = true; };
   }, [selectedDate, produits]);
+
+  // Charger les points au montage et à chaque changement de date.
+  useEffect(() => {
+    let cancelled = false;
+    loadPendingPoints(() => cancelled);
+    return () => { cancelled = true; };
+  }, [loadPendingPoints]);
 
   // Helper : ajouter un pending point et le sync vers le backend
   const syncPointToBackend = useCallback(async (point: ImportParsedPoint, date: string) => {
@@ -3665,6 +3669,8 @@ export default function DailyPlanningPage() {
                   } else {
                     toastSuccess(`CRM : ${result.created} créés, ${result.enriched} enrichis, ${result.skipped} ignorés`);
                   }
+                  // Recharger les points à dispatcher ET les tournées sans changer de date
+                  loadPendingPoints();
                   loadTournees();
                   setTimeout(() => { setSyncing(false); setSyncProgress(0); }, 1000);
                 } catch {
