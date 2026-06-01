@@ -4,6 +4,52 @@ Journal des gros travaux. Le plus récent en haut.
 
 ---
 
+## 2026-06-01 — Fiabilité import : re-sync formulaire client & nettoyage GCal
+
+### 🐛 BUG MAJEUR — `manuallyEdited` figeait le formulaire client — CORRIGÉ
+- **Symptôme** : dates / créneaux / adresses faux et figés à l'import. Si le
+  client corrigeait son formulaire dans le CRM **après** le 1er import,
+  OptiTour ne le reprenait jamais (resté sur la date commande, souvent fausse).
+  Cas : TORREMOCHA (FA14179) importé au 06/06 alors que le formulaire dit 04/06.
+- **Cause racine** : à la création, le sync posait `manuallyEdited=true` dès
+  qu'un formulaire/info-client CRM existait (`manuallyEdited: !!form` /
+  `: hasInfoClient`). Ce flag (censé signifier « édité par un humain ») bloquait
+  ensuite TOUTE re-synchronisation du formulaire client.
+- **Fix** (commit `c2aecae`) : séparer les 2 notions. Le sync ne pose plus
+  jamais `manuallyEdited` — réservé aux éditions via l'UI (PATCH). Les gardes
+  `!manuallyEdited` restent (les corrections manuelles admin ne sont pas
+  écrasées), mais tous les autres points re-suivent la dernière version du
+  formulaire client à chaque sync. 8 emplacements (Shootnbox + Smakk,
+  liv/rec, create+update). Vérifié en prod : `enriched=36` au sync suivant.
+
+### 🧹 Nettoyage 363 résidus Google Calendar
+- GCal n'est plus une source depuis le 27/05. 363 `pending_points`
+  `source=google_calendar` traînaient encore (doublons, ex. DALKIA). Route
+  maintenance temporaire (commits `2b6a2d4` → `4ff395b`) → soft-delete des 363.
+  Planning vérifié propre (0 résidu GCal visible au 04-05/06).
+
+### ⚠️ Limites identifiées (pas des bugs de code)
+- **TORREMOCHA** et autres points déjà corrigés à la main restent figés
+  (`manuallyEdited=true`) — choix utilisateur de ne pas les déverrouiller.
+  Le fix vaut pour les futurs imports.
+- **DALKIA** (FA14031) : le ramassage tombe le même jour que la livraison car
+  **aucun formulaire client n'est rempli** côté CRM et `return_date=event_date`.
+  La vraie date de retour n'existe nulle part dans les données CRM exposées →
+  non corrigeable tant que le client ne remplit pas son formulaire.
+- **LABEL EQUIPEE** (FA5468) : import **correct** (produit=Smakk, source
+  crm_smakk). Le « classé Vegas » perçu vient de l'affichage (préparations /
+  agenda / borne `R1/P`), pas du pipeline — non investigué (non prioritaire).
+
+### Note sur le pipeline d'import (sources des infos client)
+- **Shootnbox** : commande `orders_ajax.php?status=2` (box_type, dates fallback)
+  + formulaire client `otb_cfg_bulk.php` (dates/créneaux/adresse/contact —
+  PRIORITAIRE) + readiness `readiness_ajax.php` (event, bornes).
+- **Smakk** : commande `_otb_orders.php` (JSON) + readiness `readiness_ajax.php`
+  + info client `mail-infos-smk.php` (prioritaire).
+- Priorité dates Shootnbox : `formulaire.log_jour_liv || commande.event_date`.
+
+---
+
 ## 2026-05-29 — Fiabilité import CRM & affichage planning
 
 Session de debug suite à des prestations manquantes dans OptiTour
