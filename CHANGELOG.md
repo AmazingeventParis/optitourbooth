@@ -4,6 +4,23 @@ Journal des gros travaux. Le plus récent en haut.
 
 ---
 
+## 2026-06-01 (suite) — Sync CRM temps réel (webhook)
+
+### ⚡ Webhook temps réel + polling 10 min — DÉPLOYÉ
+- **Objectif** : OptiTour se met à jour dès qu'une info apparaît dans le CRM,
+  sans attendre le sync horaire.
+- **Endpoint** (commit `5d09eb7`) : `POST /api/pending-points/crm-webhook`
+  (auth `x-api-key`). Réponse **202 en ~80ms** (le CRM n'attend pas le scrape).
+- **Garde-fous** : débounce 3s (rafale de N webhooks = 1 sync, testé sur 5),
+  verrou anti-concurrence, relance auto si un webhook arrive pendant une sync.
+- **Filet de sécurité** : polling abaissé de 60 → **10 min** (rattrape si un
+  webhook se perd). Sync bookings (emails/photos, lourde) reste horaire (1/6 ticks).
+- **Côté CRM (À FAIRE par l'équipe CRM)** : ajouter un appel PHP non-bloquant au
+  webhook à la soumission des formulaires / création-modif de commandes.
+  Snippet + doc complète : `docs/WEBHOOK_CRM_TEMPS_REEL.md`.
+
+---
+
 ## 2026-06-01 (suite) — Formulaire info-client Smakk
 
 Suite au signalement « infos formulaire Smakk LABEL EQUIPEE (04/06) non importées ».
