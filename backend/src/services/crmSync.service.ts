@@ -791,7 +791,8 @@ function parseSmakkCreneau(raw: string): [string | null, string | null] {
 
 interface SmakkInfoClient {
   logType: 'livraison' | 'retrait' | 'chronopost' | null;
-  adresse: string | null;
+  adresse: string | null;       // adresse de livraison
+  recAdresse: string | null;    // adresse de récupération (si distincte)
   livDateISO: string | null;
   livCreneauDebut: string | null;
   livCreneauFin: string | null;
@@ -811,7 +812,7 @@ function parseDateDDMMYYYY(dateStr: string): string | null {
 function parseSmakkInfoClientHtml(html: string): SmakkInfoClient {
   const result: SmakkInfoClient = {
     logType: null,
-    adresse: null, livDateISO: null, livCreneauDebut: null, livCreneauFin: null,
+    adresse: null, recAdresse: null, livDateISO: null, livCreneauDebut: null, livCreneauFin: null,
     recDateISO: null, recCreneauDebut: null, recCreneauFin: null,
     contactNom: null, contactTelephone: null,
   };
@@ -829,7 +830,11 @@ function parseSmakkInfoClientHtml(html: string): SmakkInfoClient {
       if (v.includes('retrait')) result.logType = 'retrait';
       else if (v.includes('chronopost') || v.includes('tnt')) result.logType = 'chronopost';
       else if (v.includes('livraison')) result.logType = 'livraison';
+    } else if (label.includes('adresse') && label.includes('cup')) {
+      // "Adresse récupération" → adresse de ramassage distincte
+      result.recAdresse = value;
     } else if (label.includes('adresse')) {
+      // "Adresse" (sans "récupération") → adresse de livraison
       result.adresse = value;
       if (!result.logType) result.logType = 'livraison'; // champ adresse implique livraison
     } else if (label.includes('jour') && label.includes('livraison')) {
@@ -1323,7 +1328,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       const hasInfoClient = !!ic && (!!ic.adresse || !!ic.livCreneauDebut || !!ic.livDateISO);
       const livDateISO = ic?.livDateISO || order.livDateISO;
       const recDateISO = ic?.recDateISO || order.recDateISO;
-      const adresse = ic?.adresse || order.adresse;
+      const adresse = ic?.adresse || order.adresse;                 // adresse livraison
+      const recAdresse = ic?.recAdresse || ic?.adresse || order.adresse; // adresse récup (fallback sur livraison)
       const contactNom = ic?.contactNom || order.takeContact;
       const contactTelephone = ic?.contactTelephone || order.phone;
       const creneauDebutLiv = ic?.livCreneauDebut || order.creneauDebutLiv;
@@ -1386,7 +1392,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             produitNom: order.boxType || null,
             source: 'crm_smakk',
             externalId: recExt,
-            adresse,
+            adresse: recAdresse,
             creneauDebut: creneauDebutRec,
             creneauFin: creneauFinRec,
             contactNom: contactNomRec,
@@ -1405,7 +1411,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             // Re-sync depuis le CRM/info client à chaque passage tant que non édité via l'UI.
             ...(!existingRec.manuallyEdited && {
               date: ensureDateUTC(recDateISO),
-              adresse,
+              adresse: recAdresse,
               creneauDebut: creneauDebutRec,
               creneauFin: creneauFinRec,
               contactNom: contactNomRec,
