@@ -6,18 +6,42 @@ Journal des gros travaux. Le plus récent en haut.
 
 ## 2026-06-01 (suite) — Sync CRM temps réel (webhook)
 
-### ⚡ Webhook temps réel + polling 10 min — DÉPLOYÉ
+### ⚡ Webhook temps réel + polling 10 min — DÉPLOYÉ (OptiTour + CRM)
 - **Objectif** : OptiTour se met à jour dès qu'une info apparaît dans le CRM,
   sans attendre le sync horaire.
-- **Endpoint** (commit `5d09eb7`) : `POST /api/pending-points/crm-webhook`
+- **Endpoint OptiTour** (commit `5d09eb7`) : `POST /api/pending-points/crm-webhook`
   (auth `x-api-key`). Réponse **202 en ~80ms** (le CRM n'attend pas le scrape).
 - **Garde-fous** : débounce 3s (rafale de N webhooks = 1 sync, testé sur 5),
   verrou anti-concurrence, relance auto si un webhook arrive pendant une sync.
 - **Filet de sécurité** : polling abaissé de 60 → **10 min** (rattrape si un
   webhook se perd). Sync bookings (emails/photos, lourde) reste horaire (1/6 ticks).
-- **Côté CRM (À FAIRE par l'équipe CRM)** : ajouter un appel PHP non-bloquant au
-  webhook à la soumission des formulaires / création-modif de commandes.
-  Snippet + doc complète : `docs/WEBHOOK_CRM_TEMPS_REEL.md`.
+- Snippet + doc : `docs/WEBHOOK_CRM_TEMPS_REEL.md`.
+
+### Côté CRM — FAIT par l'équipe CRM (rapport rév. 2, validé)
+- Helper `otb_webhook.php` (`otb_notify()`) créé dans chaque manager
+  (manager2 Shootnbox + manager Smakk) : POST non-bloquant (timeout 3s/2s,
+  erreurs ignorées, garde `function_exists()` anti-plantage).
+- **9 déclencheurs** : soumission formulaire client (`infos-client*.php`),
+  correction réponses (`mail-infos-*.php`), signature devis→réservation
+  (`signer-devis*.php`), création/modif commande (`d26386b04e.php` events
+  `add_order`/`edit_order`), **assignation bornes** (`d26386b04e.php` event
+  `box_num` → `UPDATE orders_new SET box_id`).
+- **Correction intégrée** : 1re version écartait le Readiness à tort. OptiTour
+  LIT bien `readiness_ajax.php` (`nom_event` + `box_id`/quantiteBornes, cf
+  crmSync.service.ts:1025-1027 Shootnbox & 1309-1311 Smakk). Le dev a trouvé le
+  vrai point d'écriture (`box_num`, pas la page readiness en lecture seule) et
+  l'a instrumenté. `nom_event` couvert via le déclencheur commande.
+- Vérifs : `php -l` OK, ancres uniques (3 appels confirmés dans d26386b04e.php),
+  webhook 202 prouvé. Limite signalée : events admin non testables en headless.
+- **Reste** : un test E2E réel par l'utilisateur (action admin CRM → vérifier MAJ
+  auto dans OptiTour ~1 min après, sans Sync ni refresh).
+
+### 🐛 Bouton Sync ne rechargeait pas les points — CORRIGÉ
+- Après un Sync CRM, seul `loadTournees()` était appelé → les points à dispatcher
+  ne se mettaient à jour qu'au changement de date ou refresh.
+- **Fix** (commit `d623c8e`, frontend) : chargement des points extrait en
+  `useCallback loadPendingPoints()` (avec garde anti-réponse-périmée), appelé par
+  l'effet de date ET par le bouton Sync.
 
 ---
 
