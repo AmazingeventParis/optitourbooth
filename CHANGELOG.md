@@ -4,6 +4,40 @@ Journal des gros travaux. Le plus récent en haut.
 
 ---
 
+## 2026-06-01 (suite) — Formulaire info-client Smakk
+
+Suite au signalement « infos formulaire Smakk LABEL EQUIPEE (04/06) non importées ».
+
+### Diagnostic
+- Le **bouton Sync fonctionne**. Le parseur du formulaire info-client Smakk
+  (`parseSmakkInfoClientHtml`) **fonctionne aussi** (testé sur HTML réel : extrait
+  correctement adresse, dates, créneaux, contact). ⚠️ Deux fausses pistes
+  écartées en cours de route (« pas un tableau », « parseur cassé ») — c'était
+  bien un tableau `<td>` et le regex matchait.
+- **Vraie cause** : le point était `manuallyEdited=true`, posé par l'ANCIEN bug
+  (`manuallyEdited: hasInfoClient`) avant le fix `c2aecae`. Verrouillé → le sync
+  refusait de réinjecter le formulaire. Mesure : **25 points CRM de juin** étaient
+  ainsi faussement verrouillés (sur 121).
+
+### 🐛 Bug adresse livraison/récupération Smakk — CORRIGÉ
+- Le formulaire Smakk a 2 lignes « Adresse » et « Adresse récupération ». Le
+  parseur écrivait les deux dans le même champ → le point **livraison** récupérait
+  l'adresse de **récupération** (la 2ème écrasait la 1ère).
+- **Fix** (commit `d2db5db`) : champ `recAdresse` séparé dans `SmakkInfoClient`.
+  Le label contenant « récup » → adresse de ramassage ; sinon → livraison. Le
+  point ramassage utilise `recAdresse` (fallback adresse livraison).
+
+### Déverrouillage LABEL EQUIPEE (ciblé)
+- Route maintenance temp (commits `d2db5db` → `8b77b9f`) → `manuallyEdited=false`
+  sur `smk_order_3906`. Après sync, import **parfait** vérifié :
+  - Livraison 04/06 16:00-18:30, adresse « 5 allee raymond negre, Joinville »
+  - Ramassage 06/06 11:00-13:00, adresse « 23 Bis Quai de la marne, Joinville »
+  - Contact Frédéric Casales · 06 30 92 51 79
+- Les 24 autres points verrouillés restent figés (choix utilisateur : juste tester
+  LABEL EQUIPEE). Déverrouillage global possible plus tard si besoin.
+
+---
+
 ## 2026-06-01 — Fiabilité import : re-sync formulaire client & nettoyage GCal
 
 ### 🐛 BUG MAJEUR — `manuallyEdited` figeait le formulaire client — CORRIGÉ
