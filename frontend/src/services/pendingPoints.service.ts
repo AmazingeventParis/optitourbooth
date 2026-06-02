@@ -37,9 +37,12 @@ export const pendingPointsService = {
     return response.data.data;
   },
 
-  async listCalendarEvents(calendarType: 'shootnbox' | 'smakk'): Promise<CalendarEvent[]> {
+  // Événements de préparation fusionnés des deux CRM (Shootnbox + Smakk),
+  // lus en direct depuis la readiness. Le filtrage par type de borne se fait
+  // côté frontend via `produitNom` (colonne "Borne").
+  async listCalendarEvents(): Promise<CalendarEvent[]> {
     const response = await api.get<ApiResponse<CalendarEvent[]>>(
-      `/pending-points/calendar-events?calendarType=${calendarType}`
+      `/pending-points/calendar-events`
     );
     return response.data.data;
   },

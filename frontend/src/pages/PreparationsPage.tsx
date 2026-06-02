@@ -180,13 +180,14 @@ export default function PreparationsPage() {
     }
   };
 
-  const fetchCalendarEvents = async (machineType: MachineType) => {
+  const fetchCalendarEvents = async () => {
     try {
-      const calendarType = machineType === 'Smakk' ? 'smakk' : 'shootnbox';
-      const events = await pendingPointsService.listCalendarEvents(calendarType);
+      // Readiness fusionnée des deux CRM ; le filtrage par type de borne
+      // se fait au rendu du <select> via produitNom (colonne "Borne").
+      const events = await pendingPointsService.listCalendarEvents();
       setCalendarEvents(events);
     } catch (err) {
-      console.error('Erreur chargement événements calendrier:', err);
+      console.error('Erreur chargement événements readiness:', err);
       setCalendarEvents([]);
     }
   };
@@ -205,7 +206,7 @@ export default function PreparationsPage() {
       // Mode création
       setIsViewMode(false);
       setSelectedPreparateur('Wilfried');
-      fetchCalendarEvents(machine.type);
+      fetchCalendarEvents();
 
       // Pré-remplir avec les suggestions de l'agenda pour cette borne
       if (machineSuggestions.length > 0) {
@@ -263,16 +264,10 @@ export default function PreparationsPage() {
           client: evt.client,
           preparateur,
           notes: undefined,
+          // id readiness (`rdy_<brand>_<orderId>`) : sert à masquer la commande
+          // de la liste readiness une fois la préparation créée.
           pendingPointId: evt.pendingPointId,
         });
-        // Marquer l'événement calendrier comme utilisé
-        if (evt.pendingPointId) {
-          try {
-            await pendingPointsService.markUsedInPreparation(evt.pendingPointId);
-          } catch (e) {
-            console.error('Erreur marquage événement utilisé:', e);
-          }
-        }
       }
 
       success(`${evenementsValides.length} préparation(s) créée(s)`);
@@ -1151,7 +1146,7 @@ export default function PreparationsPage() {
                   {/* Sélection via Google Agenda */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Choisir un événement Google Agenda
+                      Choisir un événement (readiness CRM)
                     </label>
                     <select
                       value={evt.pendingPointId || ''}

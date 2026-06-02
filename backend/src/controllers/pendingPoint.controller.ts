@@ -3,7 +3,7 @@ import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
 import { syncGoogleCalendarEvents } from '../services/googleCalendar.service.js';
-import { syncCrmPendingPoints, triggerCrmSyncDebounced } from '../services/crmSync.service.js';
+import { syncCrmPendingPoints, triggerCrmSyncDebounced, fetchReadinessEvents } from '../services/crmSync.service.js';
 
 // ─── Helpers CRM import ──────────────────────────────────────────────────────
 
@@ -319,48 +319,37 @@ export async function markDispatched(req: Request, res: Response): Promise<void>
 }
 
 /**
- * GET /api/pending-points/calendar-events?calendarType=shootnbox|smakk
- * Liste les événements CRM (source crm_shootnbox / crm_smakk) pour la page Préparations.
- * Date: aujourd'hui → +60 jours. Exclut les événements déjà utilisés dans une préparation.
+ * GET /api/pending-points/calendar-events
+ * Événements de préparation des DEUX CRM (Shootnbox + Smakk), lus en direct
+ * depuis la table readiness.php (readiness_ajax.php), pas depuis pending_points.
+ * Fusion des deux marques, fenêtre aujourd'hui → +60 j (cache 60 s côté service).
+ * Le frontend aiguille chaque événement vers la bonne fiche borne via `produitNom`
+ * (colonne "Borne"). Exclut les commandes ayant déjà une préparation active.
  */
-export async function listCalendarEvents(req: Request, res: Response): Promise<void> {
-  const { calendarType } = req.query;
+export async function listCalendarEvents(_req: Request, res: Response): Promise<void> {
+  const events = await fetchReadinessEvents();
 
-  const now = new Date();
-  const dateStart = ensureDateUTC(now.toISOString().substring(0, 10));
-  const dateEnd = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
-
-  // Filtre par marque CRM
-  let sourceFilter: any = { source: { in: ['crm_shootnbox', 'crm_smakk'] } };
-  if (calendarType === 'smakk') {
-    sourceFilter = { source: 'crm_smakk' };
-  } else if (calendarType === 'shootnbox') {
-    sourceFilter = { source: 'crm_shootnbox' };
-  }
-
-  const points = await prisma.pendingPoint.findMany({
-    where: {
-      ...sourceFilter,
-      date: { gte: dateStart, lte: dateEnd },
-      usedInPreparation: false,
-      ignoredInPreparation: false,
-      type: 'livraison',
-    },
-    orderBy: { date: 'asc' },
+  // Masquer les commandes qui ont déjà une préparation active (non archivée).
+  // L'id readiness (`rdy_<brand>_<orderId>`) est stocké dans Preparation.pendingPointId.
+  const activePreps = await prisma.preparation.findMany({
+    where: { pendingPointId: { not: null }, dateArchivage: null },
+    select: { pendingPointId: true },
   });
+  const usedIds = new Set(activePreps.map((p) => p.pendingPointId));
 
-  const events = points.map((p: any) => ({
-    id: p.id,
-    date: p.date,
-    clientName: p.clientName,
-    eventName: p.eventName || null,
-    produitNom: p.produitNom,
-    adresse: p.adresse,
-    externalId: p.externalId,
-    suggestedMachineId: p.suggestedMachineId || null,
-  }));
+  const result = events
+    .filter((e) => !usedIds.has(e.id))
+    .map((e) => ({
+      id: e.id,
+      date: e.date,
+      clientName: e.clientName,
+      eventName: e.eventName,
+      produitNom: e.produitNom,
+      externalId: e.orderId,
+      suggestedMachineId: null,
+    }));
 
-  apiResponse.success(res, events);
+  apiResponse.success(res, result);
 }
 
 /**

@@ -1554,3 +1554,147 @@ export function stopCrmSync(): void {
     console.log('[CRM Sync] Sync stopped');
   }
 }
+
+// ─── Readiness events (page Préparations) ─────────────────────────
+// Source unique des menus déroulants "Choisir un événement" : la table
+// readiness.php des DEUX CRM (readiness_ajax.php). On lit la colonne "Borne"
+// (type de borne) pour aiguiller chaque événement vers la bonne fiche, et la
+// colonne "Nom d'Event" (nom_event chez Shootnbox, societe chez Smakk).
+// Le n° FA n'est pas importé. Toutes les commandes sont incluses (livraison +
+// retrait), conformément au besoin métier (on prépare la borne dans tous les cas).
+
+export interface ReadinessEvent {
+  id: string;                 // `rdy_<brand>_<orderId>` — stocké dans Preparation.pendingPointId
+  orderId: string;
+  brand: 'shootnbox' | 'smakk';
+  date: string;               // ISO yyyy-mm-dd
+  clientName: string;
+  eventName: string | null;
+  produitNom: string | null;  // type normalisé (Vegas, VegasSlim, Smakk, Ring, ...)
+  boxIds: string;             // colonne "N" (ex: "V1/P,V2/P")
+}
+
+// Colonne "Borne" du CRM → type OptiTour. Vegas Slim + Smakk Slim → VegasSlim.
+const READINESS_TYPE_MAP: Record<string, string> = {
+  'vegas': 'Vegas',
+  'vegas slim': 'VegasSlim',
+  'smakk': 'Smakk',
+  'smakk slim': 'VegasSlim',
+  'ring': 'Ring',
+  'miroir': 'Miroir',
+  'playbox': 'Playbox',
+  'karaoké': 'Playbox',
+  'karaoke': 'Playbox',
+  'aircam': 'Aircam',
+  'spinner': 'Spinner',
+};
+
+function normalizeReadinessType(raw: string): string | null {
+  const clean = stripHtml(String(raw || '')).trim();
+  if (!clean) return null;
+  return READINESS_TYPE_MAP[clean.toLowerCase()] ?? clean;
+}
+
+// "01.06.2026<br />ID 3574" → "2026-06-01"
+function parseReadinessDate(raw: string): string | null {
+  const m = stripHtml(String(raw || '')).match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (!m) return null;
+  return `${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}`;
+}
+
+function parseReadinessRows(rows: any[], brand: 'shootnbox' | 'smakk'): ReadinessEvent[] {
+  const events: ReadinessEvent[] = [];
+  for (const row of rows) {
+    const orderId = stripHtml(String(row.id || '')).trim();
+    if (!orderId) continue;
+
+    const date = parseReadinessDate(String(row.date || ''));
+    if (!date) continue;
+
+    const produitNom = normalizeReadinessType(String(row.borne || ''));
+    // Shootnbox a un vrai champ nom_event ; Smakk non → repli sur societe.
+    const eventName = stripHtml(String(row.nom_event || '')).trim()
+      || stripHtml(String(row.societe || '')).trim()
+      || null;
+    const clientName = stripHtml(String(row.name || '')).trim()
+      || stripHtml(String(row.societe || '')).trim()
+      || 'Client inconnu';
+
+    events.push({
+      id: `rdy_${brand}_${orderId}`,
+      orderId,
+      brand,
+      date,
+      clientName,
+      eventName,
+      produitNom,
+      boxIds: stripHtml(String(row.box_id || '')).trim(),
+    });
+  }
+  return events;
+}
+
+async function fetchShootnboxReadinessEvents(signal?: AbortSignal): Promise<ReadinessEvent[]> {
+  if (!SHOOTNBOX_EMAIL || !SHOOTNBOX_PASSWORD) {
+    console.warn('[Readiness] Shootnbox credentials manquants — readiness Shootnbox ignorée');
+    return [];
+  }
+  const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox', signal);
+  const response = await fetch(`${SHOOTNBOX_BASE}/readiness_ajax.php`, {
+    method: 'POST',
+    headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'draw=1&start=0&length=1000',
+    signal,
+  });
+  const data = await response.json() as any;
+  return parseReadinessRows(data.aaData || data.data || [], 'shootnbox');
+}
+
+async function fetchSmakkReadinessEvents(signal?: AbortSignal): Promise<ReadinessEvent[]> {
+  const response = await fetch(`${SMAKK_MANAGER_BASE}/readiness_ajax.php`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'draw=1&start=0&length=1000',
+    signal: signal ?? AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error(`Smakk readiness HTTP ${response.status}`);
+  const data = await response.json() as any;
+  return parseReadinessRows(data.aaData || data.data || [], 'smakk');
+}
+
+let readinessCache: { events: ReadinessEvent[]; at: number } | null = null;
+const READINESS_CACHE_TTL_MS = 60 * 1000;
+
+/**
+ * Événements de préparation fusionnés des deux CRM (Shootnbox + Smakk),
+ * bornés entre aujourd'hui et +60 jours. Cache mémoire de 60 s pour éviter
+ * un login Shootnbox à chaque ouverture de modal.
+ */
+export async function fetchReadinessEvents(): Promise<ReadinessEvent[]> {
+  if (readinessCache && Date.now() - readinessCache.at < READINESS_CACHE_TTL_MS) {
+    return readinessCache.events;
+  }
+
+  // Les deux CRM en parallèle ; une marque en échec ne bloque pas l'autre.
+  const [snb, smk] = await Promise.allSettled([
+    fetchShootnboxReadinessEvents(),
+    fetchSmakkReadinessEvents(),
+  ]);
+
+  const all: ReadinessEvent[] = [];
+  if (snb.status === 'fulfilled') all.push(...snb.value);
+  else console.error('[Readiness] Shootnbox échec:', snb.reason);
+  if (smk.status === 'fulfilled') all.push(...smk.value);
+  else console.error('[Readiness] Smakk échec:', smk.reason);
+
+  // Fenêtre temporelle : aujourd'hui → +60 j.
+  const today = new Date();
+  const startStr = today.toISOString().substring(0, 10);
+  const endStr = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
+  const filtered = all
+    .filter(e => e.date >= startStr && e.date <= endStr)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  readinessCache = { events: filtered, at: Date.now() };
+  return filtered;
+}
