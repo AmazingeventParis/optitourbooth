@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Card, Button, Modal, Input, Badge } from '@/components/ui';
+import { Card, Button, Modal, Input, Badge, SearchableSelect } from '@/components/ui';
 import { machinesService, MachineIncident } from '@/services/machines.service';
 import { preparationsService } from '@/services/preparations.service';
 import { pendingPointsService, CalendarEvent } from '@/services/pendingPoints.service';
@@ -1148,12 +1148,33 @@ export default function PreparationsPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Choisir un événement (readiness CRM)
                     </label>
-                    <select
+                    <SearchableSelect
                       value={evt.pendingPointId || ''}
-                      onChange={(e) => {
+                      placeholder="Tapez le nom du client…"
+                      options={[
+                        { value: '', label: '— Saisie manuelle —' },
+                        ...calendarEvents
+                          .filter(ce => {
+                            // Exclure les événements déjà choisis dans un autre créneau
+                            if (evenements.some((ev, i) => i !== index && ev.pendingPointId === ce.id)) return false;
+                            // Filtrer par type de borne (produitNom = colonne "Borne")
+                            if (!ce.produitNom || !selectedMachine) return true;
+                            return ce.produitNom === selectedMachine.type;
+                          })
+                          .map(ce => {
+                            const dateStr = typeof ce.date === 'string'
+                              ? ce.date.substring(0, 10)
+                              : new Date(ce.date).toISOString().substring(0, 10);
+                            // Libellé : [date d'événement] - [nom du client]
+                            return {
+                              value: ce.id,
+                              label: `${format(parseISO(dateStr), 'd MMM yyyy', { locale: fr })} - ${ce.clientName}`,
+                            };
+                          }),
+                      ]}
+                      onChange={(selectedId) => {
                         const newEvents = [...evenements];
-                        const selectedId = e.target.value;
-                        if (selectedId === '') {
+                        if (!selectedId) {
                           // Mode manuel
                           newEvents[index] = { dateEvenement: '', client: '', pendingPointId: undefined };
                         } else {
@@ -1171,30 +1192,7 @@ export default function PreparationsPage() {
                         }
                         setEvenements(newEvents);
                       }}
-                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
-                    >
-                      <option value="">-- Saisie manuelle --</option>
-                      {calendarEvents
-                        .filter(ce => {
-                          // Exclude events already selected in other slots
-                          if (evenements.some((ev, i) => i !== index && ev.pendingPointId === ce.id)) return false;
-                          // Filter by machine type: show only matching produitNom or unidentified events
-                          if (!ce.produitNom || !selectedMachine) return true;
-                          return ce.produitNom === selectedMachine.type;
-                        })
-                        .map(ce => {
-                          const dateStr = typeof ce.date === 'string'
-                            ? ce.date.substring(0, 10)
-                            : new Date(ce.date).toISOString().substring(0, 10);
-                          // Affichage : [date d'événement] - [nom du client].
-                          // Pas de type de borne (déjà classés par fiche).
-                          return (
-                            <option key={ce.id} value={ce.id}>
-                              {format(parseISO(dateStr), 'd MMM yyyy', { locale: fr })} - {ce.clientName}
-                            </option>
-                          );
-                        })}
-                    </select>
+                    />
                   </div>
 
                   {/* Champs date et client (auto-remplis ou manuels) */}
