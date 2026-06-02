@@ -1164,7 +1164,7 @@ export default function PreparationsPage() {
                               : new Date(calEvt.date).toISOString().substring(0, 10);
                             newEvents[index] = {
                               dateEvenement: dateStr,
-                              client: calEvt.eventName || calEvt.clientName,
+                              client: calEvt.clientName,
                               pendingPointId: calEvt.id,
                             };
                           }
@@ -1186,12 +1186,11 @@ export default function PreparationsPage() {
                           const dateStr = typeof ce.date === 'string'
                             ? ce.date.substring(0, 10)
                             : new Date(ce.date).toISOString().substring(0, 10);
-                          const label = ce.eventName || ce.clientName;
+                          // Affichage : [date d'événement] - [nom du client].
+                          // Pas de type de borne (déjà classés par fiche).
                           return (
                             <option key={ce.id} value={ce.id}>
-                              {format(parseISO(dateStr), 'd MMM yyyy', { locale: fr })} - {label}
-                              {ce.eventName && ce.clientName !== ce.eventName ? ` · ${ce.clientName}` : ''}
-                              {ce.produitNom ? ` (${ce.produitNom})` : ''}
+                              {format(parseISO(dateStr), 'd MMM yyyy', { locale: fr })} - {ce.clientName}
                             </option>
                           );
                         })}

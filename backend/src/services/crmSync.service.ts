@@ -1612,12 +1612,19 @@ function parseReadinessRows(rows: any[], brand: 'shootnbox' | 'smakk'): Readines
     if (!date) continue;
 
     const produitNom = normalizeReadinessType(String(row.borne || ''));
-    // Shootnbox a un vrai champ nom_event ; Smakk non → repli sur societe.
-    const eventName = stripHtml(String(row.nom_event || '')).trim()
+
+    // Colonne "Nom d'Event". Shootnbox y concatène "<date> <client> <FA>"
+    // (ex: "06.06.2026 Soumeillan Célyne FA14034") → on retire la date en
+    // préfixe et le n° FA en suffixe pour ne garder que le nom du client.
+    const rawEventName = stripHtml(String(row.nom_event || '')).trim();
+    const clientFromEvent = rawEventName
+      .replace(/^\s*\d{1,2}\.\d{1,2}\.\d{4}\s*/, '')
+      .replace(/\s*FA\s*\d+\s*$/i, '')
+      .trim();
+    // Smakk n'a pas de nom_event → repli sur societe puis name.
+    const clientName = clientFromEvent
       || stripHtml(String(row.societe || '')).trim()
-      || null;
-    const clientName = stripHtml(String(row.name || '')).trim()
-      || stripHtml(String(row.societe || '')).trim()
+      || stripHtml(String(row.name || '')).trim()
       || 'Client inconnu';
 
     events.push({
@@ -1626,7 +1633,7 @@ function parseReadinessRows(rows: any[], brand: 'shootnbox' | 'smakk'): Readines
       brand,
       date,
       clientName,
-      eventName,
+      eventName: null,
       produitNom,
       boxIds: stripHtml(String(row.box_id || '')).trim(),
     });
