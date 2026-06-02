@@ -74,6 +74,7 @@ export default function SearchableSelect({
               )}
               displayValue={(option: Option | null) => option?.label || ''}
               onChange={(event) => setQuery(event.target.value)}
+              onFocus={(event) => event.currentTarget.select()}
               placeholder={placeholder}
             />
             <Combobox.Button className="absolute inset-y-0 right-0 flex items-center pr-2">
