@@ -879,12 +879,21 @@ enum ChronopostStatut {
 
 model ChronopostExpedition {
   id                  String           @id @default(uuid())
-  numeroColis         String           @unique @map("numero_colis")
+  // Optionnel : un événement importé du CRM n'a pas encore de n° de colis
+  // (il apparaît à l'expédition). Postgres autorise plusieurs NULL sous @unique.
+  numeroColis         String?          @unique @map("numero_colis")
+  // Import CRM : clé de dédup stable (snb_order_<id> / smk_order_<id>)
+  externalId          String?          @unique @map("external_id")
+  source              String?          @default("manual") // manual | crm_shootnbox | crm_smakk | chronotrace
   clientNom           String           @map("client_nom")
   clientAdresse       String?          @map("client_adresse")
   clientVille         String?          @map("client_ville")
   produitNom          String?          @map("produit_nom")
+  contactNom          String?          @map("contact_nom")
+  contactTelephone    String?          @map("contact_telephone")
+  modeRetour          String?          @map("mode_retour") // recup | poste
   notes               String?          @db.Text
+  dateEvenement       DateTime?        @map("date_evenement")
   dateDepart          DateTime?        @map("date_depart")
   dateLivraisonPrevue DateTime?        @map("date_livraison_prevue")
   dateLivraisonReelle DateTime?        @map("date_livraison_reelle")

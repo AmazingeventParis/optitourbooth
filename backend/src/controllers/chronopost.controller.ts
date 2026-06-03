@@ -64,7 +64,7 @@ export async function addExpedition(req: Request, res: Response): Promise<void> 
 
 export async function updateExpedition(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
-  const { produitNom, dateRetourPrevu, dateRetourReel, numeroColisRetour, statut, notes, clientNom } = req.body;
+  const { produitNom, dateDepart, dateRetourPrevu, dateRetourReel, numeroColis, numeroColisRetour, statut, notes, clientNom, contactNom, contactTelephone } = req.body;
 
   const exp = await prisma.chronopostExpedition.findUnique({ where: { id } });
   if (!exp) { apiResponse.notFound(res, 'Expédition non trouvée'); return; }
@@ -72,6 +72,10 @@ export async function updateExpedition(req: Request, res: Response): Promise<voi
   const updateData: Record<string, any> = {
     ...(produitNom !== undefined && { produitNom }),
     ...(clientNom !== undefined && { clientNom }),
+    ...(contactNom !== undefined && { contactNom }),
+    ...(contactTelephone !== undefined && { contactTelephone }),
+    ...(numeroColis !== undefined && { numeroColis: numeroColis ? String(numeroColis).trim().toUpperCase() : null }),
+    ...(dateDepart !== undefined && { dateDepart: dateDepart ? new Date(dateDepart) : null }),
     ...(dateRetourPrevu !== undefined && { dateRetourPrevu: dateRetourPrevu ? new Date(dateRetourPrevu) : null }),
     ...(dateRetourReel !== undefined && { dateRetourReel: dateRetourReel ? new Date(dateRetourReel) : null }),
     ...(numeroColisRetour !== undefined && { numeroColisRetour }),
@@ -123,6 +127,7 @@ export async function syncExpedition(req: Request, res: Response): Promise<void>
   const { id } = req.params;
   const exp = await prisma.chronopostExpedition.findUnique({ where: { id } });
   if (!exp) { apiResponse.notFound(res, 'Expédition non trouvée'); return; }
+  if (!exp.numeroColis) { apiResponse.badRequest(res, 'Aucun n° de colis : renseignez-le pour suivre le colis'); return; }
 
   const result = await trackParcel(exp.numeroColis);
 

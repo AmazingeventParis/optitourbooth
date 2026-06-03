@@ -1,9 +1,18 @@
 import { prisma } from '../config/database.js';
 import { fetchAllParcels } from './chronotraceApi.service.js';
 import { trackParcel, inferStatutFromSignificantEvent } from './chronopost.service.js';
+import { syncChronopostFromCrm } from './crmSync.service.js';
 import { ChronopostStatut } from '@prisma/client';
 
 export async function syncChronopostAuto(): Promise<void> {
+  // 1. Import des événements Chronopost depuis le CRM (Shootnbox + Smakk).
+  //    Source de vérité des événements ; le n° de colis se remplit ensuite.
+  try {
+    await syncChronopostFromCrm();
+  } catch (e) {
+    console.error('[Chronopost CRON] Import CRM error:', e);
+  }
+
   let sessionConfigured = false;
   try {
     const session = await prisma.chronotraceSession.findUnique({ where: { id: 'singleton' } });
@@ -98,6 +107,21 @@ function normalizeClientNom(name: string): string {
     .join(' ');
 }
 
+// Cherche un événement importé du CRM (externalId présent, pas encore de n° de
+// colis) dont le nom de client correspond — pour y rattacher un colis Chronotrace
+// plutôt que créer un doublon.
+async function findCrmEventByClientName(clientNom: string) {
+  const normalized = normalizeClientNom(clientNom);
+  if (!normalized) return null;
+  const candidates = await prisma.chronopostExpedition.findMany({
+    where: { numeroColis: null, externalId: { not: null } },
+  });
+  for (const c of candidates) {
+    if (normalizeClientNom(c.clientNom) === normalized) return c;
+  }
+  return null;
+}
+
 async function findMatchingOutbound(clientNom: string, returnNumeroColis: string) {
   const normalized = normalizeClientNom(clientNom);
   if (!normalized) return null;
@@ -133,9 +157,27 @@ async function syncViaChronotrace(): Promise<void> {
       try {
         const existing = await prisma.chronopostExpedition.findUnique({ where: { numeroColis: p.numeroColis } });
         if (!existing) {
+          // Rapprochement : rattacher ce colis à un événement CRM sans n° (même client)
+          const crmEvent = await findCrmEventByClientName(p.clientNom);
+          if (crmEvent) {
+            await prisma.chronopostExpedition.update({
+              where: { id: crmEvent.id },
+              data: {
+                numeroColis: p.numeroColis,
+                statut: crmEvent.statut === 'rentre' ? 'rentre' : p.statut,
+                clientVille: p.clientVille || crmEvent.clientVille,
+                ...(p.dateDepart && { dateDepart: p.dateDepart }),
+                ...(p.dateLivraisonReelle && { dateLivraisonReelle: p.dateLivraisonReelle }),
+              },
+            });
+            linked++;
+            console.log(`[Chronopost CRON] Colis ${p.numeroColis} rattaché à l'événement CRM ${crmEvent.externalId} (${crmEvent.clientNom})`);
+            continue;
+          }
           await prisma.chronopostExpedition.create({
             data: {
               numeroColis: p.numeroColis,
+              source: 'chronotrace',
               clientNom: p.clientNom,
               clientVille: p.clientVille || null,
               clientAdresse: p.clientAdresse || null,
@@ -238,7 +280,7 @@ async function syncViaChronotrace(): Promise<void> {
 
 async function syncViaTrackingApi(): Promise<void> {
   const parcels = await prisma.chronopostExpedition.findMany({
-    where: { statut: { notIn: ['rentre'] } },
+    where: { statut: { notIn: ['rentre'] }, numeroColis: { not: null } },
   });
 
   if (parcels.length === 0) {
@@ -250,6 +292,7 @@ async function syncViaTrackingApi(): Promise<void> {
   let errors = 0;
 
   for (const parcel of parcels) {
+    if (!parcel.numeroColis) continue;
     try {
       const result = await trackParcel(parcel.numeroColis);
       if (result.errorCode !== '0' && result.errorCode !== '000') continue;

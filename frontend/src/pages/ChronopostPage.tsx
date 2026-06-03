@@ -78,6 +78,7 @@ export default function ChronopostPage() {
   // Edit state in detail panel
   const [editProduit, setEditProduit] = useState('');
   const [editClientNom, setEditClientNom] = useState('');
+  const [editNumeroColis, setEditNumeroColis] = useState('');
   const [editNumeroRetour, setEditNumeroRetour] = useState('');
   const [editDateRetour, setEditDateRetour] = useState('');
   const [editNotes, setEditNotes] = useState('');
@@ -123,6 +124,7 @@ export default function ChronopostPage() {
     if (selected) {
       setEditProduit(selected.produitNom ?? '');
       setEditClientNom(selected.clientNom ?? '');
+      setEditNumeroColis(selected.numeroColis ?? '');
       setEditNumeroRetour(selected.numeroColisRetour ?? '');
       setEditDateRetour(selected.dateRetourPrevu ? toInputDate(new Date(selected.dateRetourPrevu)) : '');
       setEditNotes(selected.notes ?? '');
@@ -276,6 +278,7 @@ export default function ChronopostPage() {
       const updated = await chronopostService.update(selected.id, {
         clientNom: editClientNom || undefined,
         produitNom: editProduit || undefined,
+        numeroColis: editNumeroColis.trim() || null,
         numeroColisRetour: editNumeroRetour || undefined,
         dateRetourPrevu: editDateRetour || undefined,
         notes: editNotes || undefined,
@@ -297,7 +300,7 @@ export default function ChronopostPage() {
 
   async function handleDelete() {
     if (!selected) return;
-    if (!confirm(`Supprimer ${selected.numeroColis} ?`)) return;
+    if (!confirm(`Supprimer ${selected.numeroColis || selected.clientNom} ?`)) return;
     try {
       await chronopostService.delete(selected.id);
       setSelected(null);
@@ -528,7 +531,9 @@ export default function ChronopostPage() {
         <div className="w-88 flex-shrink-0 bg-white rounded-2xl border border-gray-200 flex flex-col overflow-hidden shadow-sm" style={{ width: '360px' }}>
           <div className="flex items-center justify-between p-4 border-b border-gray-100">
             <div className="min-w-0">
-              <p className="text-xs text-gray-400 font-mono truncate">{selected.numeroColis}</p>
+              <p className={clsx('text-xs font-mono truncate', selected.numeroColis ? 'text-gray-400' : 'text-orange-500 italic')}>
+                {selected.numeroColis || 'N° à venir'}
+              </p>
               <h3 className="font-semibold text-gray-900 mt-0.5 truncate">{selected.clientNom}</h3>
             </div>
             <button onClick={() => setSelected(null)} className="ml-2 p-1.5 hover:bg-gray-100 rounded-lg flex-shrink-0">
@@ -593,6 +598,27 @@ export default function ChronopostPage() {
               )}
             </div>
 
+            {/* Infos événement (import CRM) */}
+            {(selected.dateEvenement || selected.clientAdresse || selected.contactNom || selected.contactTelephone || selected.modeRetour) && (
+              <div className="space-y-1.5 text-sm border-t border-gray-100 pt-4">
+                {selected.dateEvenement && (
+                  <div className="flex justify-between"><span className="text-gray-400">Événement</span><span className="font-medium text-gray-800">{formatDate(selected.dateEvenement)}</span></div>
+                )}
+                {selected.clientAdresse && (
+                  <div className="flex justify-between gap-3"><span className="text-gray-400 flex-shrink-0">Adresse</span><span className="text-gray-700 text-right">{selected.clientAdresse}{selected.clientVille ? `, ${selected.clientVille}` : ''}</span></div>
+                )}
+                {selected.contactNom && (
+                  <div className="flex justify-between gap-3"><span className="text-gray-400">Contact</span><span className="text-gray-700 text-right">{selected.contactNom}</span></div>
+                )}
+                {selected.contactTelephone && (
+                  <div className="flex justify-between"><span className="text-gray-400">Téléphone</span><span className="text-gray-700">{selected.contactTelephone}</span></div>
+                )}
+                {selected.modeRetour && (
+                  <div className="flex justify-between"><span className="text-gray-400">Retour</span><span className="text-gray-700">{selected.modeRetour === 'recup' ? 'Récupération chauffeur' : selected.modeRetour === 'poste' ? 'Renvoi par le client' : selected.modeRetour}</span></div>
+                )}
+              </div>
+            )}
+
             {/* Full tracking history (when synced individually) */}
             {selected.trackingData?.events && selected.trackingData.events.length > 0 && (
               <div>
@@ -614,6 +640,16 @@ export default function ChronopostPage() {
             {/* Editable fields */}
             <div className="border-t border-gray-100 pt-4 space-y-3">
               <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Informations logistiques</p>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">N° de colis (aller)</label>
+                <input
+                  type="text"
+                  value={editNumeroColis}
+                  onChange={e => setEditNumeroColis(e.target.value.toUpperCase())}
+                  placeholder="à compléter à l'expédition"
+                  className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg font-mono focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">Nom du client</label>
                 <input
@@ -674,16 +710,18 @@ export default function ChronopostPage() {
               </button>
             </div>
 
-            {/* Chronopost link */}
-            <a
-              href={`https://www.chronopost.fr/tracking-no-cms/suivi-page?listeNumerosLT=${selected.numeroColis}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-              Voir sur Chronopost.fr
-            </a>
+            {/* Chronopost link — uniquement si un n° de colis est connu */}
+            {selected.numeroColis && (
+              <a
+                href={`https://www.chronopost.fr/tracking-no-cms/suivi-page?listeNumerosLT=${selected.numeroColis}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                Voir sur Chronopost.fr
+              </a>
+            )}
           </div>
 
           {/* Actions footer */}
@@ -700,8 +738,9 @@ export default function ChronopostPage() {
             <div className="flex gap-2">
               <button
                 onClick={handleSyncOne}
-                disabled={syncingOne}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                disabled={syncingOne || !selected.numeroColis}
+                title={!selected.numeroColis ? 'Renseignez un n° de colis pour suivre le colis' : undefined}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
                 <ArrowPathIcon className={clsx('h-3.5 w-3.5', syncingOne && 'animate-spin')} />
                 {syncingOne ? 'Sync...' : 'Historique complet'}

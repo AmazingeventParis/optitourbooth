@@ -20,12 +20,18 @@ export interface ChronopostTrackingEvent {
 
 export interface ChronopostExpedition {
   id: string;
-  numeroColis: string;
+  numeroColis: string | null;
+  externalId?: string | null;
+  source?: string | null;
   clientNom: string;
   clientAdresse?: string;
   clientVille?: string;
   produitNom?: string;
+  contactNom?: string | null;
+  contactTelephone?: string | null;
+  modeRetour?: string | null;
   notes?: string;
+  dateEvenement?: string;
   dateDepart?: string;
   dateLivraisonPrevue?: string;
   dateLivraisonReelle?: string;

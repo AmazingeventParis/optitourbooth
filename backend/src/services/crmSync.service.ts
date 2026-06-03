@@ -1765,3 +1765,213 @@ export async function fetchReadinessEvents(): Promise<ReadinessEvent[]> {
   readinessCache = { events: filtered, at: Date.now() };
   return filtered;
 }
+
+// ─── Import Chronopost depuis le CRM ──────────────────────────────
+// Les commandes en mode "Chronopost" sont exclues des pending_points (pas de
+// chauffeur) → elles alimentent la section Chronopost dédiée. On les importe
+// des DEUX managers comme des "événements" (sans n° de colis : il n'existe qu'à
+// l'expédition). Upsert par externalId, sans écraser les saisies utilisateur ni
+// le suivi colis (Chronotrace).
+
+export interface ChronopostCrmSyncResult {
+  created: number;
+  updated: number;
+  errors: string[];
+}
+
+// Type de borne pour la section Chronopost (pas de variante Slim dans sa liste).
+function normalizeChronoProduit(raw: string): string | null {
+  const base = normalizeBoxType(stripHtml(String(raw || '')).trim());
+  const stripped = base.replace(/\s*slim$/i, '').trim();
+  return stripped || null;
+}
+
+async function upsertChronopostFromCrm(
+  rec: {
+    externalId: string;
+    source: 'crm_shootnbox' | 'crm_smakk';
+    clientNom: string;
+    produitNom: string | null;
+    clientAdresse: string | null;
+    clientVille: string | null;
+    contactNom: string | null;
+    contactTelephone: string | null;
+    modeRetour: string | null;
+    dateEvenement: string | null;   // ISO yyyy-mm-dd
+    dateDepart: string | null;      // ISO
+    dateRetourPrevu: string | null; // ISO
+  },
+  result: ChronopostCrmSyncResult,
+): Promise<void> {
+  const toDate = (s: string | null) => (s ? ensureDateUTC(s) : null);
+  try {
+    const existing = await prisma.chronopostExpedition.findUnique({ where: { externalId: rec.externalId } });
+    if (!existing) {
+      await prisma.chronopostExpedition.create({
+        data: {
+          externalId: rec.externalId,
+          source: rec.source,
+          clientNom: rec.clientNom,
+          produitNom: rec.produitNom,
+          clientAdresse: rec.clientAdresse,
+          clientVille: rec.clientVille,
+          contactNom: rec.contactNom,
+          contactTelephone: rec.contactTelephone,
+          modeRetour: rec.modeRetour,
+          dateEvenement: toDate(rec.dateEvenement),
+          dateDepart: toDate(rec.dateDepart),
+          dateRetourPrevu: toDate(rec.dateRetourPrevu),
+          statut: 'en_preparation',
+        },
+      });
+      result.created++;
+    } else {
+      // Maj des infos CRM sans écraser le n° de colis, le statut manuel ni les
+      // dates transporteur déjà connues (Chronotrace/manuel).
+      await prisma.chronopostExpedition.update({
+        where: { id: existing.id },
+        data: {
+          source: rec.source,
+          clientNom: rec.clientNom,
+          ...(rec.produitNom && { produitNom: rec.produitNom }),
+          ...(rec.clientAdresse && { clientAdresse: rec.clientAdresse }),
+          ...(rec.clientVille && { clientVille: rec.clientVille }),
+          ...(rec.contactNom && { contactNom: rec.contactNom }),
+          ...(rec.contactTelephone && { contactTelephone: rec.contactTelephone }),
+          ...(rec.modeRetour && { modeRetour: rec.modeRetour }),
+          ...(rec.dateEvenement && { dateEvenement: toDate(rec.dateEvenement) }),
+          ...(rec.dateDepart && !existing.dateDepart && { dateDepart: toDate(rec.dateDepart) }),
+          ...(rec.dateRetourPrevu && !existing.dateRetourPrevu && { dateRetourPrevu: toDate(rec.dateRetourPrevu) }),
+        },
+      });
+      result.updated++;
+    }
+  } catch (e: any) {
+    result.errors.push(`${rec.externalId}: ${e.message}`);
+  }
+}
+
+export let lastChronopostCrmSyncResult: (ChronopostCrmSyncResult & { completedAt: string }) | null = null;
+
+export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> {
+  const result: ChronopostCrmSyncResult = { created: 0, updated: 0, errors: [] };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error('syncChronopostFromCrm timeout (60s)')), 60_000);
+
+  // ── Shootnbox : formulaires logType=chronopost + box_type via orders_ajax ──
+  if (SHOOTNBOX_EMAIL && SHOOTNBOX_PASSWORD) {
+    try {
+      const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox Chronopost', controller.signal);
+
+      // box_type par orderId (best-effort)
+      const boxByOrderId = new Map<string, string>();
+      try {
+        for (const urlSuffix of ['orders_ajax.php?status=2', 'orders_ajax.php?status=2&arch=true']) {
+          let start = 0;
+          let total = 0;
+          do {
+            const { rows, totalFiltered } = await fetchOrdersPage(cookie, `${SHOOTNBOX_BASE}/${urlSuffix}`, start, 500, controller.signal);
+            if (rows.length === 0) break;
+            total = totalFiltered;
+            for (const row of rows) {
+              const oid = String(row.id || '').trim();
+              if (oid) boxByOrderId.set(oid, stripHtml(String(row.box_type || '')));
+            }
+            start += 500;
+          } while (start < total);
+        }
+      } catch { /* type de borne best-effort */ }
+
+      const lookupKey = process.env.CRM_LOOKUP_KEY || 'otb_crm_lookup_2026';
+      const resp = await fetch(`${SHOOTNBOX_BASE}/otb_cfg_bulk.php?key=${lookupKey}`, { signal: controller.signal });
+      const body = await resp.json() as any[];
+      const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+
+      for (const cfg of (Array.isArray(body) ? body : [])) {
+        if ((cfg.logistique_type || '') !== 'chronopost') continue;
+        const orderId = String(cfg.order_id || '').trim();
+        if (!orderId) continue;
+        const d = cfg.submitted_data || {};
+        const eventISO = pendingDateDMY(stripHtml(String(cfg.event_date || '')));
+        if (eventISO && new Date(eventISO) < today) continue; // événements passés ignorés
+
+        const clientNom = stripHtml(String(cfg.societe || '')).trim()
+          || `${stripHtml(String(cfg.first_name || ''))} ${stripHtml(String(cfg.last_name || ''))}`.trim()
+          || `Commande ${orderId}`;
+        const adresse = pendingBuildAddress(d.log_chrono_rue_num, d.log_chrono_rue_nom, d.log_chrono_cp, d.log_chrono_ville);
+
+        await upsertChronopostFromCrm({
+          externalId: `snb_order_${orderId}`,
+          source: 'crm_shootnbox',
+          clientNom,
+          produitNom: normalizeChronoProduit(boxByOrderId.get(orderId) || ''),
+          clientAdresse: adresse || null,
+          clientVille: (d.log_chrono_ville || '').trim() || null,
+          contactNom: clientNom,
+          contactTelephone: (d.log_chrono_tel || '').trim() || null,
+          modeRetour: (d.log_chrono_retour || '').trim() || null,
+          dateEvenement: eventISO,
+          dateDepart: eventISO, // pas de date transporteur côté Shootnbox → position sur l'événement
+          dateRetourPrevu: null,
+        }, result);
+      }
+    } catch (e: any) {
+      result.errors.push(`Shootnbox: ${e.message}`);
+    }
+  }
+
+  // ── Smakk : _otb_orders.php, delivery_options contient "chronopost" ──
+  try {
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    let page = 0;
+    let total = 0;
+    do {
+      const url = `${SMAKK_API_URL}?key=${SMAKK_API_KEY}&page=${page}&size=500`;
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) throw new Error(`Smakk API HTTP ${response.status}`);
+      const data = await response.json() as any;
+      if (data.error) throw new Error(`Smakk API error: ${data.error}`);
+      total = data.total || 0;
+      const rows: any[] = data.data || [];
+
+      for (const row of rows) {
+        const delivOpts = String(row.delivery_options || '').toLowerCase();
+        if (!delivOpts.includes('chronopost')) continue;
+        const orderId = String(row.id || '').trim();
+        if (!orderId) continue;
+        const eventISO = pendingDateDMY(String(row.event_date || '').trim());
+        if (eventISO && new Date(eventISO) < today) continue;
+
+        const clientNom = String(row.company || '').trim()
+          || [row.first_name, row.last_name].filter(Boolean).map((s: string) => s.trim()).join(' ').trim()
+          || `Commande ${orderId}`;
+        const adresse = pendingBuildAddress(undefined, (row.address || '').trim(), (row.cp || '').trim(), (row.city || '').trim());
+
+        await upsertChronopostFromCrm({
+          externalId: `smk_order_${orderId}`,
+          source: 'crm_smakk',
+          clientNom,
+          produitNom: normalizeChronoProduit(String(row.box_type || '')),
+          clientAdresse: adresse || null,
+          clientVille: (row.city || '').trim() || null,
+          contactNom: (row.take_contact || '').trim() || null,
+          contactTelephone: (row.phone || '').trim() || null,
+          modeRetour: null,
+          dateEvenement: eventISO,
+          dateDepart: pendingDateDMY(String(row.take_date || '').trim()) || eventISO,
+          dateRetourPrevu: pendingDateDMY(String(row.return_date || '').trim()),
+        }, result);
+      }
+
+      page++;
+      if (rows.length === 0) break;
+    } while (page * 500 < total);
+  } catch (e: any) {
+    result.errors.push(`Smakk: ${e.message}`);
+  }
+
+  clearTimeout(timeout);
+  lastChronopostCrmSyncResult = { ...result, completedAt: new Date().toISOString() };
+  console.log(`[Chronopost CRM] Terminé: created=${result.created}, updated=${result.updated}, errors=${result.errors.length}`);
+  return result;
+}
