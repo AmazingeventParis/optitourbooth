@@ -1858,13 +1858,15 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(new Error('syncChronopostFromCrm timeout (60s)')), 60_000);
 
-  // ── Shootnbox : formulaires logType=chronopost + box_type via orders_ajax ──
+  // ── Shootnbox : UNION de deux critères ──
+  //   1. box_type = "Vegas Slim" (toujours envoyé par transporteur) — depuis orders_ajax status=2
+  //   2. formulaire logistique marqué Chronopost (logType=chronopost) — n'importe quel type de borne
   if (SHOOTNBOX_EMAIL && SHOOTNBOX_PASSWORD) {
     try {
       const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox Chronopost', controller.signal);
 
-      // box_type par orderId (best-effort)
-      const boxByOrderId = new Map<string, string>();
+      // Infos commandes par orderId (box_type, client, date événement)
+      const ordersMap = new Map<string, { boxType: string; clientName: string; eventISO: string | null }>();
       try {
         for (const urlSuffix of ['orders_ajax.php?status=2', 'orders_ajax.php?status=2&arch=true']) {
           let start = 0;
@@ -1875,41 +1877,70 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
             total = totalFiltered;
             for (const row of rows) {
               const oid = String(row.id || '').trim();
-              if (oid) boxByOrderId.set(oid, stripHtml(String(row.box_type || '')));
+              if (!oid) continue;
+              const [company, person] = parseCustomerField(String(row.customer || ''));
+              ordersMap.set(oid, {
+                boxType: stripHtml(String(row.box_type || '')),
+                clientName: (company || person || '').trim(),
+                eventISO: pendingDateDMY(stripHtml(String(row.event_date || ''))),
+              });
             }
             start += 500;
           } while (start < total);
         }
-      } catch { /* type de borne best-effort */ }
+      } catch (e: any) { result.errors.push(`Shootnbox orders: ${e.message}`); }
 
+      // Formulaires logistiques (clé = order_id)
       const lookupKey = process.env.CRM_LOOKUP_KEY || 'otb_crm_lookup_2026';
-      const resp = await fetch(`${SHOOTNBOX_BASE}/otb_cfg_bulk.php?key=${lookupKey}`, { signal: controller.signal });
-      const body = await resp.json() as any[];
-      const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+      const formByOrderId = new Map<string, { d: any; logType: string; eventISO: string | null; clientNom: string }>();
+      try {
+        const resp = await fetch(`${SHOOTNBOX_BASE}/otb_cfg_bulk.php?key=${lookupKey}`, { signal: controller.signal });
+        const body = await resp.json() as any[];
+        for (const cfg of (Array.isArray(body) ? body : [])) {
+          const oid = String(cfg.order_id || '').trim();
+          if (!oid) continue;
+          const clientNom = stripHtml(String(cfg.societe || '')).trim()
+            || `${stripHtml(String(cfg.first_name || ''))} ${stripHtml(String(cfg.last_name || ''))}`.trim();
+          formByOrderId.set(oid, {
+            d: cfg.submitted_data || {},
+            logType: cfg.logistique_type || '',
+            eventISO: pendingDateDMY(stripHtml(String(cfg.event_date || ''))),
+            clientNom,
+          });
+        }
+      } catch (e: any) { result.errors.push(`Shootnbox forms: ${e.message}`); }
 
-      for (const cfg of (Array.isArray(body) ? body : [])) {
-        if ((cfg.logistique_type || '') !== 'chronopost') continue;
-        const orderId = String(cfg.order_id || '').trim();
-        if (!orderId) continue;
-        const d = cfg.submitted_data || {};
-        const eventISO = pendingDateDMY(stripHtml(String(cfg.event_date || '')));
+      // Ensemble éligible = Vegas Slim (orders) ∪ formulaires Chronopost
+      const eligibleIds = new Set<string>();
+      for (const [oid, o] of ordersMap) if (/slim/i.test(o.boxType)) eligibleIds.add(oid);
+      for (const [oid, f] of formByOrderId) if (f.logType === 'chronopost') eligibleIds.add(oid);
+
+      const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+      for (const orderId of eligibleIds) {
+        const o = ordersMap.get(orderId);
+        const f = formByOrderId.get(orderId);
+        const isChronoForm = f?.logType === 'chronopost';
+        const d = f?.d || {};
+
+        const eventISO = f?.eventISO || o?.eventISO || null;
         if (eventISO && new Date(eventISO) < today) continue; // événements passés ignorés
 
-        const clientNom = stripHtml(String(cfg.societe || '')).trim()
-          || `${stripHtml(String(cfg.first_name || ''))} ${stripHtml(String(cfg.last_name || ''))}`.trim()
-          || `Commande ${orderId}`;
-        const adresse = pendingBuildAddress(d.log_chrono_rue_num, d.log_chrono_rue_nom, d.log_chrono_cp, d.log_chrono_ville);
+        const clientNom = (f?.clientNom || '').trim() || o?.clientName || `Commande ${orderId}`;
+        // Adresse/contact seulement si formulaire Chronopost rempli (champs log_chrono_*)
+        const adresse = isChronoForm
+          ? pendingBuildAddress(d.log_chrono_rue_num, d.log_chrono_rue_nom, d.log_chrono_cp, d.log_chrono_ville)
+          : '';
 
         await upsertChronopostFromCrm({
           externalId: `snb_order_${orderId}`,
           source: 'crm_shootnbox',
           clientNom,
-          produitNom: normalizeChronoProduit(boxByOrderId.get(orderId) || ''),
+          produitNom: normalizeChronoProduit(o?.boxType || ''),
           clientAdresse: adresse || null,
-          clientVille: (d.log_chrono_ville || '').trim() || null,
-          contactNom: clientNom,
-          contactTelephone: (d.log_chrono_tel || '').trim() || null,
-          modeRetour: (d.log_chrono_retour || '').trim() || null,
+          clientVille: isChronoForm ? (d.log_chrono_ville || '').trim() || null : null,
+          contactNom: isChronoForm ? clientNom : null,
+          contactTelephone: isChronoForm ? (d.log_chrono_tel || '').trim() || null : null,
+          modeRetour: isChronoForm ? (d.log_chrono_retour || '').trim() || null : null,
           dateEvenement: eventISO,
           dateDepart: eventISO, // pas de date transporteur côté Shootnbox → position sur l'événement
           dateRetourPrevu: null,
@@ -1936,7 +1967,9 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
 
       for (const row of rows) {
         const delivOpts = String(row.delivery_options || '').toLowerCase();
-        if (!delivOpts.includes('chronopost')) continue;
+        const isSlim = String(row.box_type || '').toLowerCase().includes('slim');
+        // Inclus si : livraison Chronopost choisie OU borne Slim (toujours par transporteur)
+        if (!delivOpts.includes('chronopost') && !isSlim) continue;
         const orderId = String(row.id || '').trim();
         if (!orderId) continue;
         const eventISO = pendingDateDMY(String(row.event_date || '').trim());
