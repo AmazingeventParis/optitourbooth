@@ -54,6 +54,20 @@ function isSameDay(d1: Date, d2: Date): boolean {
     d1.getDate() === d2.getDate();
 }
 
+// Jours ouvrés = lundi→vendredi (week-ends exclus). n>0 ajoute, n<0 retire.
+// (les jours fériés ne sont pas pris en compte)
+function addBusinessDays(date: Date, n: number): Date {
+  const d = new Date(date);
+  const step = n >= 0 ? 1 : -1;
+  let remaining = Math.abs(n);
+  while (remaining > 0) {
+    d.setDate(d.getDate() + step);
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) remaining--;
+  }
+  return d;
+}
+
 export default function ChronopostPage() {
   const [expeditions, setExpeditions] = useState<ChronopostExpedition[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,6 +162,21 @@ export default function ChronopostPage() {
     const c = new Date(d); c.setHours(12, 0, 0, 0); return c;
   }
 
+  // Durée d'immobilisation de la borne (départ de nos locaux → retour dans nos locaux).
+  // Règle : départ = 3 jours ouvrés AVANT la presta, retour = 2 jours ouvrés APRÈS.
+  // Calculé depuis la date d'événement quand on l'a (import CRM) ; sinon repli sur
+  // les dates transporteur réelles (colis manuel/Chronotrace).
+  function immobSpan(e: ChronopostExpedition): { start: Date; end: Date } | null {
+    if (e.dateEvenement) {
+      const ev = noon(new Date(e.dateEvenement));
+      return { start: noon(addBusinessDays(ev, -3)), end: noon(addBusinessDays(ev, 2)) };
+    }
+    if (!e.dateDepart) return null;
+    const dep = noon(new Date(e.dateDepart));
+    const returnRaw = e.dateRetourReel || e.dateRetourPrevu;
+    return { start: dep, end: returnRaw ? noon(new Date(returnRaw)) : dep };
+  }
+
   interface DayEvent {
     expedition: ChronopostExpedition;
     /** start = departure day, middle = in-transit, end = return day */
@@ -161,25 +190,16 @@ export default function ChronopostPage() {
     const result: DayEvent[] = [];
 
     for (const e of expeditions) {
-      if (!e.dateDepart) continue;
-      const dep = noon(new Date(e.dateDepart));
-      const returnRaw = e.dateRetourReel || e.dateRetourPrevu;
-
-      if (returnRaw) {
-        const ret = noon(new Date(returnRaw));
-        if (cellDate < dep || cellDate > ret) continue;
-        const isOverdue = e.statut !== 'rentre' && !!e.dateRetourPrevu && noon(new Date(e.dateRetourPrevu)) < todayNoon;
-        let type: DayEvent['type'];
-        if (isSameDay(cellDate, dep)) type = 'start';
-        else if (isSameDay(cellDate, ret)) type = 'end';
-        else type = 'middle';
-        result.push({ expedition: e, type, isOverdue });
-      } else {
-        // No return date known → only show on departure day
-        if (isSameDay(cellDate, dep)) {
-          result.push({ expedition: e, type: 'start', isOverdue: false });
-        }
-      }
+      const span = immobSpan(e);
+      if (!span) continue;
+      const { start: dep, end: ret } = span;
+      if (cellDate < dep || cellDate > ret) continue;
+      const isOverdue = e.statut !== 'rentre' && ret < todayNoon;
+      let type: DayEvent['type'];
+      if (isSameDay(cellDate, dep)) type = 'start';
+      else if (isSameDay(cellDate, ret)) type = 'end';
+      else type = 'middle';
+      result.push({ expedition: e, type, isOverdue });
     }
     return result;
   }
@@ -450,15 +470,10 @@ export default function ChronopostPage() {
                 const isToday = isSameDay(new Date(year, month, day), today);
                 // Cell is highlighted if the selected expedition spans this day
                 const cellSpanned = selected && (() => {
-                  if (!selected.dateDepart) return false;
+                  const span = immobSpan(selected);
+                  if (!span) return false;
                   const cellNoon = noon(new Date(year, month, day));
-                  const dep = noon(new Date(selected.dateDepart));
-                  const returnRaw = selected.dateRetourReel || selected.dateRetourPrevu;
-                  if (returnRaw) {
-                    const ret = noon(new Date(returnRaw));
-                    return cellNoon >= dep && cellNoon <= ret;
-                  }
-                  return isSameDay(cellNoon, dep);
+                  return cellNoon >= span.start && cellNoon <= span.end;
                 })();
 
                 return (
@@ -569,19 +584,24 @@ export default function ChronopostPage() {
               </div>
             )}
 
-            {/* Dates */}
+            {/* Dates — immobilisation borne (départ de nos locaux → retour) */}
+            {(() => {
+              const span = immobSpan(selected);
+              return (
             <div>
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Dates</p>
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Immobilisation</p>
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-blue-50 rounded-lg p-2.5">
-                  <p className="text-xs text-blue-500">Dépôt Chronopost</p>
-                  <p className="font-semibold text-blue-800 text-sm">{formatDate(selected.dateDepart)}</p>
+                  <p className="text-xs text-blue-500">Départ de nos locaux</p>
+                  <p className="font-semibold text-blue-800 text-sm">{span ? formatDate(span.start.toISOString()) : '—'}</p>
+                  {selected.dateEvenement && <p className="text-[10px] text-blue-400 mt-0.5">3 j. ouvrés avant</p>}
                 </div>
                 <div className={clsx('rounded-lg p-2.5', selected.statut === 'rentre' ? 'bg-emerald-50' : 'bg-orange-50')}>
-                  <p className={clsx('text-xs', selected.statut === 'rentre' ? 'text-emerald-500' : 'text-orange-500')}>Retour prévu</p>
+                  <p className={clsx('text-xs', selected.statut === 'rentre' ? 'text-emerald-500' : 'text-orange-500')}>Retour dans nos locaux</p>
                   <p className={clsx('font-semibold text-sm', selected.statut === 'rentre' ? 'text-emerald-800' : 'text-orange-800')}>
-                    {formatDate(selected.dateRetourPrevu)}
+                    {span ? formatDate(span.end.toISOString()) : '—'}
                   </p>
+                  {selected.dateEvenement && <p className={clsx('text-[10px] mt-0.5', selected.statut === 'rentre' ? 'text-emerald-400' : 'text-orange-400')}>2 j. ouvrés après</p>}
                 </div>
               </div>
               {selected.dateRetourReel && (
@@ -597,6 +617,8 @@ export default function ChronopostPage() {
                 </div>
               )}
             </div>
+              );
+            })()}
 
             {/* Infos événement (import CRM) */}
             {(selected.dateEvenement || selected.clientAdresse || selected.contactNom || selected.contactTelephone || selected.modeRetour) && (
