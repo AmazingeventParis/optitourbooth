@@ -4,48 +4,17 @@ import {
   ChevronRightIcon,
   XMarkIcon,
   ArrowPathIcon,
-  CheckCircleIcon,
-  ArrowTopRightOnSquareIcon,
   PlusIcon,
   KeyIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
-import { chronopostService, ChronopostExpedition, ChronopostStatut } from '@/services/chronopost.service';
+import { chronopostService, ChronopostExpedition } from '@/services/chronopost.service';
 import { useToast } from '@/hooks/useToast';
 import clsx from 'clsx';
-
-const STATUT_LABELS: Record<ChronopostStatut, string> = {
-  en_preparation: 'En préparation',
-  expedie: 'Expédié',
-  livre: 'Livré',
-  en_retour: 'En retour',
-  rentre: 'Rentré',
-  probleme: 'Problème',
-};
-
-const STATUT_COLORS: Record<ChronopostStatut, string> = {
-  en_preparation: 'bg-gray-100 text-gray-700',
-  expedie: 'bg-blue-100 text-blue-700',
-  livre: 'bg-green-100 text-green-700',
-  en_retour: 'bg-yellow-100 text-yellow-700',
-  rentre: 'bg-emerald-100 text-emerald-700',
-  probleme: 'bg-red-100 text-red-700',
-};
-
-const PRODUITS = ['Vegas', 'Smakk', 'Ring', 'Miroir', 'Spinner', 'Aircam', 'Playbox'];
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '—';
   return new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function formatDateTime(dateStr?: string | null): string {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-}
-
-function toInputDate(d: Date): string {
-  return d.toISOString().split('T')[0]!;
 }
 
 function isSameDay(d1: Date, d2: Date): boolean {
@@ -119,8 +88,6 @@ export default function ChronopostPage() {
   const [expeditions, setExpeditions] = useState<ChronopostExpedition[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [syncingOne, setSyncingOne] = useState(false);
-  const [savingStatut, setSavingStatut] = useState(false);
   const [selected, setSelected] = useState<ChronopostExpedition | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [lastSync, setLastSync] = useState<Date | null>(null);
@@ -135,15 +102,6 @@ export default function ChronopostPage() {
   const [savingSession, setSavingSession] = useState(false);
   const { success, error: showError } = useToast();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Edit state in detail panel
-  const [editProduit, setEditProduit] = useState('');
-  const [editClientNom, setEditClientNom] = useState('');
-  const [editNumeroColis, setEditNumeroColis] = useState('');
-  const [editNumeroRetour, setEditNumeroRetour] = useState('');
-  const [editDateRetour, setEditDateRetour] = useState('');
-  const [editNotes, setEditNotes] = useState('');
-  const [savingEdit, setSavingEdit] = useState(false);
 
   const loadSession = useCallback(async () => {
     try {
@@ -179,18 +137,6 @@ export default function ChronopostPage() {
     intervalRef.current = setInterval(() => load(true), 5 * 60 * 1000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
-
-  // Sync edit fields when selection changes
-  useEffect(() => {
-    if (selected) {
-      setEditProduit(selected.produitNom ?? '');
-      setEditClientNom(selected.clientNom ?? '');
-      setEditNumeroColis(selected.numeroColis ?? '');
-      setEditNumeroRetour(selected.numeroColisRetour ?? '');
-      setEditDateRetour(selected.dateRetourPrevu ? toInputDate(new Date(selected.dateRetourPrevu)) : '');
-      setEditNotes(selected.notes ?? '');
-    }
-  }, [selected?.id]);
 
   // Calendar
   const year = currentDate.getFullYear();
@@ -321,88 +267,6 @@ export default function ChronopostPage() {
       showError('Erreur', 'Synchronisation échouée');
     } finally {
       setRefreshing(false);
-    }
-  }
-
-  async function handleSyncOne() {
-    if (!selected) return;
-    setSyncingOne(true);
-    try {
-      const updated = await chronopostService.syncOne(selected.id);
-      setSelected(updated);
-      setExpeditions(prev => prev.map(e => e.id === updated.id ? updated : e));
-      success('Détails de suivi mis à jour');
-    } catch {
-      showError('Erreur', 'Synchronisation échouée');
-    } finally {
-      setSyncingOne(false);
-    }
-  }
-
-  async function handleMarkReturned() {
-    if (!selected) return;
-    try {
-      const updated = await chronopostService.markReturned(selected.id);
-      setSelected(updated);
-      setExpeditions(prev => prev.map(e => e.id === updated.id ? updated : e));
-      success('Marqué comme rentré');
-    } catch {
-      showError('Erreur', 'Impossible de marquer comme rentré');
-    }
-  }
-
-  async function handleStatutChange(statut: ChronopostStatut) {
-    if (!selected) return;
-    setSavingStatut(true);
-    try {
-      const updated = await chronopostService.update(selected.id, { statut });
-      setSelected(updated);
-      setExpeditions(prev => prev.map(e => e.id === updated.id ? updated : e));
-    } catch {
-      showError('Erreur', 'Impossible de modifier le statut');
-    } finally {
-      setSavingStatut(false);
-    }
-  }
-
-  async function handleSaveEdit() {
-    if (!selected) return;
-    setSavingEdit(true);
-    try {
-      const isLinkingReturn = editNumeroRetour && editNumeroRetour !== selected.numeroColisRetour;
-      const updated = await chronopostService.update(selected.id, {
-        clientNom: editClientNom || undefined,
-        produitNom: editProduit || undefined,
-        numeroColis: editNumeroColis.trim() || null,
-        numeroColisRetour: editNumeroRetour || undefined,
-        dateRetourPrevu: editDateRetour || undefined,
-        notes: editNotes || undefined,
-      });
-      setSelected(updated);
-      // Reload all expeditions in case the backend merged/deleted a standalone return record
-      if (isLinkingReturn) {
-        await load(true);
-      } else {
-        setExpeditions(prev => prev.map(e => e.id === updated.id ? updated : e));
-      }
-      success('Sauvegardé');
-    } catch {
-      showError('Erreur', 'Impossible de sauvegarder');
-    } finally {
-      setSavingEdit(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!selected) return;
-    if (!confirm(`Supprimer ${selected.numeroColis || selected.clientNom} ?`)) return;
-    try {
-      await chronopostService.delete(selected.id);
-      setSelected(null);
-      setExpeditions(prev => prev.filter(e => e.id !== selected.id));
-      success('Supprimée');
-    } catch {
-      showError('Erreur', 'Impossible de supprimer');
     }
   }
 
@@ -626,33 +490,6 @@ export default function ChronopostPage() {
           </div>
 
           <div className="overflow-y-auto flex-1 p-4 space-y-4">
-            {/* Statut */}
-            <div>
-              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Statut</label>
-              <select
-                value={selected.statut}
-                onChange={e => handleStatutChange(e.target.value as ChronopostStatut)}
-                disabled={savingStatut}
-                className={clsx('mt-1 w-full text-sm px-3 py-1.5 rounded-lg border border-transparent font-medium cursor-pointer', STATUT_COLORS[selected.statut])}
-              >
-                {(Object.entries(STATUT_LABELS) as [ChronopostStatut, string][]).map(([val, label]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Significant event from Chronopost */}
-            {selected.trackingData?.significantEvent && (
-              <div className="bg-gray-50 rounded-lg p-3 text-sm">
-                <p className="text-xs text-gray-400 mb-1">Dernier événement Chronopost</p>
-                <p className="font-medium text-gray-800">{selected.trackingData.significantEvent.eventLabel}</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {formatDateTime(selected.trackingData.significantEvent.eventDate)}
-                  {selected.trackingData.significantEvent.officeLabel && ` · ${selected.trackingData.significantEvent.officeLabel}`}
-                </p>
-              </div>
-            )}
-
             {/* Dates — immobilisation borne (départ de nos locaux → retour) */}
             {(() => {
               const span = immobSpan(selected);
@@ -710,139 +547,6 @@ export default function ChronopostPage() {
               </div>
             )}
 
-            {/* Full tracking history (when synced individually) */}
-            {selected.trackingData?.events && selected.trackingData.events.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Historique complet</p>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {[...selected.trackingData.events].reverse().map((ev, i) => (
-                    <div key={i} className="flex gap-2 text-xs">
-                      <div className="w-1.5 h-1.5 rounded-full bg-gray-300 mt-1.5 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium text-gray-700">{ev.libelle}</p>
-                        <p className="text-gray-400">{formatDateTime(ev.date)}{ev.site ? ` · ${ev.site}` : ''}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Editable fields */}
-            <div className="border-t border-gray-100 pt-4 space-y-3">
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Informations logistiques</p>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">N° de colis (aller)</label>
-                <input
-                  type="text"
-                  value={editNumeroColis}
-                  onChange={e => setEditNumeroColis(e.target.value.toUpperCase())}
-                  placeholder="à compléter à l'expédition"
-                  className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg font-mono focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Nom du client</label>
-                <input
-                  type="text"
-                  value={editClientNom}
-                  onChange={e => setEditClientNom(e.target.value)}
-                  className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Type de borne</label>
-                <select
-                  value={editProduit}
-                  onChange={e => setEditProduit(e.target.value)}
-                  className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">— Non défini —</option>
-                  {PRODUITS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">N° colis retour</label>
-                <input
-                  type="text"
-                  value={editNumeroRetour}
-                  onChange={e => setEditNumeroRetour(e.target.value.toUpperCase())}
-                  placeholder="ex: XN255109731FR"
-                  className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg font-mono focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-[10px] text-gray-400 mt-0.5">
-                  Si un enregistrement avec ce n° existe, il sera fusionné automatiquement.
-                </p>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Date de retour prévue</label>
-                <input
-                  type="date"
-                  value={editDateRetour}
-                  onChange={e => setEditDateRetour(e.target.value)}
-                  className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Notes</label>
-                <textarea
-                  value={editNotes}
-                  onChange={e => setEditNotes(e.target.value)}
-                  rows={2}
-                  className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
-              <button
-                onClick={handleSaveEdit}
-                disabled={savingEdit}
-                className="w-full px-3 py-1.5 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-700 disabled:opacity-50"
-              >
-                {savingEdit ? 'Sauvegarde...' : 'Sauvegarder'}
-              </button>
-            </div>
-
-            {/* Chronopost link — uniquement si un n° de colis est connu */}
-            {selected.numeroColis && (
-              <a
-                href={`https://www.chronopost.fr/tracking-no-cms/suivi-page?listeNumerosLT=${selected.numeroColis}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-                Voir sur Chronopost.fr
-              </a>
-            )}
-          </div>
-
-          {/* Actions footer */}
-          <div className="p-4 border-t border-gray-100 space-y-2">
-            {selected.statut !== 'rentre' && (
-              <button
-                onClick={handleMarkReturned}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
-              >
-                <CheckCircleIcon className="h-4 w-4" />
-                Marquer comme rentré
-              </button>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={handleSyncOne}
-                disabled={syncingOne || !selected.numeroColis}
-                title={!selected.numeroColis ? 'Renseignez un n° de colis pour suivre le colis' : undefined}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
-              >
-                <ArrowPathIcon className={clsx('h-3.5 w-3.5', syncingOne && 'animate-spin')} />
-                {syncingOne ? 'Sync...' : 'Historique complet'}
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-3 py-2 border border-red-200 text-red-600 rounded-lg text-xs hover:bg-red-50 transition-colors"
-              >
-                Supprimer
-              </button>
-            </div>
           </div>
         </div>
       )}
