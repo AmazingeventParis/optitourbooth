@@ -551,10 +551,10 @@ export default function ChronopostPage() {
                         const isToday = isSameDay(dObj, today);
                         const isHoliday = frenchHolidays(year).has(dateKey(dObj));
                         return (
-                          <div key={di} className="flex items-center justify-between px-1.5 pt-1">
-                            {isHoliday
-                              ? <span className="text-[9px] font-semibold text-red-500 uppercase leading-none" title="Jour férié">férié</span>
-                              : <span />}
+                          <div key={di} className="relative flex items-center justify-center pt-1 min-h-[24px]">
+                            {isHoliday && (
+                              <span className="absolute left-1 top-1 text-[8px] font-semibold text-red-500 uppercase leading-none" title="Jour férié">férié</span>
+                            )}
                             <span className={clsx(
                               'text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0',
                               isToday ? 'bg-blue-600 text-white' : isHoliday ? 'text-red-500' : 'text-gray-500',
@@ -590,7 +590,7 @@ export default function ChronopostPage() {
                               bar.isEnd ? 'rounded-r-md mr-0.5' : '',
                             )}
                           >
-                            {bar.isStart ? (bar.isOverdue ? '⚠ ' : '✈ ') : ''}{bar.e.clientNom}
+                            {bar.isStart ? (bar.isOverdue ? '⚠ ' : '🚚 ') : ''}{bar.e.clientNom}
                           </button>
                         );
                       })}
@@ -602,7 +602,7 @@ export default function ChronopostPage() {
 
             {/* Legend */}
             <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-blue-100 rounded" /> ✈ Immobilisation (départ → retour)</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-blue-100 rounded" /> 🚚 Immobilisation (départ → retour)</span>
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-emerald-100 rounded" /> Rentré</span>
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-orange-100 rounded" /> ⚠ En retard</span>
             </div>
