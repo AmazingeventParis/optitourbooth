@@ -515,6 +515,7 @@ export default function ChronopostPage() {
                 if (!day) return <div key={i} className="bg-gray-50" />;
                 const events = getEventsForDay(day);
                 const isToday = isSameDay(new Date(year, month, day), today);
+                const isHoliday = frenchHolidays(year).has(dateKey(new Date(year, month, day)));
                 // Cell is highlighted if the selected expedition spans this day
                 const cellSpanned = selected && (() => {
                   const span = immobSpan(selected);
@@ -531,12 +532,17 @@ export default function ChronopostPage() {
                       cellSpanned ? '!bg-blue-50' : '',
                     )}
                   >
-                    <span className={clsx(
-                      'text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full mb-1 self-end flex-shrink-0',
-                      isToday ? 'bg-blue-600 text-white' : 'text-gray-500',
-                    )}>
-                      {day}
-                    </span>
+                    <div className="flex items-center justify-between mb-1">
+                      {isHoliday
+                        ? <span className="text-[9px] font-semibold text-red-500 uppercase leading-none" title="Jour férié">férié</span>
+                        : <span />}
+                      <span className={clsx(
+                        'text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0',
+                        isToday ? 'bg-blue-600 text-white' : isHoliday ? 'text-red-500' : 'text-gray-500',
+                      )}>
+                        {day}
+                      </span>
+                    </div>
                     <div className="flex flex-col gap-0.5 flex-1">
                       {events.map(({ expedition: e, type, isOverdue }) => {
                         const isActive = selected?.id === e.id;
