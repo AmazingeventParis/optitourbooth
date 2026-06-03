@@ -54,16 +54,63 @@ function isSameDay(d1: Date, d2: Date): boolean {
     d1.getDate() === d2.getDate();
 }
 
-// Jours ouvrés = lundi→vendredi (week-ends exclus). n>0 ajoute, n<0 retire.
-// (les jours fériés ne sont pas pris en compte)
+// Dimanche de Pâques (algorithme de Meeus/Butcher) pour une année donnée.
+function easterSunday(year: number): Date {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31); // 3 = mars, 4 = avril
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Jours fériés français (métropole) pour une année — mémoïsé.
+const holidaysCache = new Map<number, Set<string>>();
+function frenchHolidays(year: number): Set<string> {
+  const cached = holidaysCache.get(year);
+  if (cached) return cached;
+  const set = new Set<string>();
+  // Fériés fixes
+  for (const [m, d] of [[1, 1], [5, 1], [5, 8], [7, 14], [8, 15], [11, 1], [11, 11], [12, 25]]) {
+    set.add(dateKey(new Date(year, m - 1, d)));
+  }
+  // Fériés mobiles (basés sur Pâques)
+  const easter = easterSunday(year);
+  const addDays = (base: Date, n: number) => { const x = new Date(base); x.setDate(x.getDate() + n); return x; };
+  set.add(dateKey(addDays(easter, 1)));  // Lundi de Pâques
+  set.add(dateKey(addDays(easter, 39))); // Ascension
+  set.add(dateKey(addDays(easter, 50))); // Lundi de Pentecôte
+  holidaysCache.set(year, set);
+  return set;
+}
+
+function isBusinessDay(d: Date): boolean {
+  const day = d.getDay();
+  if (day === 0 || day === 6) return false; // week-end
+  return !frenchHolidays(d.getFullYear()).has(dateKey(d)); // jour férié
+}
+
+// Jours ouvrés = lundi→vendredi hors jours fériés français. n>0 ajoute, n<0 retire.
 function addBusinessDays(date: Date, n: number): Date {
   const d = new Date(date);
   const step = n >= 0 ? 1 : -1;
   let remaining = Math.abs(n);
   while (remaining > 0) {
     d.setDate(d.getDate() + step);
-    const day = d.getDay();
-    if (day !== 0 && day !== 6) remaining--;
+    if (isBusinessDay(d)) remaining--;
   }
   return d;
 }
