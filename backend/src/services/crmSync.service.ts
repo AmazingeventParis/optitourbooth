@@ -883,8 +883,64 @@ export interface PendingPointsSyncResult {
   enriched: number;
   skipped: number;
   autoDispatched: number;
+  clientsBackfilled?: number;
   errors: string[];
   completedAt?: string;
+}
+
+// ─── Back-fill contact → fiche Client ─────────────────────────────
+// La copie contact (nom + tél) vers la fiche Client ne se fait qu'au moment du
+// dispatch (autodispatch.service). Si un événement est dispatché AVANT que le
+// client remplisse son formulaire info-logistique, sa fiche Client reste sans
+// contact, même quand le pending_point récupère l'info au sync suivant.
+// Ce back-fill propage le contact des pending_points vers la fiche Client
+// correspondante (match par nom/société), pour Shootnbox ET Smakk. On ne remplit
+// que les champs VIDES → jamais d'écrasement d'une saisie manuelle.
+async function backfillClientContacts(result: PendingPointsSyncResult): Promise<void> {
+  const pts = await prisma.pendingPoint.findMany({
+    where: {
+      deletedByUser: false,
+      OR: [{ contactNom: { not: null } }, { contactTelephone: { not: null } }],
+    },
+    select: { clientName: true, contactNom: true, contactTelephone: true },
+  });
+
+  // Dédupe par nom de client (on agrège le 1er contact non vide trouvé)
+  const byName = new Map<string, { clientName: string; contactNom: string | null; contactTelephone: string | null }>();
+  for (const p of pts) {
+    const key = (p.clientName || '').trim().toLowerCase();
+    if (!key) continue;
+    const cur = byName.get(key) || { clientName: p.clientName, contactNom: null, contactTelephone: null };
+    if (!cur.contactNom && p.contactNom) cur.contactNom = p.contactNom;
+    if (!cur.contactTelephone && p.contactTelephone) cur.contactTelephone = p.contactTelephone;
+    byName.set(key, cur);
+  }
+
+  let filled = 0;
+  for (const v of byName.values()) {
+    const nameMatch = {
+      OR: [
+        { nom: { equals: v.clientName, mode: 'insensitive' as const } },
+        { societe: { equals: v.clientName, mode: 'insensitive' as const } },
+      ],
+    };
+    if (v.contactNom) {
+      const r = await prisma.client.updateMany({
+        where: { AND: [nameMatch, { OR: [{ contactNom: null }, { contactNom: '' }] }] },
+        data: { contactNom: v.contactNom },
+      });
+      filled += r.count;
+    }
+    if (v.contactTelephone) {
+      await prisma.client.updateMany({
+        where: { AND: [nameMatch, { OR: [{ contactTelephone: null }, { contactTelephone: '' }] }] },
+        data: { contactTelephone: v.contactTelephone },
+      });
+    }
+  }
+
+  result.clientsBackfilled = filled;
+  if (filled > 0) console.log(`[CRM PendingPoints] Back-fill contacts → ${filled} fiche(s) Client complétée(s)`);
 }
 
 export let lastPendingPointsSyncResult: PendingPointsSyncResult | null = null;
@@ -1423,6 +1479,10 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       } catch (e: any) { result.errors.push(`Smakk ramassage ${order.orderId}: ${e.message}`); }
     }
 
+    // Back-fill : propager les contacts des pending_points vers les fiches Client
+    // dont le contact est encore vide (events dispatchés avant réponse au formulaire).
+    await backfillClientContacts(result);
+
   } catch (e: any) {
     result.errors.push(e.message || 'Erreur inattendue');
   }
@@ -1430,7 +1490,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   clearTimeout(masterTimeout);
   result.completedAt = new Date().toISOString();
   lastPendingPointsSyncResult = result;
-  console.log(`[CRM PendingPoints] Terminé: created=${result.created}, enriched=${result.enriched}, skipped=${result.skipped}, autoDispatched=${result.autoDispatched}, errors=${result.errors.length}`);
+  console.log(`[CRM PendingPoints] Terminé: created=${result.created}, enriched=${result.enriched}, skipped=${result.skipped}, autoDispatched=${result.autoDispatched}, backfilled=${result.clientsBackfilled ?? 0}, errors=${result.errors.length}`);
 
   return result;
 }
