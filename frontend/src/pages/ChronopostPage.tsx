@@ -224,31 +224,59 @@ export default function ChronopostPage() {
     return { start: dep, end: returnRaw ? noon(new Date(returnRaw)) : dep };
   }
 
-  interface DayEvent {
-    expedition: ChronopostExpedition;
-    /** start = departure day, middle = in-transit, end = return day */
-    type: 'start' | 'middle' | 'end';
+  interface WeekBar {
+    e: ChronopostExpedition;
+    startCol: number;   // colonne de début dans la semaine (0-6)
+    endCol: number;     // colonne de fin dans la semaine (0-6)
+    isStart: boolean;   // vrai si c'est le vrai départ (pas une continuation de la semaine précédente)
+    isEnd: boolean;     // vrai si c'est le vrai retour
     isOverdue: boolean;
+    lane: number;       // ligne d'empilement dans la semaine
   }
 
-  function getEventsForDay(day: number): DayEvent[] {
-    const cellDate = noon(new Date(year, month, day));
+  // Calcule, pour une semaine (7 cases), les barres continues à afficher :
+  // un événement = une seule barre qui s'étend de sa colonne de départ à sa
+  // colonne de fin (durée d'immobilisation), empilées sur des lignes (lanes).
+  function computeWeekBars(week: (number | null)[]): { bars: WeekBar[]; lanes: number } {
+    const colDates = week.map(d => (d ? noon(new Date(year, month, d)) : null));
     const todayNoon = noon(new Date());
-    const result: DayEvent[] = [];
+    const bars: WeekBar[] = [];
 
     for (const e of expeditions) {
       const span = immobSpan(e);
       if (!span) continue;
-      const { start: dep, end: ret } = span;
-      if (cellDate < dep || cellDate > ret) continue;
-      const isOverdue = e.statut !== 'rentre' && ret < todayNoon;
-      let type: DayEvent['type'];
-      if (isSameDay(cellDate, dep)) type = 'start';
-      else if (isSameDay(cellDate, ret)) type = 'end';
-      else type = 'middle';
-      result.push({ expedition: e, type, isOverdue });
+      let startCol = -1;
+      let endCol = -1;
+      for (let c = 0; c < 7; c++) {
+        const cd = colDates[c];
+        if (!cd) continue;
+        if (cd >= span.start && cd <= span.end) {
+          if (startCol === -1) startCol = c;
+          endCol = c;
+        }
+      }
+      if (startCol === -1) continue; // l'événement ne touche pas cette semaine
+      bars.push({
+        e,
+        startCol,
+        endCol,
+        isStart: isSameDay(colDates[startCol]!, span.start),
+        isEnd: isSameDay(colDates[endCol]!, span.end),
+        isOverdue: e.statut !== 'rentre' && span.end < todayNoon,
+        lane: 0,
+      });
     }
-    return result;
+
+    // Empilement glouton : une barre ne partage pas une ligne avec une autre qui chevauche ses colonnes
+    bars.sort((a, b) => a.startCol - b.startCol || a.endCol - b.endCol);
+    const laneEnd: number[] = [];
+    for (const bar of bars) {
+      let lane = 0;
+      while (laneEnd[lane] !== undefined && laneEnd[lane]! >= bar.startCol) lane++;
+      laneEnd[lane] = bar.endCol;
+      bar.lane = lane;
+    }
+    return { bars, lanes: laneEnd.length };
   }
 
   async function handleAdd() {
@@ -509,71 +537,60 @@ export default function ChronopostPage() {
               ))}
             </div>
 
-            {/* Days grid */}
-            <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-xl overflow-hidden flex-1">
-              {days.map((day, i) => {
-                if (!day) return <div key={i} className="bg-gray-50" />;
-                const events = getEventsForDay(day);
-                const isToday = isSameDay(new Date(year, month, day), today);
-                const isHoliday = frenchHolidays(year).has(dateKey(new Date(year, month, day)));
-                // Cell is highlighted if the selected expedition spans this day
-                const cellSpanned = selected && (() => {
-                  const span = immobSpan(selected);
-                  if (!span) return false;
-                  const cellNoon = noon(new Date(year, month, day));
-                  return cellNoon >= span.start && cellNoon <= span.end;
-                })();
-
+            {/* Days grid — une barre continue par événement sur sa durée d'immobilisation */}
+            <div className="flex flex-col gap-px bg-gray-200 rounded-xl overflow-hidden flex-1">
+              {Array.from({ length: Math.ceil(days.length / 7) }, (_, wi) => days.slice(wi * 7, wi * 7 + 7)).map((week, wi) => {
+                const { bars, lanes } = computeWeekBars(week);
                 return (
-                  <div
-                    key={i}
-                    className={clsx(
-                      'bg-white min-h-[72px] p-1.5 flex flex-col',
-                      cellSpanned ? '!bg-blue-50' : '',
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      {isHoliday
-                        ? <span className="text-[9px] font-semibold text-red-500 uppercase leading-none" title="Jour férié">férié</span>
-                        : <span />}
-                      <span className={clsx(
-                        'text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0',
-                        isToday ? 'bg-blue-600 text-white' : isHoliday ? 'text-red-500' : 'text-gray-500',
-                      )}>
-                        {day}
-                      </span>
+                  <div key={wi} className="bg-white flex flex-col">
+                    {/* Numéros de jour */}
+                    <div className="grid grid-cols-7">
+                      {week.map((day, di) => {
+                        if (!day) return <div key={di} className="min-h-[24px]" />;
+                        const dObj = new Date(year, month, day);
+                        const isToday = isSameDay(dObj, today);
+                        const isHoliday = frenchHolidays(year).has(dateKey(dObj));
+                        return (
+                          <div key={di} className="flex items-center justify-between px-1.5 pt-1">
+                            {isHoliday
+                              ? <span className="text-[9px] font-semibold text-red-500 uppercase leading-none" title="Jour férié">férié</span>
+                              : <span />}
+                            <span className={clsx(
+                              'text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0',
+                              isToday ? 'bg-blue-600 text-white' : isHoliday ? 'text-red-500' : 'text-gray-500',
+                            )}>
+                              {day}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="flex flex-col gap-0.5 flex-1">
-                      {events.map(({ expedition: e, type, isOverdue }) => {
-                        const isActive = selected?.id === e.id;
-                        let bg: string;
-                        let label: string;
-                        if (type === 'start') {
-                          bg = isActive ? 'bg-blue-300 text-blue-900' : 'bg-blue-100 text-blue-700';
-                          label = `✈ ${e.clientNom}`;
-                        } else if (type === 'end') {
-                          if (isOverdue) {
-                            bg = isActive ? 'bg-orange-300 text-orange-900' : 'bg-orange-100 text-orange-700';
-                            label = `⚠ ${e.clientNom}`;
-                          } else {
-                            bg = isActive ? 'bg-emerald-300 text-emerald-900' : 'bg-emerald-100 text-emerald-700';
-                            label = `↩ ${e.clientNom}`;
-                          }
-                        } else {
-                          // middle — in transit
-                          bg = isActive ? 'bg-blue-200 text-blue-800' : 'bg-blue-50 text-blue-500';
-                          label = `· ${e.clientNom}`;
-                        }
+                    {/* Barres d'immobilisation (grid-column span) */}
+                    <div
+                      className="grid grid-cols-7 gap-y-0.5 px-0.5 pb-1.5 pt-0.5"
+                      style={{ gridAutoRows: '17px', minHeight: `${Math.max(lanes, 1) * 19 + 4}px` }}
+                    >
+                      {bars.map((bar, bi) => {
+                        const isActive = selected?.id === bar.e.id;
+                        const bg = bar.isOverdue
+                          ? (isActive ? 'bg-orange-300 text-orange-900' : 'bg-orange-100 text-orange-700')
+                          : bar.e.statut === 'rentre'
+                            ? (isActive ? 'bg-emerald-300 text-emerald-900' : 'bg-emerald-100 text-emerald-700')
+                            : (isActive ? 'bg-blue-300 text-blue-900' : 'bg-blue-100 text-blue-700');
                         return (
                           <button
-                            key={e.id}
-                            onClick={() => setSelected(e)}
+                            key={bar.e.id + '_' + bi}
+                            onClick={() => setSelected(bar.e)}
+                            title={bar.e.clientNom}
+                            style={{ gridColumn: `${bar.startCol + 1} / ${bar.endCol + 2}`, gridRow: bar.lane + 1 }}
                             className={clsx(
-                              'text-[10px] rounded px-1 py-0.5 truncate font-medium leading-tight text-left transition-opacity hover:opacity-75',
+                              'text-[10px] px-1 py-0.5 truncate font-medium leading-tight text-left transition-opacity hover:opacity-80',
                               bg,
+                              bar.isStart ? 'rounded-l-md ml-0.5' : '',
+                              bar.isEnd ? 'rounded-r-md mr-0.5' : '',
                             )}
                           >
-                            {label}
+                            {bar.isStart ? (bar.isOverdue ? '⚠ ' : '✈ ') : ''}{bar.e.clientNom}
                           </button>
                         );
                       })}
@@ -585,9 +602,8 @@ export default function ChronopostPage() {
 
             {/* Legend */}
             <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-blue-100 rounded" /> ✈ Départ</span>
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-blue-50 rounded" /> · En transit</span>
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-emerald-100 rounded" /> ↩ Retour</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-blue-100 rounded" /> ✈ Immobilisation (départ → retour)</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-emerald-100 rounded" /> Rentré</span>
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-orange-100 rounded" /> ⚠ En retard</span>
             </div>
           </>
