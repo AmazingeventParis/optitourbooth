@@ -114,7 +114,7 @@ async function findCrmEventByClientName(clientNom: string) {
   const normalized = normalizeClientNom(clientNom);
   if (!normalized) return null;
   const candidates = await prisma.chronopostExpedition.findMany({
-    where: { numeroColis: null, externalId: { not: null } },
+    where: { numeroColis: null, externalId: { not: null }, kind: { not: 'retrait' } },
   });
   for (const c of candidates) {
     if (normalizeClientNom(c.clientNom) === normalized) return c;

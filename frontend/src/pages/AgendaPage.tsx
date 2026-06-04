@@ -892,7 +892,11 @@ function EventDetailModal({ block, onClose, onNavigateTournee }: {
         )}
 
         <div className="text-xs text-gray-400 pt-2 border-t border-gray-100">
-          Source : {block.source === 'tournee' ? 'Point de tournée' : block.source === 'pending' ? 'Google Calendar (non dispatché)' : 'Préparation'}
+          Source : {block.source === 'tournee' ? 'Point de tournée'
+            : block.source === 'retrait' ? 'Retrait boutique (CRM)'
+            : block.source === 'chronopost' ? 'Chronopost / Slim (CRM)'
+            : block.source === 'pending' ? 'Formulaire (non dispatché)'
+            : 'Préparation'}
         </div>
 
         {block.tourneeId && (

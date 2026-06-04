@@ -20,7 +20,7 @@ interface AllocationBlock {
   machineNumero: string | null;
   machineType: string | null;
   status: 'planifie' | 'immobilisee' | 'livree';
-  source: 'tournee' | 'pending' | 'preparation';
+  source: 'tournee' | 'pending' | 'preparation' | 'chronopost' | 'retrait';
   tourneeId: string | null;
   deliveryPointId: string | null;
   pickupPointId: string | null;
@@ -40,6 +40,50 @@ function fmtDate(d: Date): string { return d.toISOString().substring(0, 10); }
 
 function clientFirstWord(name: string): string {
   return name.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
+}
+
+// ─── Jours ouvrés (hors week-ends + fériés français) ──────────────
+// Utilisé pour l'immobilisation Chronopost/Slim dans l'agenda (J-3 / J+2 ouvrés),
+// identique au calcul de la section /chronopost.
+function easterSunday(year: number): Date {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+const holidaysCache = new Map<number, Set<string>>();
+function frenchHolidays(year: number): Set<string> {
+  const cached = holidaysCache.get(year);
+  if (cached) return cached;
+  const set = new Set<string>();
+  const fixed: [number, number][] = [[1, 1], [5, 1], [5, 8], [7, 14], [8, 15], [11, 1], [11, 11], [12, 25]];
+  for (const [m, dd] of fixed) {
+    set.add(fmtDate(new Date(Date.UTC(year, m - 1, dd))));
+  }
+  const easter = easterSunday(year);
+  const add = (n: number) => { const x = new Date(easter); x.setUTCDate(x.getUTCDate() + n); return x; };
+  set.add(fmtDate(add(1)));   // Lundi de Pâques
+  set.add(fmtDate(add(39)));  // Ascension
+  set.add(fmtDate(add(50)));  // Lundi de Pentecôte
+  holidaysCache.set(year, set);
+  return set;
+}
+function addBusinessDays(date: Date, n: number): Date {
+  const d = new Date(date);
+  const step = n >= 0 ? 1 : -1;
+  let remaining = Math.abs(n);
+  while (remaining > 0) {
+    d.setUTCDate(d.getUTCDate() + step);
+    const day = d.getUTCDay();
+    if (day !== 0 && day !== 6 && !frenchHolidays(d.getUTCFullYear()).has(fmtDate(d))) remaining--;
+  }
+  return d;
 }
 
 /**
@@ -219,65 +263,70 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     });
   }
 
-  // ========== SOURCE 3: Pending points NOT dispatched ==========
-  // Include livraisons before the range (up to 14 days) whose pickup might be in the range
-  const pendingPoints = await prisma.pendingPoint.findMany({
+  // ========== SOURCE 3: Bornes hors locaux SANS tournée (Chronopost/Slim + Retrait) ==========
+  // Source = table ChronopostExpedition (import CRM). Les livraisons normales viennent
+  // déjà des points de tournée (SOURCE 1). Ici : envois transporteur + retraits boutique.
+  //  - retrait  : immobilisation jour de retrait (dateDepart) → jour de retour (dateRetourPrevu)
+  //  - chronopost/slim : immobilisation = 3 j. ouvrés avant l'événement → 2 j. ouvrés après
+  const chronoRecords = await prisma.chronopostExpedition.findMany({
     where: {
-      date: { gte: extFrom, lte: to },
-      type: 'livraison',
+      OR: [
+        { dateEvenement: { gte: extFrom, lte: extTo } },
+        { dateDepart: { gte: extFrom, lte: extTo } },
+        { dateRetourPrevu: { gte: extFrom, lte: extTo } },
+      ],
     },
   });
 
-  for (const pp of pendingPoints) {
-    const ppDate = fmtDate(pp.date);
-    const fw = clientFirstWord(pp.clientName);
+  for (const cr of chronoRecords as any[]) {
+    const isRetrait = cr.kind === 'retrait';
 
-    // Skip if already covered by a point-based block
-    if (usedDeliveryClients.has(fw + '|' + ppDate)) continue;
+    let dateStart: string;
+    let dateEnd: string;
+    if (isRetrait) {
+      const dep = cr.dateDepart || cr.dateEvenement;
+      if (!dep) continue;
+      dateStart = fmtDate(dep);
+      dateEnd = cr.dateRetourPrevu ? fmtDate(cr.dateRetourPrevu) : dateStart;
+    } else {
+      // chronopost/slim : J-3 / J+2 jours ouvrés (fériés FR) autour de l'événement
+      const ev = cr.dateEvenement || cr.dateDepart;
+      if (!ev) continue;
+      dateStart = fmtDate(addBusinessDays(ev, -3));
+      dateEnd = fmtDate(addBusinessDays(ev, 2));
+    }
 
-    // Find matching pending pickup
-    const pendingPickup = await prisma.pendingPoint.findFirst({
-      where: {
-        type: 'ramassage',
-        date: { gte: pp.date },
-        clientName: { contains: fw, mode: 'insensitive' },
-      },
-      orderBy: { date: 'asc' },
-    });
+    // Skip si hors de la fenêtre visible
+    if (dateEnd < dateFrom || dateStart > dateTo) continue;
 
-    const dateEnd = pendingPickup ? fmtDate(pendingPickup.date) : ppDate;
-    const timeEnd = pendingPickup?.creneauFin || '23:59';
+    const fw = clientFirstWord(cr.clientNom || '');
+    // Dédup : si un bloc de tournée couvre déjà ce client à cette date, on skip
+    if (usedDeliveryClients.has(fw + '|' + dateStart)) continue;
 
-    // Skip if the block doesn't overlap with the visible range
-    if (dateEnd < dateFrom || ppDate > dateTo) continue;
-
-    const ppProduit = pp.produitNom || '?';
-    const machine = findMachine(pp.clientName, ppDate, ppProduit);
-
-    // Get product color
-    const produit = pp.produitNom ? await prisma.produit.findFirst({ where: { nom: pp.produitNom }, select: { couleur: true } }) : null;
+    const produitNom = cr.produitNom || '?';
+    const machine = findMachine(cr.clientNom || '', dateStart, produitNom);
 
     blocks.push({
-      id: `pp-${pp.id}`,
-      client: pp.clientName,
-      clientAdresse: (pp as any).adresse || null,
-      clientVille: null,
-      clientTelephone: (pp as any).contactTelephone || null,
-      clientContactNom: (pp as any).contactNom || null,
-      produit: ppProduit,
-      produitCouleur: produit?.couleur || '#6B7280',
-      dateStart: ppDate,
-      timeStart: pp.creneauDebut || '00:00',
+      id: `cx-${cr.id}`,
+      client: cr.clientNom || 'Client',
+      clientAdresse: cr.clientAdresse || null,
+      clientVille: cr.clientVille || null,
+      clientTelephone: cr.contactTelephone || null,
+      clientContactNom: cr.contactNom || null,
+      produit: produitNom,
+      produitCouleur: produitColorMap.get(produitNom) || '#6B7280',
+      dateStart,
+      timeStart: '00:00',
       dateEnd,
-      timeEnd,
+      timeEnd: '23:59',
       machineNumero: machine?.numero || null,
       machineType: machine?.type || null,
       status: 'planifie',
-      source: 'pending',
+      source: isRetrait ? 'retrait' : 'chronopost',
       tourneeId: null,
       deliveryPointId: null,
       pickupPointId: null,
-      notesInternes: (pp as any).notes || null,
+      notesInternes: cr.notes || null,
       preparateurNom: null,
     });
   }

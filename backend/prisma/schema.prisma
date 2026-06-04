@@ -895,6 +895,9 @@ model ChronopostExpedition {
   // Import CRM : clé de dédup stable (snb_order_<id> / smk_order_<id>)
   externalId          String?          @unique @map("external_id")
   source              String?          @default("manual") // manual | crm_shootnbox | crm_smakk | chronotrace
+  // chronopost (incl. Slim, envoi transporteur) | retrait (client vient chercher en boutique)
+  // Les "retrait" n'apparaissent PAS dans la section /chronopost ; ils servent à l'agenda.
+  kind                String           @default("chronopost")
   clientNom           String           @map("client_nom")
   clientAdresse       String?          @map("client_adresse")
   clientVille         String?          @map("client_ville")

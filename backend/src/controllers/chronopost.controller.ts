@@ -7,7 +7,10 @@ import { syncChronopostAuto, reconcileReturnParcels } from '../services/chronopo
 import { ChronopostStatut } from '@prisma/client';
 
 export async function listExpeditions(req: Request, res: Response): Promise<void> {
+  // La section /chronopost ne montre que les envois transporteur (chronopost/slim).
+  // Les retraits boutique (kind=retrait) sont importés pour l'agenda uniquement.
   const expeditions = await prisma.chronopostExpedition.findMany({
+    where: { kind: { not: 'retrait' } },
     orderBy: { dateDepart: 'desc' },
   });
   apiResponse.success(res, expeditions);

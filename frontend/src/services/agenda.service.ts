@@ -16,7 +16,7 @@ export interface AllocationBlock {
   machineNumero: string | null;
   machineType: string | null;
   status: 'planifie' | 'immobilisee' | 'livree';
-  source: 'tournee' | 'pending' | 'preparation';
+  source: 'tournee' | 'pending' | 'preparation' | 'chronopost' | 'retrait';
   tourneeId: string | null;
   deliveryPointId: string | null;
   pickupPointId: string | null;

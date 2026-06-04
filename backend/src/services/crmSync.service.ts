@@ -1803,6 +1803,7 @@ async function upsertChronopostFromCrm(
   rec: {
     externalId: string;
     source: 'crm_shootnbox' | 'crm_smakk';
+    kind: 'chronopost' | 'retrait';
     clientNom: string;
     produitNom: string | null;
     clientAdresse: string | null;
@@ -1825,6 +1826,7 @@ async function upsertChronopostFromCrm(
         data: {
           externalId: rec.externalId,
           source: rec.source,
+          kind: rec.kind,
           clientNom: rec.clientNom,
           produitNom: rec.produitNom,
           clientAdresse: rec.clientAdresse,
@@ -1847,6 +1849,7 @@ async function upsertChronopostFromCrm(
         where: { id: existing.id },
         data: {
           source: rec.source,
+          kind: rec.kind,
           clientNom: rec.clientNom,
           ...(rec.produitNom && { produitNom: rec.produitNom }),
           ...(rec.clientAdresse && { clientAdresse: rec.clientAdresse }),
@@ -1881,8 +1884,8 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
     try {
       const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox Chronopost', controller.signal);
 
-      // Infos commandes par orderId (box_type, client, date événement)
-      const ordersMap = new Map<string, { boxType: string; clientName: string; eventISO: string | null; email: string }>();
+      // Infos commandes par orderId (box_type, client, dates, livraison)
+      const ordersMap = new Map<string, { boxType: string; clientName: string; eventISO: string | null; returnISO: string | null; email: string; delivery: string }>();
       try {
         for (const urlSuffix of ['orders_ajax.php?status=2', 'orders_ajax.php?status=2&arch=true']) {
           let start = 0;
@@ -1899,7 +1902,9 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
                 boxType: stripHtml(String(row.box_type || '')),
                 clientName: (company || person || '').trim(),
                 eventISO: pendingDateDMY(stripHtml(String(row.event_date || ''))),
+                returnISO: pendingDateDMY(stripHtml(String(row.return_date || ''))),
                 email: stripHtml(String(row.email || '')).trim(),
+                delivery: stripHtml(String(row.delivery || '')).toLowerCase(),
               });
             }
             start += 500;
@@ -1933,20 +1938,24 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
         }
       } catch (e: any) { result.errors.push(`Shootnbox forms: ${e.message}`); }
 
-      // Ensemble éligible = Vegas Slim (orders) ∪ formulaires Chronopost
+      // Ensemble éligible = Vegas Slim (orders) ∪ formulaires Chronopost ∪ Retrait
+      // Retrait = delivery orders_ajax contient "retrait" OU formulaire logType=retrait.
       const eligibleIds = new Set<string>();
-      for (const [oid, o] of ordersMap) if (/slim/i.test(o.boxType)) eligibleIds.add(oid);
-      for (const [oid, f] of formByOrderId) if (f.logType === 'chronopost') eligibleIds.add(oid);
+      for (const [oid, o] of ordersMap) if (/slim/i.test(o.boxType) || o.delivery.includes('retrait')) eligibleIds.add(oid);
+      for (const [oid, f] of formByOrderId) if (f.logType === 'chronopost' || f.logType === 'retrait') eligibleIds.add(oid);
 
       const today = new Date(); today.setUTCHours(0, 0, 0, 0);
       for (const orderId of eligibleIds) {
         const o = ordersMap.get(orderId);
         const f = formByOrderId.get(orderId);
         const isChronoForm = f?.logType === 'chronopost';
+        const isRetrait = f?.logType === 'retrait' || !!o?.delivery.includes('retrait');
         const d = f?.d || {};
 
         const eventISO = f?.eventISO || o?.eventISO || null;
-        if (eventISO && new Date(eventISO) < today) continue; // événements passés ignorés
+        // Pour un retrait, l'immobilisation va jusqu'au retour : garder si retour >= aujourd'hui
+        const endISO = isRetrait ? (o?.returnISO || eventISO) : eventISO;
+        if (endISO && new Date(endISO) < today) continue; // événements/retours passés ignorés
 
         const clientNom = (f?.clientNom || '').trim() || o?.clientName || `Commande ${orderId}`;
         // Adresse/contact seulement si formulaire Chronopost rempli (champs log_chrono_*)
@@ -1957,6 +1966,7 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
         await upsertChronopostFromCrm({
           externalId: `snb_order_${orderId}`,
           source: 'crm_shootnbox',
+          kind: isRetrait ? 'retrait' : 'chronopost',
           clientNom,
           produitNom: normalizeChronoProduit(o?.boxType || ''),
           clientAdresse: adresse || null,
@@ -1966,8 +1976,10 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
           email: (isChronoForm ? (d.log_chrono_email || '').trim() : '') || o?.email || null,
           modeRetour: isChronoForm ? (d.log_chrono_retour || '').trim() || null : null,
           dateEvenement: eventISO,
-          dateDepart: eventISO, // pas de date transporteur côté Shootnbox → position sur l'événement
-          dateRetourPrevu: null,
+          // Shootnbox : pas de date de retrait distincte → on part de l'événement.
+          dateDepart: eventISO,
+          // Retrait : immobilisation jusqu'au retour CRM. Chronopost : géré côté affichage (J-3/J+2).
+          dateRetourPrevu: isRetrait ? (o?.returnISO || null) : null,
         }, result);
       }
     } catch (e: any) {
@@ -1992,12 +2004,17 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
       for (const row of rows) {
         const delivOpts = String(row.delivery_options || '').toLowerCase();
         const isSlim = String(row.box_type || '').toLowerCase().includes('slim');
-        // Inclus si : livraison Chronopost choisie OU borne Slim (toujours par transporteur)
-        if (!delivOpts.includes('chronopost') && !isSlim) continue;
+        const isRetrait = delivOpts.includes('retrait') || delivOpts.includes('boutique');
+        // Inclus si : Retrait boutique OU Chronopost OU borne Slim (toujours par transporteur)
+        if (!isRetrait && !delivOpts.includes('chronopost') && !isSlim) continue;
         const orderId = String(row.id || '').trim();
         if (!orderId) continue;
         const eventISO = pendingDateDMY(String(row.event_date || '').trim());
-        if (eventISO && new Date(eventISO) < today) continue;
+        const takeISO = pendingDateDMY(String(row.take_date || '').trim());
+        const returnISO = pendingDateDMY(String(row.return_date || '').trim());
+        // Pour un retrait, garder tant que le retour n'est pas passé.
+        const endISO = isRetrait ? (returnISO || eventISO) : eventISO;
+        if (endISO && new Date(endISO) < today) continue;
 
         const clientNom = String(row.company || '').trim()
           || [row.first_name, row.last_name].filter(Boolean).map((s: string) => s.trim()).join(' ').trim()
@@ -2007,6 +2024,7 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
         await upsertChronopostFromCrm({
           externalId: `smk_order_${orderId}`,
           source: 'crm_smakk',
+          kind: isRetrait ? 'retrait' : 'chronopost',
           clientNom,
           produitNom: normalizeChronoProduit(String(row.box_type || '')),
           clientAdresse: adresse || null,
@@ -2016,8 +2034,9 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
           email: (row.email || '').trim() || null,
           modeRetour: null,
           dateEvenement: eventISO,
-          dateDepart: pendingDateDMY(String(row.take_date || '').trim()) || eventISO,
-          dateRetourPrevu: pendingDateDMY(String(row.return_date || '').trim()),
+          // Retrait : jour de retrait (take_date) → jour de retour. Chronopost : take_date sinon event.
+          dateDepart: takeISO || eventISO,
+          dateRetourPrevu: isRetrait ? (returnISO || null) : returnISO,
         }, result);
       }
 
