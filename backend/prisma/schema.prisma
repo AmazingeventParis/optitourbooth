@@ -898,6 +898,9 @@ model ChronopostExpedition {
   // chronopost (incl. Slim, envoi transporteur) | retrait (client vient chercher en boutique)
   // Les "retrait" n'apparaissent PAS dans la section /chronopost ; ils servent à l'agenda.
   kind                String           @default("chronopost")
+  // Borne assignée dans l'agenda (drag-drop / optimisation) — pas de relation pour
+  // ne pas toucher le modèle Machine ; résolu par lookup dans buildAllocations.
+  suggestedMachineId  String?          @map("suggested_machine_id")
   clientNom           String           @map("client_nom")
   clientAdresse       String?          @map("client_adresse")
   clientVille         String?          @map("client_ville")

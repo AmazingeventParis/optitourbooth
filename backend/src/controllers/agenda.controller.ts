@@ -93,12 +93,12 @@ function addBusinessDays(date: Date, n: number): Date {
 }
 
 /**
- * GET /api/agenda/allocations?dateFrom=&dateTo=
+ * Construit les blocs d'allocation pour une période. Fonction PURE (await-able),
+ * réutilisée par l'endpoint HTTP getAllocations ET par optimizeAssignments
+ * (qui doit récupérer les blocs de façon synchrone — l'appel via asyncHandler
+ * ne renvoie pas la promesse).
  */
-export const getAllocations = asyncHandler(async (req: Request, res: Response) => {
-  const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
-  if (!dateFrom || !dateTo) return apiResponse.badRequest(res, 'dateFrom et dateTo requis');
-
+async function buildAllocations(dateFrom: string, dateTo: string): Promise<AllocationBlock[]> {
   const from = new Date(dateFrom + 'T00:00:00Z');
   const to = new Date(dateTo + 'T23:59:59Z');
   const extFrom = new Date(from.getTime() - 14 * 86400000);
@@ -291,6 +291,13 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     },
   });
 
+  // Résolution des bornes assignées (drag-drop / optimisation) sur ces blocs
+  const chronoMachineIds = [...new Set((chronoRecords as any[]).map(c => c.suggestedMachineId).filter(Boolean))] as string[];
+  const chronoMachines = chronoMachineIds.length > 0
+    ? await prisma.machine.findMany({ where: { id: { in: chronoMachineIds } }, select: { id: true, numero: true, type: true } })
+    : [];
+  const chronoMachineMap = new Map(chronoMachines.map(m => [m.id, m]));
+
   for (const cr of chronoRecords as any[]) {
     const isRetrait = cr.kind === 'retrait';
 
@@ -328,7 +335,9 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     if (usedDeliveryClients.has(fw + '|' + dateStart)) continue;
 
     const produitNom = cr.produitNom || '?';
-    const machine = findMachine(cr.clientNom || '', dateStart, produitNom);
+    // Borne assignée (agenda) prioritaire, sinon recherche par prépa/pending
+    const assignedMachine = cr.suggestedMachineId ? chronoMachineMap.get(cr.suggestedMachineId) : null;
+    const machine = assignedMachine || findMachine(cr.clientNom || '', dateStart, produitNom);
 
     blocks.push({
       id: `cx-${cr.id}`,
@@ -405,6 +414,16 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
   // Sort by dateStart then timeStart
   blocks.sort((a, b) => a.dateStart.localeCompare(b.dateStart) || a.timeStart.localeCompare(b.timeStart));
 
+  return blocks;
+}
+
+/**
+ * GET /api/agenda/allocations?dateFrom=&dateTo=
+ */
+export const getAllocations = asyncHandler(async (req: Request, res: Response) => {
+  const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
+  if (!dateFrom || !dateTo) return apiResponse.badRequest(res, 'dateFrom et dateTo requis');
+  const blocks = await buildAllocations(dateFrom, dateTo);
   return apiResponse.success(res, blocks);
 });
 
@@ -418,14 +437,11 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
   const { dateFrom, dateTo } = req.body;
   if (!dateFrom || !dateTo) return apiResponse.badRequest(res, 'dateFrom et dateTo requis');
 
-  const MARGIN_HOURS = 4;
+  const MARGIN_HOURS = 1;
   const MARGIN_MS = MARGIN_HOURS * 60 * 60 * 1000;
 
-  // Get all allocations for the period
-  const fakeReq = { query: { dateFrom, dateTo }, headers: req.headers } as any;
-  let blocks: AllocationBlock[] = [];
-  const fakeRes = { status: () => fakeRes, json: (body: any) => { blocks = body.data || []; return fakeRes; } } as any;
-  await getAllocations(fakeReq, fakeRes, (() => {}) as any);
+  // Get all allocations for the period (await direct — pas via asyncHandler)
+  const blocks: AllocationBlock[] = await buildAllocations(dateFrom, dateTo);
 
   // Get all machines grouped by type
   const allMachines = await prisma.machine.findMany({
@@ -544,7 +560,21 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
       // Record the assignment (avec le chauffeur de récupération de CE bloc)
       machineSchedule.get(bestMachineId)!.push({ endMs: blockEndMs(block), recupDriver: block.chauffeurRecuperation });
 
-      // Store suggestion on pending point (don't create preparation)
+      // Blocs chronopost/retrait → affectation sur ChronopostExpedition
+      if (block.id.startsWith('cx-')) {
+        try {
+          await prisma.chronopostExpedition.update({
+            where: { id: block.id.slice(3) },
+            data: { suggestedMachineId: bestMachineId },
+          });
+          assigned++;
+        } catch {
+          skipped++;
+        }
+        continue;
+      }
+
+      // Sinon (livraison/tournée) : suggestion sur le pending point
       const eventDate = ensureDateUTC(block.dateStart);
       const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
 
@@ -583,7 +613,7 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
  */
 export const checkMargin = asyncHandler(async (req: Request, res: Response) => {
   const { targetMachineId, dateStart, timeStart, dateEnd, timeEnd, blockClient, dateFrom, dateTo } = req.body;
-  const MARGIN_HOURS = 4;
+  const MARGIN_HOURS = 1;
   const MARGIN_MS = MARGIN_HOURS * 60 * 60 * 1000;
 
   const machine = await prisma.machine.findUnique({ where: { id: targetMachineId } });
@@ -724,6 +754,19 @@ export const assignMachine = asyncHandler(async (req: Request, res: Response) =>
   // Verify target machine exists
   const machine = await prisma.machine.findUnique({ where: { id: targetMachineId } });
   if (!machine) return apiResponse.notFound(res, 'Machine non trouvée');
+
+  // Blocs chronopost/retrait (id "cx-<id>") → affectation stockée sur ChronopostExpedition
+  if (typeof blockId === 'string' && blockId.startsWith('cx-')) {
+    const cxId = blockId.slice(3);
+    try {
+      await prisma.chronopostExpedition.update({ where: { id: cxId }, data: { suggestedMachineId: targetMachineId } });
+    } catch {
+      return apiResponse.notFound(res, 'Événement chronopost/retrait non trouvé');
+    }
+    const { socketEmit } = await import('../config/socket.js');
+    socketEmit.toAdmins('machines:updated', {});
+    return apiResponse.success(res, { action: 'assigned', machineNumero: machine.numero });
+  }
 
   const eventDate = ensureDateUTC(dateEvenement);
 
