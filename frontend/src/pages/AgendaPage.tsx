@@ -646,7 +646,7 @@ export default function AgendaPage() {
                       {/* Single merged cell for all days — blocks are positioned absolutely across the full width */}
                       <td
                         colSpan={days.length}
-                        className="border-b border-gray-50 p-0 h-[26px] relative"
+                        className="border-b border-gray-50 p-0 h-[39px] relative"
                         onDragOver={(e) => {
                           if (isHS) return;
                           if (!dragBlock || (dragBlock.produit !== row.type && dragBlock.produit !== '?')) return;

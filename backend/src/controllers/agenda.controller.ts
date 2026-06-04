@@ -437,7 +437,9 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
   const { dateFrom, dateTo } = req.body;
   if (!dateFrom || !dateTo) return apiResponse.badRequest(res, 'dateFrom et dateTo requis');
 
-  const MARGIN_HOURS = 1;
+  // Aucune marge de sécurité : on peut réutiliser une borne même si les prestas
+  // s'enchaînent directement (récupération puis livraison sans temps mort).
+  const MARGIN_HOURS = 0;
   const MARGIN_MS = MARGIN_HOURS * 60 * 60 * 1000;
 
   // Get all allocations for the period (await direct — pas via asyncHandler)
@@ -613,7 +615,7 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
  */
 export const checkMargin = asyncHandler(async (req: Request, res: Response) => {
   const { targetMachineId, dateStart, timeStart, dateEnd, timeEnd, blockClient, dateFrom, dateTo } = req.body;
-  const MARGIN_HOURS = 1;
+  const MARGIN_HOURS = 0;
   const MARGIN_MS = MARGIN_HOURS * 60 * 60 * 1000;
 
   const machine = await prisma.machine.findUnique({ where: { id: targetMachineId } });
