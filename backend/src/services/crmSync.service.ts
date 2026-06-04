@@ -970,14 +970,20 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     // 2. Formulaires mail-info-client soumis — fetch AVANT le filtre orders pour pouvoir
     //    utiliser logType comme fallback quand le champ delivery d'orders_ajax est vide.
     const lookupKey = process.env.CRM_LOOKUP_KEY || 'otb_crm_lookup_2026';
-    const formByNumId = new Map<string, { d: Record<string, string>; logType: string }>();
+    const formByNumId = new Map<string, { d: Record<string, string>; logType: string; hasLog: boolean }>();
     try {
       const resp = await fetch(`https://shootnbox.fr/manager2/otb_cfg_bulk.php?key=${lookupKey}`, { signal: controller.signal });
       const body = await resp.json() as any[];
+      // ATTENTION : otb_cfg_bulk renvoie PLUSIEURS configs par commande (logistique +
+      // graphique "gfx" sans champs log_). On garde en PRIORITÉ l'entrée logistique :
+      // une config sans champ log_ ne doit jamais écraser une config logistique.
       for (const cfg of (Array.isArray(body) ? body : [])) {
-        if (cfg.num_id && cfg.submitted_data) {
-          formByNumId.set(cfg.num_id, { d: cfg.submitted_data, logType: cfg.logistique_type || 'classique' });
-        }
+        if (!cfg.num_id || !cfg.submitted_data) continue;
+        const d = cfg.submitted_data as Record<string, string>;
+        const hasLog = Object.keys(d).some((k) => k.startsWith('log_'));
+        const existing = formByNumId.get(cfg.num_id);
+        if (existing && (existing.hasLog || !hasLog)) continue; // garde la meilleure entrée déjà retenue
+        formByNumId.set(cfg.num_id, { d, logType: cfg.logistique_type || 'classique', hasLog });
       }
       console.log(`[CRM PendingPoints] ${formByNumId.size} formulaires disponibles pour enrichissement`);
     } catch (e) {
@@ -1903,20 +1909,26 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
 
       // Formulaires logistiques (clé = order_id)
       const lookupKey = process.env.CRM_LOOKUP_KEY || 'otb_crm_lookup_2026';
-      const formByOrderId = new Map<string, { d: any; logType: string; eventISO: string | null; clientNom: string }>();
+      const formByOrderId = new Map<string, { d: any; logType: string; eventISO: string | null; clientNom: string; hasLog: boolean }>();
       try {
         const resp = await fetch(`${SHOOTNBOX_BASE}/otb_cfg_bulk.php?key=${lookupKey}`, { signal: controller.signal });
         const body = await resp.json() as any[];
+        // Plusieurs configs par commande (logistique + gfx) → garder l'entrée logistique.
         for (const cfg of (Array.isArray(body) ? body : [])) {
           const oid = String(cfg.order_id || '').trim();
           if (!oid) continue;
+          const d = cfg.submitted_data || {};
+          const hasLog = Object.keys(d).some((k) => k.startsWith('log_'));
+          const existing = formByOrderId.get(oid);
+          if (existing && (existing.hasLog || !hasLog)) continue;
           const clientNom = stripHtml(String(cfg.societe || '')).trim()
             || `${stripHtml(String(cfg.first_name || ''))} ${stripHtml(String(cfg.last_name || ''))}`.trim();
           formByOrderId.set(oid, {
-            d: cfg.submitted_data || {},
+            d,
             logType: cfg.logistique_type || '',
             eventISO: pendingDateDMY(stripHtml(String(cfg.event_date || ''))),
             clientNom,
+            hasLog,
           });
         }
       } catch (e: any) { result.errors.push(`Shootnbox forms: ${e.message}`); }
