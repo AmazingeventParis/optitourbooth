@@ -29,6 +29,9 @@ interface AllocationBlock {
   // Chauffeurs issus des tournées (livraison = début, récupération = fin)
   chauffeurLivraison: string | null;
   chauffeurRecuperation: string | null;
+  // Créneaux complets (plages) — timeStart = début livraison, timeEnd = fin récup
+  livraisonCreneauFin: string | null;
+  recuperationCreneauDebut: string | null;
 }
 
 function fmtTime(t: Date | string | null): string | null {
@@ -226,6 +229,9 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     const timeStart = fmtTime(delivery.creneauDebut) || '00:00';
     const dateEnd = pickup ? fmtDate(pickup.tournee.date) : dDate;
     const timeEnd = pickup ? (fmtTime(pickup.creneauFin) || '23:59') : '23:59';
+    // Bornes du créneau pour afficher la PLAGE (et pas juste une heure) dans le détail
+    const livraisonCreneauFin = fmtTime(delivery.creneauFin);
+    const recuperationCreneauDebut = pickup ? fmtTime(pickup.creneauDebut) : null;
 
     // Skip if block doesn't overlap visible range
     if (dateEnd < dateFrom || dateStart > dateTo) continue;
@@ -265,6 +271,8 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       preparateurNom: preparateur,
       chauffeurLivraison: delivery.tournee?.chauffeur ? `${delivery.tournee.chauffeur.prenom}` : null,
       chauffeurRecuperation: pickup?.tournee?.chauffeur ? `${pickup.tournee.chauffeur.prenom}` : null,
+      livraisonCreneauFin,
+      recuperationCreneauDebut,
     });
   }
 
@@ -346,6 +354,8 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       preparateurNom: null,
       chauffeurLivraison: null,
       chauffeurRecuperation: null,
+      livraisonCreneauFin: null,
+      recuperationCreneauDebut: null,
     });
   }
 
@@ -387,6 +397,8 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       preparateurNom: prep.preparateur || null,
       chauffeurLivraison: null,
       chauffeurRecuperation: null,
+      livraisonCreneauFin: null,
+      recuperationCreneauDebut: null,
     });
   }
 

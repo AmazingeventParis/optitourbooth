@@ -864,7 +864,7 @@ function EventDetailModal({ block, onClose, onNavigateTournee }: {
               <div>
                 <div className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Livraison</div>
                 <div className="text-sm font-medium text-gray-900">{(() => { try { return format(parseISO(block.dateStart), 'EEE d MMM yyyy', { locale: fr }); } catch { return block.dateStart; } })()}</div>
-                <div className="flex items-center gap-1 text-sm text-gray-600"><ClockIcon className="h-3.5 w-3.5" /> {block.timeStart}</div>
+                <div className="flex items-center gap-1 text-sm text-gray-600"><ClockIcon className="h-3.5 w-3.5" /> {block.timeStart}{block.livraisonCreneauFin ? ` – ${block.livraisonCreneauFin}` : ''}</div>
                 {block.chauffeurLivraison && (
                   <div className="flex items-center gap-1 text-sm text-gray-700 mt-0.5">🚚 <span className="font-medium">{block.chauffeurLivraison}</span></div>
                 )}
@@ -872,7 +872,7 @@ function EventDetailModal({ block, onClose, onNavigateTournee }: {
               <div>
                 <div className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Récupération</div>
                 <div className="text-sm font-medium text-gray-900">{(() => { try { return format(parseISO(block.dateEnd), 'EEE d MMM yyyy', { locale: fr }); } catch { return block.dateEnd; } })()}</div>
-                <div className="flex items-center gap-1 text-sm text-gray-600"><ClockIcon className="h-3.5 w-3.5" /> {block.timeEnd}</div>
+                <div className="flex items-center gap-1 text-sm text-gray-600"><ClockIcon className="h-3.5 w-3.5" /> {block.recuperationCreneauDebut ? `${block.recuperationCreneauDebut} – ` : ''}{block.timeEnd}</div>
                 {block.chauffeurRecuperation && (
                   <div className="flex items-center gap-1 text-sm text-gray-700 mt-0.5">↩ <span className="font-medium">{block.chauffeurRecuperation}</span></div>
                 )}

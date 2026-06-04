@@ -24,6 +24,8 @@ export interface AllocationBlock {
   preparateurNom: string | null;
   chauffeurLivraison: string | null;
   chauffeurRecuperation: string | null;
+  livraisonCreneauFin: string | null;
+  recuperationCreneauDebut: string | null;
 }
 
 export interface StockDay {
