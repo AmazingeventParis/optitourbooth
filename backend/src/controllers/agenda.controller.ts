@@ -284,10 +284,21 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
     let dateStart: string;
     let dateEnd: string;
     if (isRetrait) {
-      const dep = cr.dateDepart || cr.dateEvenement;
-      if (!dep) continue;
-      dateStart = fmtDate(dep);
-      dateEnd = cr.dateRetourPrevu ? fmtDate(cr.dateRetourPrevu) : dateStart;
+      const ev = cr.dateEvenement ? new Date(cr.dateEvenement) : null;
+      const evDay = ev ? ev.getUTCDay() : -1; // 0 = dimanche, 6 = samedi
+      if (ev && (evDay === 0 || evDay === 6)) {
+        // Retrait boutique avec événement le week-end : boutique fermée sam/dim
+        // → immobilisation vendredi (avant) → lundi (après).
+        const fri = new Date(ev); while (fri.getUTCDay() !== 5) fri.setUTCDate(fri.getUTCDate() - 1);
+        const mon = new Date(ev); while (mon.getUTCDay() !== 1) mon.setUTCDate(mon.getUTCDate() + 1);
+        dateStart = fmtDate(fri);
+        dateEnd = fmtDate(mon);
+      } else {
+        const dep = cr.dateDepart || cr.dateEvenement;
+        if (!dep) continue;
+        dateStart = fmtDate(dep);
+        dateEnd = cr.dateRetourPrevu ? fmtDate(cr.dateRetourPrevu) : dateStart;
+      }
     } else {
       // chronopost/slim : J-3 / J+2 jours ouvrés (fériés FR) autour de l'événement
       const ev = cr.dateEvenement || cr.dateDepart;
