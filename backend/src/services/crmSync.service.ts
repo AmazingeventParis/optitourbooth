@@ -1116,7 +1116,9 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             data: {
               clientName: order.clientName,
               ...(eventName && { eventName }),
-              quantiteBornes,
+              // Ne PAS réécrire quantiteBornes à 1 quand la readiness ne renvoie pas
+              // de box_id à ce sync (sinon le badge ×N disparaît par intermittence).
+              ...(borneRaw && { quantiteBornes }),
               // Re-synchroniser depuis le CRM/formulaire à CHAQUE sync tant que le
               // point n'a pas été édité manuellement via l'UI. Si le client met à
               // jour son formulaire dans manager2, OptiTour suit automatiquement.
@@ -1172,10 +1174,13 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             data: {
               clientName: order.clientName,
               ...(eventName && { eventName }),
-              quantiteBornes,
+              // Ne PAS réécrire quantiteBornes à 1 si la readiness n'a pas de box_id.
+              ...(borneRaw && { quantiteBornes }),
               // Re-sync depuis le CRM/formulaire à chaque passage tant que non édité via l'UI.
               ...(!existingRec.manuallyEdited && { date: ensureDateUTC(recDate) }),
-              ...(form && parsedRec?.adresse && { adresse: parsedRec.adresse }),
+              // Le ramassage n'a pas d'adresse de récupération distincte → repli sur
+              // l'adresse de livraison (sinon le point de ramassage reste sans adresse).
+              ...(form && (parsedRec?.adresse || parsedLiv?.adresse) && { adresse: parsedRec?.adresse ?? parsedLiv?.adresse }),
               ...(!existingRec.manuallyEdited && form && parsedRec && {
                 ...(parsedRec.creneauDebut && { creneauDebut: parsedRec.creneauDebut }),
                 ...(parsedRec.creneauFin && { creneauFin: parsedRec.creneauFin }),
@@ -1421,7 +1426,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           await prisma.pendingPoint.update({ where: { id: existingLiv.id }, data: {
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
-            quantiteBornes: smkQuantiteBornes,
+            // Ne pas réécrire à 1 si la readiness Smakk n'a pas de box_id à ce sync.
+            ...(smkBorneRaw && { quantiteBornes: smkQuantiteBornes }),
             // Re-sync depuis le CRM/info client à chaque passage tant que non édité via l'UI.
             ...(!existingLiv.manuallyEdited && {
               date: ensureDateUTC(livDateISO),
@@ -1463,7 +1469,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           await prisma.pendingPoint.update({ where: { id: existingRec.id }, data: {
             clientName: order.clientName,
             ...(smkEventName && { eventName: smkEventName }),
-            quantiteBornes: smkQuantiteBornes,
+            // Ne pas réécrire à 1 si la readiness Smakk n'a pas de box_id à ce sync.
+            ...(smkBorneRaw && { quantiteBornes: smkQuantiteBornes }),
             // Re-sync depuis le CRM/info client à chaque passage tant que non édité via l'UI.
             ...(!existingRec.manuallyEdited && {
               date: ensureDateUTC(recDateISO),
