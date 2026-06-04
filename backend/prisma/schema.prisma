@@ -901,6 +901,7 @@ model ChronopostExpedition {
   produitNom          String?          @map("produit_nom")
   contactNom          String?          @map("contact_nom")
   contactTelephone    String?          @map("contact_telephone")
+  email               String?
   modeRetour          String?          @map("mode_retour") // recup | poste
   notes               String?          @db.Text
   dateEvenement       DateTime?        @map("date_evenement")

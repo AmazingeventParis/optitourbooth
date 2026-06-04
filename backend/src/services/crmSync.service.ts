@@ -1803,6 +1803,7 @@ async function upsertChronopostFromCrm(
     clientVille: string | null;
     contactNom: string | null;
     contactTelephone: string | null;
+    email: string | null;
     modeRetour: string | null;
     dateEvenement: string | null;   // ISO yyyy-mm-dd
     dateDepart: string | null;      // ISO
@@ -1824,6 +1825,7 @@ async function upsertChronopostFromCrm(
           clientVille: rec.clientVille,
           contactNom: rec.contactNom,
           contactTelephone: rec.contactTelephone,
+          email: rec.email,
           modeRetour: rec.modeRetour,
           dateEvenement: toDate(rec.dateEvenement),
           dateDepart: toDate(rec.dateDepart),
@@ -1845,6 +1847,7 @@ async function upsertChronopostFromCrm(
           ...(rec.clientVille && { clientVille: rec.clientVille }),
           ...(rec.contactNom && { contactNom: rec.contactNom }),
           ...(rec.contactTelephone && { contactTelephone: rec.contactTelephone }),
+          ...(rec.email && { email: rec.email }),
           ...(rec.modeRetour && { modeRetour: rec.modeRetour }),
           ...(rec.dateEvenement && { dateEvenement: toDate(rec.dateEvenement) }),
           ...(rec.dateDepart && !existing.dateDepart && { dateDepart: toDate(rec.dateDepart) }),
@@ -1873,7 +1876,7 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
       const cookie = await crmLogin(SHOOTNBOX_BASE, SHOOTNBOX_EMAIL, SHOOTNBOX_PASSWORD, 'ShootNBox Chronopost', controller.signal);
 
       // Infos commandes par orderId (box_type, client, date événement)
-      const ordersMap = new Map<string, { boxType: string; clientName: string; eventISO: string | null }>();
+      const ordersMap = new Map<string, { boxType: string; clientName: string; eventISO: string | null; email: string }>();
       try {
         for (const urlSuffix of ['orders_ajax.php?status=2', 'orders_ajax.php?status=2&arch=true']) {
           let start = 0;
@@ -1890,6 +1893,7 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
                 boxType: stripHtml(String(row.box_type || '')),
                 clientName: (company || person || '').trim(),
                 eventISO: pendingDateDMY(stripHtml(String(row.event_date || ''))),
+                email: stripHtml(String(row.email || '')).trim(),
               });
             }
             start += 500;
@@ -1947,6 +1951,7 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
           clientVille: isChronoForm ? (d.log_chrono_ville || '').trim() || null : null,
           contactNom: isChronoForm ? clientNom : null,
           contactTelephone: isChronoForm ? (d.log_chrono_tel || '').trim() || null : null,
+          email: (isChronoForm ? (d.log_chrono_email || '').trim() : '') || o?.email || null,
           modeRetour: isChronoForm ? (d.log_chrono_retour || '').trim() || null : null,
           dateEvenement: eventISO,
           dateDepart: eventISO, // pas de date transporteur côté Shootnbox → position sur l'événement
@@ -1996,6 +2001,7 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
           clientVille: (row.city || '').trim() || null,
           contactNom: (row.take_contact || '').trim() || null,
           contactTelephone: (row.phone || '').trim() || null,
+          email: (row.email || '').trim() || null,
           modeRetour: null,
           dateEvenement: eventISO,
           dateDepart: pendingDateDMY(String(row.take_date || '').trim()) || eventISO,

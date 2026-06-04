@@ -29,6 +29,7 @@ export interface ChronopostExpedition {
   produitNom?: string;
   contactNom?: string | null;
   contactTelephone?: string | null;
+  email?: string | null;
   modeRetour?: string | null;
   notes?: string;
   dateEvenement?: string;

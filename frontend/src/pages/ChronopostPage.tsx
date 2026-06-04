@@ -527,7 +527,7 @@ export default function ChronopostPage() {
             })()}
 
             {/* Infos événement (import CRM) */}
-            {(selected.dateEvenement || selected.clientAdresse || selected.contactNom || selected.contactTelephone || selected.modeRetour) && (
+            {(selected.dateEvenement || selected.clientAdresse || selected.contactNom || selected.contactTelephone || selected.email || selected.modeRetour) && (
               <div className="space-y-1.5 text-sm border-t border-gray-100 pt-4">
                 {selected.dateEvenement && (
                   <div className="flex justify-between"><span className="text-gray-400">Événement</span><span className="font-medium text-gray-800">{formatDate(selected.dateEvenement)}</span></div>
@@ -540,6 +540,9 @@ export default function ChronopostPage() {
                 )}
                 {selected.contactTelephone && (
                   <div className="flex justify-between"><span className="text-gray-400">Téléphone</span><span className="text-gray-700">{selected.contactTelephone}</span></div>
+                )}
+                {selected.email && (
+                  <div className="flex justify-between gap-3"><span className="text-gray-400 flex-shrink-0">Email</span><a href={`mailto:${selected.email}`} className="text-blue-600 hover:underline text-right truncate">{selected.email}</a></div>
                 )}
                 {selected.modeRetour && (
                   <div className="flex justify-between"><span className="text-gray-400">Retour</span><span className="text-gray-700">{selected.modeRetour === 'recup' ? 'Récupération chauffeur' : selected.modeRetour === 'poste' ? 'Renvoi par le client' : selected.modeRetour}</span></div>
