@@ -22,6 +22,8 @@ export interface AllocationBlock {
   pickupPointId: string | null;
   notesInternes: string | null;
   preparateurNom: string | null;
+  chauffeurLivraison: string | null;
+  chauffeurRecuperation: string | null;
 }
 
 export interface StockDay {

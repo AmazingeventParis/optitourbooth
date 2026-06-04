@@ -26,6 +26,9 @@ interface AllocationBlock {
   pickupPointId: string | null;
   notesInternes: string | null;
   preparateurNom: string | null;
+  // Chauffeurs issus des tournées (livraison = début, récupération = fin)
+  chauffeurLivraison: string | null;
+  chauffeurRecuperation: string | null;
 }
 
 function fmtTime(t: Date | string | null): string | null {
@@ -102,7 +105,7 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
   const allPoints = await prisma.point.findMany({
     where: { tournee: { date: { gte: extFrom, lte: extTo } } },
     include: {
-      tournee: { select: { id: true, date: true } },
+      tournee: { select: { id: true, date: true, chauffeur: { select: { prenom: true, nom: true } } } },
       client: { select: { id: true, nom: true, adresse: true, codePostal: true, ville: true, telephone: true, contactNom: true, contactTelephone: true } },
       produits: { include: { produit: { select: { id: true, nom: true, couleur: true } } } },
     },
@@ -260,6 +263,8 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       pickupPointId: pickup?.id || null,
       notesInternes: delivery.notesInternes || null,
       preparateurNom: preparateur,
+      chauffeurLivraison: delivery.tournee?.chauffeur ? `${delivery.tournee.chauffeur.prenom}` : null,
+      chauffeurRecuperation: pickup?.tournee?.chauffeur ? `${pickup.tournee.chauffeur.prenom}` : null,
     });
   }
 
@@ -339,6 +344,8 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       pickupPointId: null,
       notesInternes: cr.notes || null,
       preparateurNom: null,
+      chauffeurLivraison: null,
+      chauffeurRecuperation: null,
     });
   }
 
@@ -378,6 +385,8 @@ export const getAllocations = asyncHandler(async (req: Request, res: Response) =
       pickupPointId: null,
       notesInternes: prep.notes || null,
       preparateurNom: prep.preparateur || null,
+      chauffeurLivraison: null,
+      chauffeurRecuperation: null,
     });
   }
 

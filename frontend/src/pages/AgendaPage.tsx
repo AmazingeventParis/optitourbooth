@@ -736,14 +736,14 @@ export default function AgendaPage() {
                                 borderLeft: isUnassigned ? `2px dashed ${row.color}` : 'none',
                                 borderRight: isUnassigned ? `2px dashed ${row.color}` : 'none',
                               }}
-                              title={`${block.client}\n${block.produit} ${block.machineNumero || '(non attribué)'}\n${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}${isUnassigned ? '\n⚠ Borne non attribuée' : ''}`}
+                              title={`${block.client}\n${block.produit} ${block.machineNumero || '(non attribué)'}\n${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}${block.chauffeurLivraison || block.chauffeurRecuperation ? `\nLivraison: ${block.chauffeurLivraison || '?'} — Récup: ${block.chauffeurRecuperation || '?'}` : ''}${isUnassigned ? '\n⚠ Borne non attribuée' : ''}`}
                             >
                               <span className="text-[9px] font-bold flex-shrink-0" style={{ color: row.color }}>
-                                {isClampedStart ? '◂' : block.timeStart !== '00:00' ? block.timeStart : ''}
+                                {isClampedStart ? '◂' : block.chauffeurLivraison ? `🚚${block.chauffeurLivraison}` : block.timeStart !== '00:00' ? block.timeStart : ''}
                               </span>
                               <span className="text-[9px] font-medium truncate mx-0.5 text-center" style={{ color: row.color }}>{clientShort}</span>
                               <span className="text-[9px] font-bold flex-shrink-0" style={{ color: row.color }}>
-                                {isClampedEnd ? '▸' : block.timeEnd !== '23:59' ? block.timeEnd : ''}
+                                {isClampedEnd ? '▸' : block.chauffeurRecuperation ? `${block.chauffeurRecuperation}↩` : block.timeEnd !== '23:59' ? block.timeEnd : ''}
                               </span>
                             </div>
                           );
@@ -865,11 +865,17 @@ function EventDetailModal({ block, onClose, onNavigateTournee }: {
                 <div className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Livraison</div>
                 <div className="text-sm font-medium text-gray-900">{(() => { try { return format(parseISO(block.dateStart), 'EEE d MMM yyyy', { locale: fr }); } catch { return block.dateStart; } })()}</div>
                 <div className="flex items-center gap-1 text-sm text-gray-600"><ClockIcon className="h-3.5 w-3.5" /> {block.timeStart}</div>
+                {block.chauffeurLivraison && (
+                  <div className="flex items-center gap-1 text-sm text-gray-700 mt-0.5">🚚 <span className="font-medium">{block.chauffeurLivraison}</span></div>
+                )}
               </div>
               <div>
                 <div className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Récupération</div>
                 <div className="text-sm font-medium text-gray-900">{(() => { try { return format(parseISO(block.dateEnd), 'EEE d MMM yyyy', { locale: fr }); } catch { return block.dateEnd; } })()}</div>
                 <div className="flex items-center gap-1 text-sm text-gray-600"><ClockIcon className="h-3.5 w-3.5" /> {block.timeEnd}</div>
+                {block.chauffeurRecuperation && (
+                  <div className="flex items-center gap-1 text-sm text-gray-700 mt-0.5">↩ <span className="font-medium">{block.chauffeurRecuperation}</span></div>
+                )}
               </div>
             </div>
             {block.dateStart !== block.dateEnd && (
