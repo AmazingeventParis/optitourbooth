@@ -469,36 +469,46 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
     const typeMachines = machinesByType[type] || [];
     if (typeMachines.length === 0) continue;
 
-    // Track what's assigned to each machine: list of block end times
-    const machineSchedule: Map<string, { endMs: number }[]> = new Map();
+    // Track what's assigned to each machine : fin de l'événement + chauffeur qui a
+    // récupéré la borne (donc qui la détient physiquement ensuite).
+    const machineSchedule: Map<string, { endMs: number; recupDriver: string | null }[]> = new Map();
     for (const m of typeMachines) {
       machineSchedule.set(m.id, []);
     }
 
+    // Fenêtre de continuité chauffeur : un chauffeur ne garde une borne récupérée
+    // que quelques jours avant sa prochaine livraison (sinon elle repasse au dépôt).
+    const DRIVER_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
+
     for (const block of typeBlocks) {
       const startMs = blockStartMs(block);
+      const deliveryDriver = block.chauffeurLivraison; // chauffeur qui LIVRE ce nouvel événement
       let bestMachineId: string | null = null;
 
-      // Find the machine where this block fits (respecting 4h margin)
-      // and whose last event ends closest (maximize packing)
-      let bestGap = Infinity;
+      // Sélection : on privilégie la CONTINUITÉ CHAUFFEUR (la borne est déjà avec le
+      // chauffeur qui doit la livrer), puis le packing serré (plus petit écart).
+      let bestScore = Infinity;
 
       for (const machine of typeMachines) {
         const schedule = machineSchedule.get(machine.id)!;
         // Check if block fits: no overlap and >= 4h margin after last event
-        const hasConflict = schedule.some(s => {
-          // The last end + margin must be before this block's start
-          return (s.endMs + MARGIN_MS) > startMs;
-        });
+        const hasConflict = schedule.some(s => (s.endMs + MARGIN_MS) > startMs);
+        if (hasConflict) continue;
 
-        if (!hasConflict) {
-          // Find gap from last event end to this block start
-          const lastEnd = schedule.length > 0 ? Math.max(...schedule.map(s => s.endMs)) : 0;
-          const gap = startMs - lastEnd;
-          if (gap < bestGap) {
-            bestGap = gap;
-            bestMachineId = machine.id;
-          }
+        const lastEnd = schedule.length > 0 ? Math.max(...schedule.map(s => s.endMs)) : 0;
+        const last = schedule.length > 0 ? schedule.reduce((a, b) => (b.endMs > a.endMs ? b : a)) : null;
+        const gap = startMs - lastEnd;
+
+        // Continuité : le dernier événement de cette borne a été récupéré par le
+        // chauffeur qui doit livrer le nouvel événement, et c'est assez rapproché.
+        const driverMatch = !!(deliveryDriver && last?.recupDriver
+          && last.recupDriver === deliveryDriver && gap <= DRIVER_WINDOW_MS);
+
+        // Score : match chauffeur d'abord (gros bonus), puis plus petit écart.
+        const score = (driverMatch ? 0 : 1e15) + gap;
+        if (score < bestScore) {
+          bestScore = score;
+          bestMachineId = machine.id;
         }
       }
 
@@ -519,8 +529,8 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
         continue;
       }
 
-      // Record the assignment
-      machineSchedule.get(bestMachineId)!.push({ endMs: blockEndMs(block) });
+      // Record the assignment (avec le chauffeur de récupération de CE bloc)
+      machineSchedule.get(bestMachineId)!.push({ endMs: blockEndMs(block), recupDriver: block.chauffeurRecuperation });
 
       // Store suggestion on pending point (don't create preparation)
       const eventDate = ensureDateUTC(block.dateStart);
