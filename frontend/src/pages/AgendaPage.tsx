@@ -658,7 +658,11 @@ export default function AgendaPage() {
                           e.preventDefault();
                           e.stopPropagation();
                           setDropTargetKey(null);
-                          if (dragBlock) { handleDrop(dragBlock, row.key); setDragBlock(null); }
+                          // Robustesse : si l'état React dragBlock est perdu, retrouver le bloc
+                          // via l'id transporté par l'événement de drag.
+                          const droppedId = e.dataTransfer.getData('text/plain');
+                          const blk = dragBlock || allocations.find(a => a.id === droppedId) || null;
+                          if (blk) { handleDrop(blk, row.key); setDragBlock(null); }
                         }}
                       >
                         {/* Day grid lines */}
@@ -738,11 +742,11 @@ export default function AgendaPage() {
                               }}
                               title={`${block.client}\n${block.produit} ${block.machineNumero || '(non attribué)'}\n${block.dateStart} ${block.timeStart} → ${block.dateEnd} ${block.timeEnd}${block.chauffeurLivraison || block.chauffeurRecuperation ? `\nLivraison: ${block.chauffeurLivraison || '?'} — Récup: ${block.chauffeurRecuperation || '?'}` : ''}${isUnassigned ? '\n⚠ Borne non attribuée' : ''}`}
                             >
-                              <span className="text-[9px] font-bold flex-shrink-0" style={{ color: row.color }}>
+                              <span className="text-[11px] font-bold flex-shrink-0" style={{ color: row.color }}>
                                 {isClampedStart ? '◂' : block.chauffeurLivraison ? `🚚${block.chauffeurLivraison}` : block.timeStart !== '00:00' ? block.timeStart : ''}
                               </span>
-                              <span className="text-[9px] font-medium truncate mx-0.5 text-center" style={{ color: row.color }}>{clientShort}</span>
-                              <span className="text-[9px] font-bold flex-shrink-0" style={{ color: row.color }}>
+                              <span className="text-[11px] font-medium truncate mx-0.5 text-center" style={{ color: row.color }}>{clientShort}</span>
+                              <span className="text-[11px] font-bold flex-shrink-0" style={{ color: row.color }}>
                                 {isClampedEnd ? '▸' : block.chauffeurRecuperation ? `${block.chauffeurRecuperation}↩` : block.timeEnd !== '23:59' ? block.timeEnd : ''}
                               </span>
                             </div>
