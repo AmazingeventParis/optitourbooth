@@ -585,8 +585,9 @@ const calculateApproximateETAs = (
   const sortedPoints = [...points].sort((a, b) => a.ordre - b.ordre);
 
   return sortedPoints.map((point) => {
-    const clientLat = (point.client as Client | undefined)?.latitude;
-    const clientLon = (point.client as Client | undefined)?.longitude;
+    // Coordonnées de l'événement prioritaires (repli client)
+    const clientLat = point.latitude ?? (point.client as Client | undefined)?.latitude;
+    const clientLon = point.longitude ?? (point.client as Client | undefined)?.longitude;
 
     // Calculer le temps de trajet depuis le point précédent
     let travelTimeMinutes = 0;
@@ -831,18 +832,22 @@ const TourneeTimeline = memo(function TourneeTimeline({ tournee, colorIndex, onE
 
       message += `\n*${index + 1}. ${client?.nom || 'Client'}*\n`;
 
-      // Adresse avec lien Google Maps
-      let adresseText = client?.adresse || '';
-      if (client?.codePostal || client?.ville) {
+      // Adresse de l'ÉVÉNEMENT prioritaire (point), repli sur la fiche client
+      let adresseText = point.adresse || client?.adresse || '';
+      if (!point.adresse && (client?.codePostal || client?.ville)) {
         adresseText += `, ${client.codePostal || ''} ${client.ville || ''}`.trim();
       }
+
+      // Coordonnées de l'événement prioritaires, sinon client, sinon adresse texte
+      const navLat = point.latitude ?? client?.latitude;
+      const navLng = point.longitude ?? client?.longitude;
 
       // Créer les liens Maps et Waze (coordonnées si disponibles, sinon adresse)
       let mapsLink = '';
       let wazeLink = '';
-      if (client?.latitude && client?.longitude) {
-        mapsLink = `https://maps.google.com/?q=${client.latitude},${client.longitude}`;
-        wazeLink = `https://waze.com/ul?ll=${client.latitude},${client.longitude}&navigate=yes`;
+      if (navLat && navLng) {
+        mapsLink = `https://maps.google.com/?q=${navLat},${navLng}`;
+        wazeLink = `https://waze.com/ul?ll=${navLat},${navLng}&navigate=yes`;
       } else if (adresseText) {
         mapsLink = `https://maps.google.com/?q=${encodeURIComponent(adresseText)}`;
         wazeLink = `https://waze.com/ul?q=${encodeURIComponent(adresseText)}`;
@@ -2530,6 +2535,7 @@ export default function DailyPlanningPage() {
       tourneesService.addPoint(targetTourneeId, {
         clientId: pendingPoint.clientId,
         type: (pendingPoint.type as 'livraison' | 'ramassage' | 'livraison_ramassage') || 'livraison',
+        adresse: pendingPoint.adresse || undefined,
         creneauDebut: toApiHeure(pendingPoint.creneauDebut),
         creneauFin: toApiHeure(pendingPoint.creneauFin),
         notesInternes: pendingPoint.notes || undefined,
@@ -3354,6 +3360,7 @@ export default function DailyPlanningPage() {
         clientId: point.clientId!,
         clientName: point.clientName,
         type: (point.type || 'livraison') as 'livraison' | 'ramassage' | 'livraison_ramassage',
+        adresse: point.adresse || undefined,
         creneauDebut: point.creneauDebut || undefined,
         creneauFin: point.creneauFin || undefined,
         produitIds: point.produitsIds?.map(p => p.id) || (point.produitId ? [point.produitId] : undefined),
@@ -3949,34 +3956,42 @@ export default function DailyPlanningPage() {
                               <div className="font-medium">{client?.nom || 'Non défini'}</div>
                               {client?.societe && <div className="text-xs text-gray-500">{client.societe}</div>}
                             </div>
-                            <div className="col-span-2 text-xs text-gray-600">
-                              {client?.adresse}, {client?.codePostal} {client?.ville}
-                            </div>
-                            {client?.adresse && (
-                              <div className="col-span-2 flex items-center gap-3">
-                                <a
-                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${client.adresse}, ${client.codePostal} ${client.ville}`)}&layer=c`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 hover:underline"
-                                >
-                                  <ArrowTopRightOnSquareIcon className="h-3 w-3" />
-                                  Google Maps
-                                </a>
-                                <a
-                                  href={client?.latitude && client?.longitude
-                                    ? `https://waze.com/ul?ll=${client.latitude},${client.longitude}&navigate=yes`
-                                    : `https://waze.com/ul?q=${encodeURIComponent(`${client.adresse}, ${client.codePostal} ${client.ville}`)}`
-                                  }
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-700 hover:underline"
-                                >
-                                  <ArrowTopRightOnSquareIcon className="h-3 w-3" />
-                                  Waze
-                                </a>
-                              </div>
-                            )}
+                            {(() => {
+                              // Adresse de l'ÉVÉNEMENT prioritaire (point), repli sur la fiche client
+                              const adr = point.adresse
+                                || (client?.adresse ? `${client.adresse}, ${client.codePostal || ''} ${client.ville || ''}`.trim() : '');
+                              const navLat = point.latitude ?? client?.latitude;
+                              const navLng = point.longitude ?? client?.longitude;
+                              if (!adr) return null;
+                              return (
+                                <>
+                                  <div className="col-span-2 text-xs text-gray-600">{adr}</div>
+                                  <div className="col-span-2 flex items-center gap-3">
+                                    <a
+                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adr)}&layer=c`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 hover:underline"
+                                    >
+                                      <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+                                      Google Maps
+                                    </a>
+                                    <a
+                                      href={navLat && navLng
+                                        ? `https://waze.com/ul?ll=${navLat},${navLng}&navigate=yes`
+                                        : `https://waze.com/ul?q=${encodeURIComponent(adr)}`
+                                      }
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-700 hover:underline"
+                                    >
+                                      <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+                                      Waze
+                                    </a>
+                                  </div>
+                                </>
+                              );
+                            })()}
                             {(client?.telephone || client?.contactTelephone) && (
                               <div>
                                 <div className="text-[10px] text-gray-400 mb-1">Tél{client?.contactNom ? ` (${client.contactNom})` : ''}</div>

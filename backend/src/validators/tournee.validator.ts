@@ -60,6 +60,8 @@ const pointOptionSchema = z.object({
 export const createPointSchema = z.object({
   clientId: z.string().uuid(),
   type: z.nativeEnum(PointType),
+  // Adresse de l'événement (prioritaire sur la fiche client) — géocodée côté serveur
+  adresse: z.string().optional(),
   creneauDebut: z.string().regex(/^\d{2}:\d{2}$/, 'Format heure invalide (HH:MM)').optional(),
   creneauFin: z.string().regex(/^\d{2}:\d{2}$/, 'Format heure invalide (HH:MM)').optional(),
   notesInternes: z.string().optional(),

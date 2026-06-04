@@ -317,6 +317,13 @@ model Point {
   ordre               Int         // Position dans la tournée
   statut              PointStatut @default(a_faire)
 
+  // Adresse PAR ÉVÉNEMENT (copiée du pending_point au dispatch). Un client récurrent
+  // peut faire ses événements à des lieux différents : on n'utilise plus l'adresse
+  // unique de la fiche Client mais celle-ci en priorité (repli sur le client si null).
+  adresse             String?
+  latitude            Float?
+  longitude           Float?
+
   // Créneaux horaires demandés par le client
   creneauDebut        DateTime?   @map("creneau_debut") @db.Time
   creneauFin          DateTime?   @map("creneau_fin") @db.Time

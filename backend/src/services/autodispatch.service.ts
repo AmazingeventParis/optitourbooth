@@ -2,6 +2,7 @@ import { prisma } from '../config/database.js';
 import { osrmService } from './osrm.service.js';
 import { optimizationService } from './optimization.service.js';
 import { syncPointBilling } from './billingSync.service.js';
+import { geocodingService } from './geocoding.service.js';
 
 interface PendingPoint {
   clientId: string;
@@ -10,6 +11,7 @@ interface PendingPoint {
   creneauDebut?: string;
   creneauFin?: string;
   produitIds?: string[];
+  adresse?: string;       // adresse de l'événement (géocodée au dispatch, prioritaire sur le client)
   latitude?: number;
   longitude?: number;
   notes?: string;
@@ -173,12 +175,27 @@ export const autoDispatchService = {
       const point = pendingPoints[i]!;
       const clientCoords = clientCoordsMap.get(point.clientId);
 
-      // Vérifier que le client a des coordonnées
-      if (!clientCoords?.lat || !clientCoords?.lng) {
+      // Coordonnées DE L'ÉVÉNEMENT : on géocode l'adresse du point (propre à cet
+      // événement) et on l'utilise pour le routage. Repli sur la fiche client si
+      // pas d'adresse de point ou géocodage indisponible.
+      let eventLat: number | null = null;
+      let eventLng: number | null = null;
+      if (point.adresse && point.adresse.trim()) {
+        try {
+          const geo = await geocodingService.geocodeAddress(point.adresse.trim());
+          if (geo) { eventLat = geo.latitude; eventLng = geo.longitude; }
+        } catch { /* repli client */ }
+      }
+      const coords = (eventLat != null && eventLng != null)
+        ? { lat: eventLat, lng: eventLng }
+        : clientCoords;
+
+      // Vérifier qu'on a des coordonnées (événement ou client)
+      if (!coords?.lat || !coords?.lng) {
         result.failed.push({
           pointIndex: i,
           clientName: point.clientName,
-          reason: 'Client sans coordonnées GPS',
+          reason: 'Aucune coordonnée GPS (ni événement ni client)',
         });
         result.totalFailed++;
         continue;
@@ -190,7 +207,7 @@ export const autoDispatchService = {
       // Trouver la meilleure tournée pour ce point
       const bestResult = await this.findBestTournee(
         point,
-        { lat: clientCoords.lat, lng: clientCoords.lng },
+        { lat: coords.lat, lng: coords.lng },
         dureePrevue,
         tourneeCandidates
       );
@@ -227,6 +244,10 @@ export const autoDispatchService = {
             type: point.type,
             ordre: bestTournee.currentPoints,
             statut: 'a_faire',
+            // Adresse + coordonnées de l'événement (repli client géré à l'affichage)
+            adresse: point.adresse?.trim() || null,
+            latitude: eventLat,
+            longitude: eventLng,
             creneauDebut: point.creneauDebut ? this.parseTime(point.creneauDebut) : null,
             creneauFin: point.creneauFin ? this.parseTime(point.creneauFin) : null,
             dureePrevue,
@@ -254,11 +275,11 @@ export const autoDispatchService = {
         // Recalculer le centroïde avec le nouveau point
         if (bestTournee.centroid) {
           const oldCount = bestTournee.currentPoints - 1;
-          const newLat = (bestTournee.centroid.lat * oldCount + clientCoords.lat) / bestTournee.currentPoints;
-          const newLng = (bestTournee.centroid.lng * oldCount + clientCoords.lng) / bestTournee.currentPoints;
+          const newLat = (bestTournee.centroid.lat * oldCount + coords.lat) / bestTournee.currentPoints;
+          const newLng = (bestTournee.centroid.lng * oldCount + coords.lng) / bestTournee.currentPoints;
           bestTournee.centroid = { lat: newLat, lng: newLng };
         } else {
-          bestTournee.centroid = { lat: clientCoords.lat, lng: clientCoords.lng };
+          bestTournee.centroid = { lat: coords.lat, lng: coords.lng };
         }
 
         // Auto-sync HF/recovery billing for the new point

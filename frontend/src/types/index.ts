@@ -156,6 +156,10 @@ export interface Point {
   type: PointType;
   ordre: number;
   statut: PointStatut;
+  // Adresse de l'événement (prioritaire sur la fiche client à l'affichage/GPS)
+  adresse?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   creneauDebut?: string;
   creneauFin?: string;
   heureArriveeEstimee?: string;

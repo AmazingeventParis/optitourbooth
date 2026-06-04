@@ -161,6 +161,8 @@ async function getFullTournee(tourneeId: string) {
               instructionsAcces: true,
             },
           },
+          // NB: Point.adresse/latitude/longitude (adresse de l'événement) sont
+          // renvoyés par défaut (scalaires) — prioritaires sur ceux du client à l'affichage.
           produits: {
             select: {
               id: true,
@@ -1016,6 +1018,10 @@ export const tourneeController = {
         clientId: point.clientId,
         type: point.type,
         ordre: point.ordre,
+        // Conserver l'adresse de l'événement à la duplication
+        adresse: point.adresse,
+        latitude: point.latitude,
+        longitude: point.longitude,
         creneauDebut: point.creneauDebut
           ? new Date(new Date(newDate).setHours(
               point.creneauDebut.getHours(),
@@ -1511,11 +1517,26 @@ export const tourneeController = {
     const ordre = tournee._count.points;
 
     // Préparer les données
+    // Adresse de l'événement (prioritaire sur la fiche client) → géocodage serveur
+    let pointAdresse: string | null = null;
+    let pointLat: number | null = null;
+    let pointLng: number | null = null;
+    if (data.adresse && data.adresse.trim()) {
+      pointAdresse = data.adresse.trim();
+      try {
+        const geo = await geocodingService.geocodeAddress(pointAdresse);
+        if (geo) { pointLat = geo.latitude; pointLng = geo.longitude; }
+      } catch { /* repli client à l'affichage */ }
+    }
+
     const pointData: {
       tourneeId: string;
       clientId: string;
       type: typeof data.type;
       ordre: number;
+      adresse?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
       creneauDebut?: Date;
       creneauFin?: Date;
       notesInternes?: string;
@@ -1527,6 +1548,9 @@ export const tourneeController = {
       clientId: data.clientId,
       type: data.type,
       ordre,
+      adresse: pointAdresse,
+      latitude: pointLat,
+      longitude: pointLng,
       dureePrevue: 30, // Sera recalculé
       ...(data.attachments && { attachments: data.attachments }),
     };
@@ -2284,6 +2308,7 @@ export const tourneeController = {
         creneauDebut?: string;
         creneauFin?: string;
         produitIds?: string[];
+        adresse?: string;
         latitude?: number;
         longitude?: number;
         notes?: string;
