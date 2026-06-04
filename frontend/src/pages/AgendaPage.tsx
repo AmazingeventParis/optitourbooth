@@ -771,15 +771,15 @@ export default function AgendaPage() {
         />
       )}
 
-      {/* Warning marge 4h */}
+      {/* Avertissement de chevauchement (la marge de sécurité a été supprimée) */}
       {marginWarning && (
-        <Modal isOpen onClose={() => setMarginWarning(null)} title="Marge insuffisante" size="md">
+        <Modal isOpen onClose={() => setMarginWarning(null)} title="Borne déjà occupée" size="md">
           <div className="space-y-4">
             <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <ExclamationTriangleIcon className="h-6 w-6 text-amber-500 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-amber-800">
-                  La marge de 4h entre prestations n'est pas respectée :
+                  Cette borne est déjà occupée sur cette période :
                 </p>
                 <ul className="mt-2 space-y-1">
                   {marginWarning.warnings.map((w, i) => (
