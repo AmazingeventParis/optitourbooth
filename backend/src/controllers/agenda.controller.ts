@@ -411,6 +411,24 @@ async function buildAllocations(dateFrom: string, dateTo: string): Promise<Alloc
     });
   }
 
+  // ========== Affectations d'agenda (drag-drop / optimisation) — PRIORITAIRES ==========
+  // Source de vérité fiable de la borne par bloc, indépendante du matching pending_point.
+  const blockIds = blocks.map(b => b.id);
+  if (blockIds.length > 0) {
+    const assignments = await prisma.agendaAssignment.findMany({ where: { blockId: { in: blockIds } } });
+    if (assignments.length > 0) {
+      const amIds = [...new Set(assignments.map(a => a.machineId))];
+      const ams = await prisma.machine.findMany({ where: { id: { in: amIds } }, select: { id: true, numero: true, type: true } });
+      const amMap = new Map(ams.map(m => [m.id, m]));
+      const byBlock = new Map(assignments.map(a => [a.blockId, a.machineId]));
+      for (const b of blocks) {
+        const mid = byBlock.get(b.id);
+        const m = mid ? amMap.get(mid) : null;
+        if (m) { b.machineNumero = m.numero; b.machineType = m.type; }
+      }
+    }
+  }
+
   // Sort by dateStart then timeStart
   blocks.sort((a, b) => a.dateStart.localeCompare(b.dateStart) || a.timeStart.localeCompare(b.timeStart));
 
@@ -562,35 +580,32 @@ export const optimizeAssignments = asyncHandler(async (req: Request, res: Respon
       // Record the assignment (avec le chauffeur de récupération de CE bloc)
       machineSchedule.get(bestMachineId)!.push({ endMs: blockEndMs(block), recupDriver: block.chauffeurRecuperation });
 
-      // Blocs chronopost/retrait → affectation sur ChronopostExpedition
-      if (block.id.startsWith('cx-')) {
-        try {
-          await prisma.chronopostExpedition.update({
-            where: { id: block.id.slice(3) },
-            data: { suggestedMachineId: bestMachineId },
-          });
-          assigned++;
-        } catch {
-          skipped++;
-        }
-        continue;
-      }
-
-      // Sinon (livraison/tournée) : suggestion sur le pending point
-      const eventDate = ensureDateUTC(block.dateStart);
-      const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
-
-      const pp = await prisma.pendingPoint.findFirst({
-        where: { clientName: { contains: clientFw, mode: 'insensitive' }, date: eventDate, type: 'livraison' },
+      // Affectation d'agenda par bloc (fiable, prioritaire à l'affichage) — tous types
+      await prisma.agendaAssignment.upsert({
+        where: { blockId: block.id },
+        create: { blockId: block.id, machineId: bestMachineId },
+        update: { machineId: bestMachineId },
       });
-      if (pp) {
-        await prisma.pendingPoint.update({
-          where: { id: pp.id },
-          data: { suggestedMachineId: bestMachineId, ignoredInPreparation: true },
-        });
-        assigned++;
+      assigned++;
+
+      // Compat autres vues : refléter sur ChronopostExpedition / pending_point (best-effort)
+      if (block.id.startsWith('cx-')) {
+        await prisma.chronopostExpedition.update({
+          where: { id: block.id.slice(3) },
+          data: { suggestedMachineId: bestMachineId },
+        }).catch(() => {});
       } else {
-        skipped++;
+        const eventDate = ensureDateUTC(block.dateStart);
+        const clientFw = block.client.toLowerCase().trim().split(/[+\s]/)[0]?.trim() || '';
+        const pp = await prisma.pendingPoint.findFirst({
+          where: { clientName: { contains: clientFw, mode: 'insensitive' }, date: eventDate, type: 'livraison' },
+        });
+        if (pp) {
+          await prisma.pendingPoint.update({
+            where: { id: pp.id },
+            data: { suggestedMachineId: bestMachineId, ignoredInPreparation: true },
+          });
+        }
       }
     }
   }
@@ -756,6 +771,15 @@ export const assignMachine = asyncHandler(async (req: Request, res: Response) =>
   // Verify target machine exists
   const machine = await prisma.machine.findUnique({ where: { id: targetMachineId } });
   if (!machine) return apiResponse.notFound(res, 'Machine non trouvée');
+
+  // Affectation d'agenda par bloc (fiable, prioritaire à l'affichage) — tous types.
+  if (typeof blockId === 'string' && blockId) {
+    await prisma.agendaAssignment.upsert({
+      where: { blockId },
+      create: { blockId, machineId: targetMachineId },
+      update: { machineId: targetMachineId },
+    });
+  }
 
   // Blocs chronopost/retrait (id "cx-<id>") → affectation stockée sur ChronopostExpedition
   if (typeof blockId === 'string' && blockId.startsWith('cx-')) {

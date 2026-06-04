@@ -936,3 +936,17 @@ model ChronotraceSession {
 
   @@map("chronotrace_session")
 }
+
+/// Affectation borne↔événement dans l'AGENDA (drag-drop / optimisation).
+/// Clé = id du bloc d'agenda (id du point de tournée, ou "cx-<id>" pour
+/// chronopost/retrait). Prioritaire à l'affichage de l'agenda. N'altère PAS
+/// les tournées ni les préparations.
+model AgendaAssignment {
+  id        String   @id @default(uuid())
+  blockId   String   @unique @map("block_id")
+  machineId String   @map("machine_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("agenda_assignments")
+}
