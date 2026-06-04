@@ -160,6 +160,7 @@ export interface Point {
   adresse?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  quantiteBornes?: number; // nombre de bornes → badge ×N
   creneauDebut?: string;
   creneauFin?: string;
   heureArriveeEstimee?: string;

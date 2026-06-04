@@ -14,6 +14,7 @@ interface PendingPoint {
   adresse?: string;       // adresse de l'événement (géocodée au dispatch, prioritaire sur le client)
   latitude?: number;
   longitude?: number;
+  quantiteBornes?: number; // nombre de bornes → badge ×N en tournée
   notes?: string;
   contactNom?: string;
   contactTelephone?: string;
@@ -248,6 +249,7 @@ export const autoDispatchService = {
             adresse: point.adresse?.trim() || null,
             latitude: eventLat,
             longitude: eventLng,
+            quantiteBornes: point.quantiteBornes && point.quantiteBornes > 0 ? point.quantiteBornes : 1,
             creneauDebut: point.creneauDebut ? this.parseTime(point.creneauDebut) : null,
             creneauFin: point.creneauFin ? this.parseTime(point.creneauFin) : null,
             dureePrevue,

@@ -324,6 +324,9 @@ model Point {
   latitude            Float?
   longitude           Float?
 
+  // Nombre de bornes de l'événement (copié du pending_point au dispatch) → badge ×N
+  quantiteBornes      Int         @default(1) @map("quantite_bornes")
+
   // Créneaux horaires demandés par le client
   creneauDebut        DateTime?   @map("creneau_debut") @db.Time
   creneauFin          DateTime?   @map("creneau_fin") @db.Time

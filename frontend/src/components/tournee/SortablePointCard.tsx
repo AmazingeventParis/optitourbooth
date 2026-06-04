@@ -250,6 +250,11 @@ const SortablePointCard = memo(function SortablePointCard({
             <span className={clsx('px-2 py-0.5 text-xs font-medium rounded', typeConfig.color)}>
               {typeConfig.label}
             </span>
+            {!!point.quantiteBornes && point.quantiteBornes > 1 && (
+              <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-purple-100 text-purple-700 border border-purple-300 flex-shrink-0" title={`${point.quantiteBornes} bornes`}>
+                ×{point.quantiteBornes}
+              </span>
+            )}
             <Badge variant={statutConfig.variant} size="sm">
               {statutConfig.label}
             </Badge>

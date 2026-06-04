@@ -1018,10 +1018,11 @@ export const tourneeController = {
         clientId: point.clientId,
         type: point.type,
         ordre: point.ordre,
-        // Conserver l'adresse de l'événement à la duplication
+        // Conserver l'adresse de l'événement + nb de bornes à la duplication
         adresse: point.adresse,
         latitude: point.latitude,
         longitude: point.longitude,
+        quantiteBornes: point.quantiteBornes,
         creneauDebut: point.creneauDebut
           ? new Date(new Date(newDate).setHours(
               point.creneauDebut.getHours(),
@@ -1537,6 +1538,7 @@ export const tourneeController = {
       adresse?: string | null;
       latitude?: number | null;
       longitude?: number | null;
+      quantiteBornes?: number;
       creneauDebut?: Date;
       creneauFin?: Date;
       notesInternes?: string;
@@ -1551,6 +1553,7 @@ export const tourneeController = {
       adresse: pointAdresse,
       latitude: pointLat,
       longitude: pointLng,
+      ...(data.quantiteBornes && data.quantiteBornes > 0 && { quantiteBornes: data.quantiteBornes }),
       dureePrevue: 30, // Sera recalculé
       ...(data.attachments && { attachments: data.attachments }),
     };
@@ -2311,6 +2314,7 @@ export const tourneeController = {
         adresse?: string;
         latitude?: number;
         longitude?: number;
+        quantiteBornes?: number;
         notes?: string;
         contactNom?: string;
         contactTelephone?: string;

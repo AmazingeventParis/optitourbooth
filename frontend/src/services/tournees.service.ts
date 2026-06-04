@@ -40,6 +40,7 @@ interface CreatePointData {
   clientId: string;
   type: 'livraison' | 'ramassage' | 'livraison_ramassage';
   adresse?: string;
+  quantiteBornes?: number;
   creneauDebut?: string;
   creneauFin?: string;
   dureePrevue?: number;
@@ -299,6 +300,7 @@ export const tourneesService = {
     clientName: string;
     type: string;
     adresse?: string;
+    quantiteBornes?: number;
     creneauDebut?: string;
     creneauFin?: string;
     produitIds?: string[];

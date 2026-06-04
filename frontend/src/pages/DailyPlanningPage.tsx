@@ -2451,6 +2451,7 @@ export default function DailyPlanningPage() {
         type: (pendingPoint.type as PointType) || 'livraison',
         ordre: insertIndex,
         statut: 'a_faire',
+        quantiteBornes: pendingPoint.quantiteBornes,
         creneauDebut: pendingPoint.creneauDebut || undefined,
         creneauFin: pendingPoint.creneauFin || undefined,
         notesInternes: pendingPoint.notes || undefined,
@@ -2536,6 +2537,7 @@ export default function DailyPlanningPage() {
         clientId: pendingPoint.clientId,
         type: (pendingPoint.type as 'livraison' | 'ramassage' | 'livraison_ramassage') || 'livraison',
         adresse: pendingPoint.adresse || undefined,
+        quantiteBornes: pendingPoint.quantiteBornes || undefined,
         creneauDebut: toApiHeure(pendingPoint.creneauDebut),
         creneauFin: toApiHeure(pendingPoint.creneauFin),
         notesInternes: pendingPoint.notes || undefined,
@@ -3361,6 +3363,7 @@ export default function DailyPlanningPage() {
         clientName: point.clientName,
         type: (point.type || 'livraison') as 'livraison' | 'ramassage' | 'livraison_ramassage',
         adresse: point.adresse || undefined,
+        quantiteBornes: point.quantiteBornes || undefined,
         creneauDebut: point.creneauDebut || undefined,
         creneauFin: point.creneauFin || undefined,
         produitIds: point.produitsIds?.map(p => p.id) || (point.produitId ? [point.produitId] : undefined),
@@ -3953,7 +3956,14 @@ export default function DailyPlanningPage() {
                           </div>
                           <div className="p-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
                             <div className="col-span-2">
-                              <div className="font-medium">{client?.nom || 'Non défini'}</div>
+                              <div className="font-medium flex items-center gap-2">
+                                <span>{client?.nom || 'Non défini'}</span>
+                                {!!point.quantiteBornes && point.quantiteBornes > 1 && (
+                                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-purple-100 text-purple-700 border border-purple-300" title={`${point.quantiteBornes} bornes`}>
+                                    ×{point.quantiteBornes}
+                                  </span>
+                                )}
+                              </div>
                               {client?.societe && <div className="text-xs text-gray-500">{client.societe}</div>}
                             </div>
                             {(() => {
