@@ -9,12 +9,16 @@ import { ChevronLeftIcon, ChevronRightIcon, MapPinIcon, PhoneIcon, UserIcon, Tru
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 
-const MACHINE_TYPE_ORDER = ['Vegas', 'Smakk', 'Ring', 'Miroir', 'Playbox', 'Aircam', 'Spinner'];
+const MACHINE_TYPE_ORDER = ['Vegas', 'VegasSlim', 'Smakk', 'Ring', 'Miroir', 'Playbox', 'Aircam', 'Spinner'];
 
 const TYPE_COLORS: Record<string, string> = {
-  Vegas: '#616161', Smakk: '#F6BF26', Ring: '#8E24AA', Miroir: '#F4511E',
+  Vegas: '#616161', VegasSlim: '#90A4AE', Smakk: '#F6BF26', Ring: '#8E24AA', Miroir: '#F4511E',
   Playbox: '#E67C73', Aircam: '#3F51B5', Spinner: '#0B8043',
 };
+
+// Libellé d'affichage des types (la clé "VegasSlim" s'affiche "Vegas Slim")
+const TYPE_LABELS: Record<string, string> = { VegasSlim: 'Vegas Slim' };
+const typeLabel = (type: string): string => TYPE_LABELS[type] || type;
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -34,7 +38,7 @@ function timeToPercent(time: string): number {
 }
 
 export default function AgendaPage() {
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentDate, setCurrentDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [allocations, setAllocations] = useState<AllocationBlock[]>([]);
   const [stock, setStock] = useState<StockData | null>(null);
@@ -273,7 +277,7 @@ export default function AgendaPage() {
   }, [stock, allocations, activeStockDate]);
 
   // Types that always show all machines (even empty rows)
-  const ALWAYS_SHOW_ALL = ['Vegas', 'Smakk', 'Ring'];
+  const ALWAYS_SHOW_ALL = ['Vegas', 'VegasSlim', 'Smakk', 'Ring'];
 
   // Build machine rows: all Vegas/Smakk/Ring machines + occupied others
   const machineRows = useMemo(() => {
@@ -462,7 +466,7 @@ export default function AgendaPage() {
                 >
                   <div className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
                   <div className="text-left">
-                    <div className="text-xs font-semibold text-gray-800">{type}</div>
+                    <div className="text-xs font-semibold text-gray-800">{typeLabel(type)}</div>
                     <div className="flex items-center gap-1.5">
                       <span className={clsx('text-lg font-bold tabular-nums leading-none', data.available > 0 ? 'text-green-600' : 'text-red-600')}>
                         {data.available}
@@ -590,7 +594,7 @@ export default function AgendaPage() {
                         return showTypeSeparator ? (
                           <div className="flex items-center gap-1">
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: isHS ? '#9CA3AF' : row.color }} />
-                            <span className="text-[10px] font-bold" style={{ color: isHS ? '#9CA3AF' : row.color }}>{row.type}</span>
+                            <span className="text-[10px] font-bold" style={{ color: isHS ? '#9CA3AF' : row.color }}>{typeLabel(row.type)}</span>
                             <span className={clsx('text-[10px] font-bold', isHS ? 'text-gray-400' : 'text-gray-800')}>{row.numero}</span>
                             {isHS && <span className="text-[9px] font-bold text-red-400 bg-red-50 px-1 rounded">HS</span>}
                             {!isHS && canValidate && (

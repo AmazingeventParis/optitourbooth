@@ -1792,11 +1792,14 @@ export interface ChronopostCrmSyncResult {
   errors: string[];
 }
 
-// Type de borne pour la section Chronopost (pas de variante Slim dans sa liste).
+// Type de borne pour Chronopost/agenda. Toute borne "Slim" (Vegas Slim, Smakk Slim)
+// → type "VegasSlim" : flotte slim dédiée, pour qu'elle ait sa PROPRE ligne d'agenda
+// (séparée des Vegas normaux). Les autres bornes gardent leur type de base.
 function normalizeChronoProduit(raw: string): string | null {
-  const base = normalizeBoxType(stripHtml(String(raw || '')).trim());
-  const stripped = base.replace(/\s*slim$/i, '').trim();
-  return stripped || null;
+  const clean = stripHtml(String(raw || '')).trim();
+  if (!clean) return null;
+  if (/slim/i.test(clean)) return 'VegasSlim';
+  return normalizeBoxType(clean);
 }
 
 async function upsertChronopostFromCrm(
