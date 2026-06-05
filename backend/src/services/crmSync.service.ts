@@ -1131,8 +1131,10 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               // point n'a pas été édité manuellement via l'UI. Si le client met à
               // jour son formulaire dans manager2, OptiTour suit automatiquement.
               ...(!existingLiv.manuallyEdited && { date: ensureDateUTC(livDate) }),
-              ...(form && parsedLiv?.adresse && { adresse: parsedLiv.adresse }),
+              // H1 : l'adresse est désormais protégée par manuallyEdited (comme Smakk)
+              // → une correction manuelle d'adresse n'est plus écrasée par le CRM.
               ...(!existingLiv.manuallyEdited && form && parsedLiv && {
+                ...(parsedLiv.adresse && { adresse: parsedLiv.adresse }),
                 ...(parsedLiv.creneauDebut && { creneauDebut: parsedLiv.creneauDebut }),
                 ...(parsedLiv.creneauFin && { creneauFin: parsedLiv.creneauFin }),
                 ...(parsedLiv.contactNom && { contactNom: parsedLiv.contactNom }),
@@ -1186,9 +1188,9 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               ...(borneRaw && { quantiteBornes }),
               // Re-sync depuis le CRM/formulaire à chaque passage tant que non édité via l'UI.
               ...(!existingRec.manuallyEdited && { date: ensureDateUTC(recDate) }),
-              // Le ramassage n'a pas d'adresse de récupération distincte → repli sur
-              // l'adresse de livraison (sinon le point de ramassage reste sans adresse).
-              ...(form && (parsedRec?.adresse || parsedLiv?.adresse) && { adresse: parsedRec?.adresse ?? parsedLiv?.adresse }),
+              // Adresse ramassage : repli sur l'adresse de livraison, MAIS protégée par
+              // manuallyEdited (H1) → une correction manuelle n'est plus écrasée.
+              ...(!existingRec.manuallyEdited && form && (parsedRec?.adresse || parsedLiv?.adresse) && { adresse: parsedRec?.adresse ?? parsedLiv?.adresse }),
               ...(!existingRec.manuallyEdited && form && parsedRec && {
                 ...(parsedRec.creneauDebut && { creneauDebut: parsedRec.creneauDebut }),
                 ...(parsedRec.creneauFin && { creneauFin: parsedRec.creneauFin }),
@@ -1210,23 +1212,30 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     // supprimée du CRM). Garde-fou : on ne touche QUE les points non-dispatchés et
     // non supprimés manuellement — un point déjà placé dans une tournée (un humain
     // l'a validé) est conservé.
-    try {
-      const eligibleSnbOrderIds = new Set(eligible.map(o => o.orderId));
-      const existingSnbPts = await prisma.pendingPoint.findMany({
-        where: { source: 'crm_shootnbox', date: { gte: today }, dispatched: false, deletedByUser: false },
-        select: { id: true, externalId: true },
-      });
-      for (const pt of existingSnbPts) {
-        if (!pt.externalId) continue;
-        const match = pt.externalId.match(/^snb_order_(\d+)_/);
-        if (!match || !match[1]) continue;
-        if (!eligibleSnbOrderIds.has(match[1])) {
-          await prisma.pendingPoint.delete({ where: { id: pt.id } });
-          console.log(`[CRM PendingPoints] - supprimé (commande non éligible) externalId=${pt.externalId}`);
+    // GARDE-FOU anti-suppression massive : si le scrape n'a remonté AUCUNE commande
+    // éligible (login échoué, CRM en maintenance, réponse partielle HTTP 200 vide…),
+    // on NE nettoie PAS — sinon on supprimerait tous les points à venir à tort.
+    if (eligible.length === 0) {
+      console.warn('[CRM PendingPoints] Nettoyage Shootnbox IGNORÉ : 0 commande éligible (scrape vide/incomplet)');
+    } else {
+      try {
+        const eligibleSnbOrderIds = new Set(eligible.map(o => o.orderId));
+        const existingSnbPts = await prisma.pendingPoint.findMany({
+          where: { source: 'crm_shootnbox', date: { gte: today }, dispatched: false, deletedByUser: false },
+          select: { id: true, externalId: true },
+        });
+        for (const pt of existingSnbPts) {
+          if (!pt.externalId) continue;
+          const match = pt.externalId.match(/^snb_order_(\d+)_/);
+          if (!match || !match[1]) continue;
+          if (!eligibleSnbOrderIds.has(match[1])) {
+            await prisma.pendingPoint.delete({ where: { id: pt.id } });
+            console.log(`[CRM PendingPoints] - supprimé (commande non éligible) externalId=${pt.externalId}`);
+          }
         }
+      } catch (e: any) {
+        result.errors.push(`Nettoyage Shootnbox: ${e.message}`);
       }
-    } catch (e: any) {
-      result.errors.push(`Nettoyage Shootnbox: ${e.message}`);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1352,20 +1361,26 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       console.warn('[CRM PendingPoints Smakk] CRM_SMAKK_EMAIL/PASSWORD non configurés — info client ignoré');
     }
 
-    // Nettoyage : supprimer les pending_points crm_smakk dont le orderId n'est plus éligible
-    const eligibleOrderIds = new Set(smakkEligible.map(o => o.orderId));
-    const existingSmakkPts = await prisma.pendingPoint.findMany({
-      where: { source: 'crm_smakk', date: { gte: today } },
-      select: { id: true, externalId: true },
-    });
-    for (const pt of existingSmakkPts) {
-      if (!pt.externalId) continue;
-      const match = pt.externalId.match(/^smk_order_(\d+)_/);
-      if (!match || !match[1]) continue;
-      const orderId = match[1];
-      if (!eligibleOrderIds.has(orderId)) {
-        await prisma.pendingPoint.delete({ where: { id: pt.id } });
-        console.log(`[CRM PendingPoints Smakk] - supprimé retrait/inéligible externalId=${pt.externalId}`);
+    // Nettoyage : supprimer les pending_points crm_smakk dont le orderId n'est plus éligible.
+    // GARDE-FOU (C3) : ne pas nettoyer si scrape vide. GARDE-FOU (C2) : ne JAMAIS supprimer
+    // un point déjà dispatché (dans une tournée) ou supprimé manuellement — aligné sur Shootnbox.
+    if (smakkEligible.length === 0) {
+      console.warn('[CRM PendingPoints Smakk] Nettoyage IGNORÉ : 0 commande éligible (scrape vide/incomplet)');
+    } else {
+      const eligibleOrderIds = new Set(smakkEligible.map(o => o.orderId));
+      const existingSmakkPts = await prisma.pendingPoint.findMany({
+        where: { source: 'crm_smakk', date: { gte: today }, dispatched: false, deletedByUser: false },
+        select: { id: true, externalId: true },
+      });
+      for (const pt of existingSmakkPts) {
+        if (!pt.externalId) continue;
+        const match = pt.externalId.match(/^smk_order_(\d+)_/);
+        if (!match || !match[1]) continue;
+        const orderId = match[1];
+        if (!eligibleOrderIds.has(orderId)) {
+          await prisma.pendingPoint.delete({ where: { id: pt.id } });
+          console.log(`[CRM PendingPoints Smakk] - supprimé retrait/inéligible externalId=${pt.externalId}`);
+        }
       }
     }
 
@@ -1440,14 +1455,16 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             ...(smkEventName && { eventName: smkEventName }),
             // Ne pas réécrire à 1 si la readiness Smakk n'a pas de box_id à ce sync.
             ...(smkBorneRaw && { quantiteBornes: smkQuantiteBornes }),
-            // Re-sync depuis le CRM/info client à chaque passage tant que non édité via l'UI.
+            // Re-sync tant que non édité via l'UI. H5 : gardes par champ → ne JAMAIS
+            // écraser une valeur existante par null/vide (ex: adresse quand le cookie
+            // info-client manque, sinon le point perd son adresse le temps du sync).
             ...(!existingLiv.manuallyEdited && {
               date: ensureDateUTC(livDateISO),
-              adresse,
-              creneauDebut: creneauDebutLiv,
-              creneauFin: creneauFinLiv,
-              contactNom,
-              contactTelephone,
+              ...(adresse && { adresse }),
+              ...(creneauDebutLiv && { creneauDebut: creneauDebutLiv }),
+              ...(creneauFinLiv && { creneauFin: creneauFinLiv }),
+              ...(contactNom && { contactNom }),
+              ...(contactTelephone && { contactTelephone }),
             }),
           }});
           if (!existingLiv.manuallyEdited && hasInfoClient) result.enriched++;
@@ -1483,14 +1500,14 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             ...(smkEventName && { eventName: smkEventName }),
             // Ne pas réécrire à 1 si la readiness Smakk n'a pas de box_id à ce sync.
             ...(smkBorneRaw && { quantiteBornes: smkQuantiteBornes }),
-            // Re-sync depuis le CRM/info client à chaque passage tant que non édité via l'UI.
+            // Re-sync tant que non édité via l'UI. H5 : gardes par champ (cf. livraison).
             ...(!existingRec.manuallyEdited && {
               date: ensureDateUTC(recDateISO),
-              adresse: recAdresse,
-              creneauDebut: creneauDebutRec,
-              creneauFin: creneauFinRec,
-              contactNom: contactNomRec,
-              contactTelephone,
+              ...(recAdresse && { adresse: recAdresse }),
+              ...(creneauDebutRec && { creneauDebut: creneauDebutRec }),
+              ...(creneauFinRec && { creneauFin: creneauFinRec }),
+              ...(contactNomRec && { contactNom: contactNomRec }),
+              ...(contactTelephone && { contactTelephone }),
             }),
           }});
           if (!existingRec.manuallyEdited && hasInfoClient) result.enriched++;
