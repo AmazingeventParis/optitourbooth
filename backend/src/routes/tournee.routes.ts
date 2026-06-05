@@ -186,6 +186,14 @@ router.post(
   asyncHandler(tourneeController.autoDispatch)
 );
 
+// M8 — backfill géocodage des points (adresse événement présente, coords nulles)
+// des tournées >= 15.06 (one-shot, admin). N'altère que la fenêtre sanctionnée.
+router.post(
+  '/points/backfill-coords',
+  requireAdmin,
+  asyncHandler(tourneeController.backfillPointCoords)
+);
+
 // Prévisualiser l'import d'un fichier Excel sans tournée (admin)
 router.post(
   '/import/preview',

@@ -154,26 +154,36 @@ export default function ChauffeurTourneePage() {
     }
   };
 
+  // C1 — adresse de l'événement (point.adresse) prioritaire sur la fiche client
+  // pour le GPS, uniquement pour les tournées ≥ 15.06 (cf. ChauffeurPointPage).
+  const EVENT_ADDR_CUTOFF = '2026-06-15';
+  const eventNav = useCallback((point: Point) => {
+    const useEvent = !!point.adresse && (tournee?.date ?? '') >= EVENT_ADDR_CUTOFF;
+    return {
+      address: useEvent
+        ? (point.adresse as string)
+        : `${point.client?.adresse ?? ''}, ${point.client?.codePostal ?? ''} ${point.client?.ville ?? ''}`,
+      lat: useEvent ? point.latitude : point.client?.latitude,
+      lng: useEvent ? point.longitude : point.client?.longitude,
+    };
+  }, [tournee?.date]);
+
   // Callbacks mémorisés pour éviter les re-renders
   const openGoogleMaps = useCallback((point: Point) => {
-    if (!point.client?.adresse) return;
-    const address = encodeURIComponent(
-      `${point.client.adresse}, ${point.client.codePostal} ${point.client.ville}`
-    );
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${address}`, '_blank');
-  }, []);
+    const { address, lat, lng } = eventNav(point);
+    if (!address.trim()) return;
+    const dest = lat && lng ? `${lat},${lng}` : encodeURIComponent(address);
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, '_blank');
+  }, [eventNav]);
 
   const openWaze = useCallback((point: Point) => {
-    if (!point.client?.adresse) return;
-    if (point.client.latitude && point.client.longitude) {
-      window.open(`https://waze.com/ul?ll=${point.client.latitude},${point.client.longitude}&navigate=yes`, '_blank');
-    } else {
-      const address = encodeURIComponent(
-        `${point.client.adresse}, ${point.client.codePostal} ${point.client.ville}`
-      );
-      window.open(`https://waze.com/ul?q=${address}`, '_blank');
+    const { address, lat, lng } = eventNav(point);
+    if (lat && lng) {
+      window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
+    } else if (address.trim()) {
+      window.open(`https://waze.com/ul?q=${encodeURIComponent(address)}`, '_blank');
     }
-  }, []);
+  }, [eventNav]);
 
   // Mémoisation des points triés
   const sortedPoints = useMemo(() =>
@@ -368,7 +378,7 @@ export default function ChauffeurTourneePage() {
                       </div>
 
                       <p className="text-sm text-gray-500 mb-2">
-                        {point.client?.adresse}, {point.client?.codePostal} {point.client?.ville}
+                        {eventNav(point).address}
                       </p>
 
                       <div className="flex items-center gap-3 text-xs text-gray-500">

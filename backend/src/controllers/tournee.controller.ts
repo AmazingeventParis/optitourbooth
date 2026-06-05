@@ -2301,6 +2301,46 @@ export const tourneeController = {
    * POST /api/tournees/auto-dispatch
    * Dispatcher automatiquement les points en attente vers les tournées
    */
+  /**
+   * M8 — Backfill géocodage des points (one-shot, admin).
+   * Géocode les points dont l'adresse d'événement est renseignée mais les coords
+   * nulles, pour les tournées >= 15.06 uniquement (fenêtre sanctionnée par
+   * l'utilisateur ; ne touche jamais les tournées gérées manuellement <= 14.06).
+   */
+  async backfillPointCoords(_req: Request, res: Response): Promise<void> {
+    const cutoff = ensureDateUTC('2026-06-15');
+    const points = await prisma.point.findMany({
+      where: {
+        adresse: { not: null },
+        OR: [{ latitude: null }, { longitude: null }],
+        tournee: { date: { gte: cutoff } },
+      },
+      select: { id: true, adresse: true },
+    });
+
+    let updated = 0;
+    let failed = 0;
+    for (const p of points) {
+      if (!p.adresse) continue;
+      try {
+        const geo = await geocodingService.geocodeAddress(p.adresse);
+        if (geo) {
+          await prisma.point.update({
+            where: { id: p.id },
+            data: { latitude: geo.latitude, longitude: geo.longitude },
+          });
+          updated++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    apiResponse.success(res, { scanned: points.length, updated, failed, cutoff: '2026-06-15' });
+  },
+
   async autoDispatch(req: Request, res: Response): Promise<void> {
     const { date, pendingPoints } = req.body as {
       date: string;

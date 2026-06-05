@@ -199,23 +199,30 @@ export default function ChauffeurPointPage() {
     addPhotos(originalFiles);
   };
 
+  // C1 — adresse de l'événement (point.adresse) prioritaire sur la fiche client
+  // pour l'affichage + le GPS. Appliqué uniquement aux tournées ≥ 15.06 : celles
+  // gérées manuellement jusqu'au 14.06 gardent l'adresse de la fiche client.
+  const EVENT_ADDR_CUTOFF = '2026-06-15';
+  const useEventAddr = !!point?.adresse && (tournee?.date ?? '') >= EVENT_ADDR_CUTOFF;
+  const navAddress = useEventAddr
+    ? (point!.adresse as string)
+    : `${point?.client?.adresse ?? ''}, ${point?.client?.codePostal ?? ''} ${point?.client?.ville ?? ''}`;
+  const navLat = useEventAddr ? point?.latitude : point?.client?.latitude;
+  const navLng = useEventAddr ? point?.longitude : point?.client?.longitude;
+
   const openGoogleMaps = () => {
-    if (!point?.client?.adresse) return;
-    const address = encodeURIComponent(
-      `${point.client.adresse}, ${point.client.codePostal} ${point.client.ville}`
-    );
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${address}`, '_blank');
+    if (!navAddress.trim()) return;
+    const dest = navLat && navLng
+      ? `${navLat},${navLng}`
+      : encodeURIComponent(navAddress);
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, '_blank');
   };
 
   const openWaze = () => {
-    if (!point?.client?.adresse) return;
-    if (point.client.latitude && point.client.longitude) {
-      window.open(`https://waze.com/ul?ll=${point.client.latitude},${point.client.longitude}&navigate=yes`, '_blank');
-    } else {
-      const address = encodeURIComponent(
-        `${point.client.adresse}, ${point.client.codePostal} ${point.client.ville}`
-      );
-      window.open(`https://waze.com/ul?q=${address}`, '_blank');
+    if (navLat && navLng) {
+      window.open(`https://waze.com/ul?ll=${navLat},${navLng}&navigate=yes`, '_blank');
+    } else if (navAddress.trim()) {
+      window.open(`https://waze.com/ul?q=${encodeURIComponent(navAddress)}`, '_blank');
     }
   };
 
@@ -289,13 +296,15 @@ export default function ChauffeurPointPage() {
           <div className="flex items-start gap-3">
             <MapPinIcon className="h-5 w-5 text-gray-400 mt-0.5" />
             <div>
-              <p>{point.client?.adresse}</p>
-              {point.client?.complementAdresse && (
+              <p>{useEventAddr ? point.adresse : point.client?.adresse}</p>
+              {!useEventAddr && point.client?.complementAdresse && (
                 <p className="text-sm text-gray-500">{point.client.complementAdresse}</p>
               )}
-              <p className="text-sm text-gray-500">
-                {point.client?.codePostal} {point.client?.ville}
-              </p>
+              {!useEventAddr && (
+                <p className="text-sm text-gray-500">
+                  {point.client?.codePostal} {point.client?.ville}
+                </p>
+              )}
             </div>
           </div>
 

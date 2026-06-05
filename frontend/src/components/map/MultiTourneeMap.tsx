@@ -524,7 +524,10 @@ const MultiTourneeMap = memo(function MultiTourneeMap({
       // Add point markers
       points.forEach((point, index) => {
         const client = point.client as Client | undefined;
-        if (!client?.latitude || !client?.longitude) return;
+        // Adresse de l'événement (point.*) prioritaire sur la fiche client
+        const lat = point.latitude ?? client?.latitude;
+        const lng = point.longitude ?? client?.longitude;
+        if (lat == null || lng == null) return;
 
         // Récupérer la couleur du premier produit
         const produits = point.produits as PointProduit[] | undefined;
@@ -536,7 +539,7 @@ const MultiTourneeMap = memo(function MultiTourneeMap({
         const isLate = timeStatus === 'late';
 
         const isSelected = selectedPointId === point.id;
-        const marker = L.marker([client.latitude, client.longitude], {
+        const marker = L.marker([lat, lng], {
           icon: isSelected
             ? createHighlightedIcon(index + 1, markerColor, isLate)
             : createNumberedIcon(index + 1, markerColor, isLate),
@@ -553,11 +556,13 @@ const MultiTourneeMap = memo(function MultiTourneeMap({
           livraison_ramassage: 'Liv. + Ram.',
         }[point.type];
 
+        const popupAdresse = point.adresse
+          ? point.adresse
+          : `${client?.adresse ?? ''}<br/>${client?.codePostal ?? ''} ${client?.ville ?? ''}`;
         marker.bindPopup(`
-          <strong>${client.nom}</strong><br/>
+          <strong>${client?.nom ?? ''}</strong><br/>
           ${typeLabel} - ${chauffeurName}<br/>
-          ${client.adresse}<br/>
-          ${client.codePostal} ${client.ville}
+          ${popupAdresse}
         `);
 
         marker.on('click', () => {
@@ -569,8 +574,8 @@ const MultiTourneeMap = memo(function MultiTourneeMap({
         });
 
         markersRef.current.push(marker);
-        bounds.push([client.latitude, client.longitude]);
-        routeCoords.push([client.latitude, client.longitude]);
+        bounds.push([lat, lng]);
+        routeCoords.push([lat, lng]);
       });
 
       // Draw route line for this tournee

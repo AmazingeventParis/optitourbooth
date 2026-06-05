@@ -185,12 +185,15 @@ const RouteMap = memo(function RouteMap({
 
     sortedPoints.forEach((point, index) => {
       const client = point.client as Client | undefined;
-      if (!client?.latitude || !client?.longitude) return;
+      // Adresse de l'événement (point.*) prioritaire sur la fiche client à l'affichage
+      const lat = point.latitude ?? client?.latitude;
+      const lng = point.longitude ?? client?.longitude;
+      if (lat == null || lng == null) return;
 
       const color = getMarkerColor(point);
       const isSelected = point.id === selectedPointId;
 
-      const marker = L.marker([client.latitude, client.longitude], {
+      const marker = L.marker([lat, lng], {
         icon: createNumberedIcon(index + 1, color, isSelected),
       }).addTo(mapRef.current!);
 
@@ -200,11 +203,13 @@ const RouteMap = memo(function RouteMap({
         livraison_ramassage: 'Livraison + Ramassage',
       }[point.type];
 
+      const popupAdresse = point.adresse
+        ? point.adresse
+        : `${client?.adresse ?? ''}<br/>${client?.codePostal ?? ''} ${client?.ville ?? ''}`;
       marker.bindPopup(`
-        <strong>${client.nom}</strong><br/>
+        <strong>${client?.nom ?? ''}</strong><br/>
         ${typeLabel}<br/>
-        ${client.adresse}<br/>
-        ${client.codePostal} ${client.ville}
+        ${popupAdresse}
         ${point.creneauDebut && point.creneauFin ? `<br/>Créneau: ${point.creneauDebut} - ${point.creneauFin}` : ''}
       `);
 
@@ -213,8 +218,8 @@ const RouteMap = memo(function RouteMap({
       }
 
       markersRef.current.push(marker);
-      bounds.push([client.latitude, client.longitude]);
-      routeCoords.push([client.latitude, client.longitude]);
+      bounds.push([lat, lng]);
+      routeCoords.push([lat, lng]);
     });
 
     // Draw route line

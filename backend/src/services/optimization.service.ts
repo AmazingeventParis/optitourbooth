@@ -4,6 +4,20 @@ import { vroomService, PointToOptimize } from './vroom.service.js';
 import { tomtomService } from './tomtom.service.js';
 import { config } from '../config/index.js';
 
+// C1 — coords effectives : l'adresse de l'événement (point.latitude/longitude)
+// prime sur la fiche client. Appliqué uniquement aux tournées ≥ 15.06 : celles
+// gérées manuellement jusqu'au 14.06 conservent les coords de la fiche client.
+const EVENT_ADDR_CUTOFF = new Date('2026-06-15T00:00:00.000Z');
+function effCoords(
+  point: { latitude?: number | null; longitude?: number | null; client: { latitude: number | null; longitude: number | null } },
+  tourneeDate: Date
+): { latitude: number | null; longitude: number | null } {
+  const useEvent = tourneeDate >= EVENT_ADDR_CUTOFF && point.latitude != null && point.longitude != null;
+  return useEvent
+    ? { latitude: point.latitude!, longitude: point.longitude! }
+    : { latitude: point.client?.latitude ?? null, longitude: point.client?.longitude ?? null };
+}
+
 interface PointWithCoords {
   id: string;
   ordre: number;
@@ -88,13 +102,11 @@ export const optimizationService = {
       });
     }
 
-    // Ajouter les points avec coordonnées valides
+    // Ajouter les points avec coordonnées valides (adresse événement prioritaire)
     for (const point of points) {
-      if (point.client.latitude && point.client.longitude) {
-        coordinates.push({
-          latitude: point.client.latitude,
-          longitude: point.client.longitude,
-        });
+      const { latitude, longitude } = effCoords(point, tournee.date);
+      if (latitude && longitude) {
+        coordinates.push({ latitude, longitude });
       }
     }
 
@@ -291,18 +303,19 @@ export const optimizationService = {
       console.log('[OPTIMIZATION] WARNING: No depot coordinates');
     }
 
-    // Ajouter les points
+    // Ajouter les points (adresse de l'événement prioritaire sur la fiche client)
     for (const point of points) {
-      if (point.client.latitude && point.client.longitude) {
+      const { latitude, longitude } = effCoords(point, tournee.date);
+      if (latitude && longitude) {
         routePoints.push({
-          latitude: point.client.latitude,
-          longitude: point.client.longitude,
+          latitude,
+          longitude,
           serviceDuration: point.dureePrevue,
           pointId: point.id,
           ordre: point.ordre,
           creneauDebut: point.creneauDebut,
         });
-        console.log(`[OPTIMIZATION] Point ${point.ordre}: ${point.client.latitude}, ${point.client.longitude}, service=${point.dureePrevue}min`);
+        console.log(`[OPTIMIZATION] Point ${point.ordre}: ${latitude}, ${longitude}, service=${point.dureePrevue}min`);
       } else {
         console.log(`[OPTIMIZATION] WARNING: Point ${point.id} has no coordinates`);
       }
@@ -407,12 +420,14 @@ export const optimizationService = {
    * Calculer les heures d'arrivée avec OSRM (sans trafic)
    */
   async calculateEstimatedArrivalsWithOsrm(
-    tournee: { depotLatitude: number | null; depotLongitude: number | null },
+    tournee: { date: Date; depotLatitude: number | null; depotLongitude: number | null },
     points: Array<{
       id: string;
       ordre: number;
       dureePrevue: number;
       creneauDebut: Date | null;
+      latitude?: number | null;
+      longitude?: number | null;
       client: { latitude: number | null; longitude: number | null };
     }>,
     startTime: Date | null
@@ -428,13 +443,11 @@ export const optimizationService = {
       });
     }
 
-    // Points
+    // Points (adresse de l'événement prioritaire sur la fiche client)
     for (const point of points) {
-      if (point.client.latitude && point.client.longitude) {
-        coordinates.push({
-          latitude: point.client.latitude,
-          longitude: point.client.longitude,
-        });
+      const { latitude, longitude } = effCoords(point, tournee.date);
+      if (latitude && longitude) {
+        coordinates.push({ latitude, longitude });
       }
     }
 
@@ -535,10 +548,11 @@ export const optimizationService = {
       return { success: false, message: 'Au moins 2 points sont nécessaires pour optimiser' };
     }
 
-    // Filtrer les points avec coordonnées
-    const pointsWithCoords = tournee.points.filter(
-      (p) => p.client.latitude && p.client.longitude
-    );
+    // Filtrer les points avec coordonnées (adresse événement prioritaire)
+    const pointsWithCoords = tournee.points.filter((p) => {
+      const { latitude, longitude } = effCoords(p, tournee.date);
+      return latitude && longitude;
+    });
 
     if (pointsWithCoords.length < 2) {
       return { success: false, message: 'Pas assez de points géocodés pour optimiser' };
@@ -562,6 +576,7 @@ export const optimizationService = {
   async optimizeWithVroom(
     tournee: {
       id: string;
+      date: Date;
       heureDepart: Date | null;
       depotLatitude: number | null;
       depotLongitude: number | null;
@@ -571,6 +586,8 @@ export const optimizationService = {
         dureePrevue: number;
         creneauDebut: Date | null;
         creneauFin: Date | null;
+        latitude?: number | null;
+        longitude?: number | null;
         client: { latitude: number | null; longitude: number | null };
       }>;
     },
@@ -580,6 +597,8 @@ export const optimizationService = {
       dureePrevue: number;
       creneauDebut: Date | null;
       creneauFin: Date | null;
+      latitude?: number | null;
+      longitude?: number | null;
       client: { latitude: number | null; longitude: number | null };
     }>,
     options: OptimizationOptions
@@ -588,16 +607,19 @@ export const optimizationService = {
 
     console.log('[OPTIMIZATION] Utilisation de VROOM pour optimisation avec contraintes');
 
-    // Préparer les points pour VROOM
-    const vroomPoints: PointToOptimize[] = pointsWithCoords.map((point, index) => ({
-      id: point.id,
-      index,
-      latitude: point.client.latitude!,
-      longitude: point.client.longitude!,
-      dureePrevue: point.dureePrevue,
-      creneauDebut: point.creneauDebut,
-      creneauFin: point.creneauFin,
-    }));
+    // Préparer les points pour VROOM (adresse événement prioritaire)
+    const vroomPoints: PointToOptimize[] = pointsWithCoords.map((point, index) => {
+      const { latitude, longitude } = effCoords(point, tournee.date);
+      return {
+        id: point.id,
+        index,
+        latitude: latitude!,
+        longitude: longitude!,
+        dureePrevue: point.dureePrevue,
+        creneauDebut: point.creneauDebut,
+        creneauFin: point.creneauFin,
+      };
+    });
 
     // Map pour retrouver l'ID du point par son index
     const indexToPointId = new Map<number, string>();
@@ -652,10 +674,11 @@ export const optimizationService = {
       }
     }
 
-    // Ajouter les points sans coordonnées à la fin
-    const pointsWithoutCoords = tournee.points.filter(
-      (p) => !p.client.latitude || !p.client.longitude
-    );
+    // Ajouter les points sans coordonnées à la fin (adresse événement prioritaire)
+    const pointsWithoutCoords = tournee.points.filter((p) => {
+      const { latitude, longitude } = effCoords(p, tournee.date);
+      return !latitude || !longitude;
+    });
     for (const point of pointsWithoutCoords) {
       newOrder.push(point.id);
     }
@@ -694,15 +717,20 @@ export const optimizationService = {
   async optimizeWithOsrm(
     tournee: {
       id: string;
+      date: Date;
       depotLatitude: number | null;
       depotLongitude: number | null;
       points: Array<{
         id: string;
+        latitude?: number | null;
+        longitude?: number | null;
         client: { latitude: number | null; longitude: number | null };
       }>;
     },
     pointsWithCoords: Array<{
       id: string;
+      latitude?: number | null;
+      longitude?: number | null;
       client: { latitude: number | null; longitude: number | null };
     }>,
     options: OptimizationOptions
@@ -729,10 +757,8 @@ export const optimizationService = {
     pointsWithCoords.forEach((point, idx) => {
       const coordIndex = hasDepot ? idx + 1 : idx;
       pointIndexMap.set(coordIndex, point.id);
-      coordinates.push({
-        latitude: point.client.latitude!,
-        longitude: point.client.longitude!,
-      });
+      const { latitude, longitude } = effCoords(point, tournee.date);
+      coordinates.push({ latitude: latitude!, longitude: longitude! });
     });
 
     // Appeler OSRM pour optimiser
@@ -759,10 +785,11 @@ export const optimizationService = {
       }
     }
 
-    // Ajouter les points sans coordonnées à la fin
-    const pointsWithoutCoords = tournee.points.filter(
-      (p) => !p.client.latitude || !p.client.longitude
-    );
+    // Ajouter les points sans coordonnées à la fin (adresse événement prioritaire)
+    const pointsWithoutCoords = tournee.points.filter((p) => {
+      const { latitude, longitude } = effCoords(p, tournee.date);
+      return !latitude || !longitude;
+    });
     for (const point of pointsWithoutCoords) {
       newOrder.push(point.id);
     }
