@@ -919,6 +919,9 @@ model ChronopostExpedition {
   numeroColisRetour   String?          @map("numero_colis_retour")
   statut              ChronopostStatut @default(en_preparation)
   trackingData        Json?            @map("tracking_data")
+  // Édité manuellement via l'UI → le sync CRM ne réécrit plus les champs métier
+  // (produit, dates événement, contacts, adresse). Cf. PendingPoint.manuallyEdited.
+  manuallyEdited      Boolean          @default(false) @map("manually_edited")
   createdAt           DateTime         @default(now()) @map("created_at")
   updatedAt           DateTime         @updatedAt @map("updated_at")
 

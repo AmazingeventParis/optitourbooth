@@ -1527,7 +1527,10 @@ export const tourneeController = {
       try {
         const geo = await geocodingService.geocodeAddress(pointAdresse);
         if (geo) { pointLat = geo.latitude; pointLng = geo.longitude; }
-      } catch { /* repli client à l'affichage */ }
+        else console.warn(`[Dispatch] Géocodage sans résultat pour l'adresse événement : "${pointAdresse}" — repli sur la fiche client à l'affichage`);
+      } catch (e: any) {
+        console.warn(`[Dispatch] Échec géocodage adresse événement "${pointAdresse}": ${e?.message ?? e} — repli sur la fiche client`);
+      }
     }
 
     const pointData: {

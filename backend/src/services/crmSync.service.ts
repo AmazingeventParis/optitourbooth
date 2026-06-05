@@ -1870,23 +1870,29 @@ async function upsertChronopostFromCrm(
       result.created++;
     } else {
       // Maj des infos CRM sans écraser le n° de colis, le statut manuel ni les
-      // dates transporteur déjà connues (Chronotrace/manuel).
+      // dates transporteur déjà connues (Chronotrace/manuel). Si l'expédition a
+      // été éditée via l'UI (manuallyEdited), on ne réécrit PAS les champs métier
+      // (client/produit/adresse/contacts/date événement) — seuls source/kind/email/
+      // modeRetour (non éditables dans l'UI) sont rafraîchis.
+      const locked = existing.manuallyEdited;
       await prisma.chronopostExpedition.update({
         where: { id: existing.id },
         data: {
           source: rec.source,
           kind: rec.kind,
-          clientNom: rec.clientNom,
-          ...(rec.produitNom && { produitNom: rec.produitNom }),
-          ...(rec.clientAdresse && { clientAdresse: rec.clientAdresse }),
-          ...(rec.clientVille && { clientVille: rec.clientVille }),
-          ...(rec.contactNom && { contactNom: rec.contactNom }),
-          ...(rec.contactTelephone && { contactTelephone: rec.contactTelephone }),
           ...(rec.email && { email: rec.email }),
           ...(rec.modeRetour && { modeRetour: rec.modeRetour }),
-          ...(rec.dateEvenement && { dateEvenement: toDate(rec.dateEvenement) }),
-          ...(rec.dateDepart && !existing.dateDepart && { dateDepart: toDate(rec.dateDepart) }),
-          ...(rec.dateRetourPrevu && !existing.dateRetourPrevu && { dateRetourPrevu: toDate(rec.dateRetourPrevu) }),
+          ...(!locked && {
+            clientNom: rec.clientNom,
+            ...(rec.produitNom && { produitNom: rec.produitNom }),
+            ...(rec.clientAdresse && { clientAdresse: rec.clientAdresse }),
+            ...(rec.clientVille && { clientVille: rec.clientVille }),
+            ...(rec.contactNom && { contactNom: rec.contactNom }),
+            ...(rec.contactTelephone && { contactTelephone: rec.contactTelephone }),
+            ...(rec.dateEvenement && { dateEvenement: toDate(rec.dateEvenement) }),
+            ...(rec.dateDepart && !existing.dateDepart && { dateDepart: toDate(rec.dateDepart) }),
+            ...(rec.dateRetourPrevu && !existing.dateRetourPrevu && { dateRetourPrevu: toDate(rec.dateRetourPrevu) }),
+          }),
         },
       });
       result.updated++;

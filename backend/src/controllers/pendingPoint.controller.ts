@@ -219,7 +219,45 @@ export async function listPendingPoints(req: Request, res: Response): Promise<vo
     orderBy: { createdAt: 'asc' },
   });
 
-  apiResponse.success(res, points);
+  // Dédup côté serveur (>= 15.06 uniquement) : collapse les doublons logiques
+  // — même client/jour/type/produit issus de sources différentes (résidu GCal +
+  // CRM, ou import manuel + CRM). Lecture seule : ne supprime aucune ligne, masque
+  // juste le doublon à l'affichage en gardant le plus fiable (CRM > manuel > GCal).
+  // Les dates <= 14.06 (gérées manuellement) sont renvoyées telles quelles.
+  const deduped = date >= '2026-06-15' ? dedupePendingPoints(points) : points;
+
+  apiResponse.success(res, deduped);
+}
+
+/**
+ * Collapse les doublons logiques d'une liste de pending_points.
+ * Clé = client (normalisé) | jour | type | produit. Garde un seul représentant :
+ * source CRM > manuel > google_calendar, puis adresse renseignée, puis plus ancien.
+ */
+function dedupePendingPoints<T extends {
+  clientName: string; date: Date; type: string; produitNom: string | null;
+  source: string | null; adresse: string | null; createdAt: Date;
+}>(points: T[]): T[] {
+  const sourceRank = (s: string | null) => (s?.startsWith('crm_') ? 3 : s === 'manual' ? 2 : 1);
+  const norm = (s: string | null) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const dayOf = (d: Date) => new Date(d).toISOString().slice(0, 10);
+  const keyOf = (p: T) => `${norm(p.clientName)}|${dayOf(p.date)}|${p.type}|${norm(p.produitNom)}`;
+
+  const best = new Map<string, T>();
+  for (const p of points) {
+    const key = keyOf(p);
+    const cur = best.get(key);
+    if (!cur) { best.set(key, p); continue; }
+    const better =
+      sourceRank(p.source) !== sourceRank(cur.source)
+        ? sourceRank(p.source) > sourceRank(cur.source)
+        : (!!p.adresse !== !!cur.adresse)
+          ? !!p.adresse
+          : new Date(p.createdAt) < new Date(cur.createdAt);
+    if (better) best.set(key, p);
+  }
+  // Conserver l'ordre d'origine (createdAt asc), ne garder que les représentants.
+  return points.filter((p) => best.get(keyOf(p)) === p);
 }
 
 /**

@@ -84,6 +84,8 @@ export async function updateExpedition(req: Request, res: Response): Promise<voi
     ...(numeroColisRetour !== undefined && { numeroColisRetour }),
     ...(statut !== undefined && { statut: statut as ChronopostStatut }),
     ...(notes !== undefined && { notes }),
+    // Édition manuelle : le sync CRM ne réécrira plus les champs métier de cette expédition.
+    manuallyEdited: true,
   };
 
   // When a return tracking number is being linked for the first time, auto-merge the standalone return record

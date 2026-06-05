@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { socketService } from '@/services/socket.service';
 import { format, addDays, subDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -208,8 +209,8 @@ export default function AgendaPage() {
     [dateRange]
   );
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [allocs, stockData, machinesData] = await Promise.all([
         agendaService.getAllocations(dateRange.from, dateRange.to),
@@ -220,13 +221,35 @@ export default function AgendaPage() {
       setStock(stockData);
       setMachines(machinesData);
     } catch {
-      toast.error('Erreur chargement agenda');
+      if (!silent) toast.error('Erreur chargement agenda');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [dateRange]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Refresh live : recharge l'agenda (silencieusement, debounce) quand une borne
+  // est (ré)affectée — machines:updated émis par assignMachine/optimize — ou
+  // qu'une préparation change. Évite de devoir rafraîchir la page à la main.
+  const loadDataRef = useRef(loadData);
+  loadDataRef.current = loadData;
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => { void loadDataRef.current(true); }, 400);
+    };
+    socketService.on('machines:updated', schedule);
+    socketService.on('preparation:updated', schedule);
+    socketService.on('preparation:created', schedule);
+    return () => {
+      if (t) clearTimeout(t);
+      socketService.off('machines:updated', schedule);
+      socketService.off('preparation:updated', schedule);
+      socketService.off('preparation:created', schedule);
+    };
+  }, []);
 
   const navDate = (dir: 'prev' | 'next' | 'today') => {
     const d = parseISO(currentDate);
