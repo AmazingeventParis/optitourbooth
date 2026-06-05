@@ -830,11 +830,13 @@ function parseSmakkInfoClientHtml(html: string): SmakkInfoClient {
       if (v.includes('retrait')) result.logType = 'retrait';
       else if (v.includes('chronopost') || v.includes('tnt')) result.logType = 'chronopost';
       else if (v.includes('livraison')) result.logType = 'livraison';
+    } else if (label.includes('adresse') && (label.includes('factur') || label.includes('paiement'))) {
+      // "Adresse facturation" (section Paiement) → JAMAIS l'adresse de livraison. On ignore.
     } else if (label.includes('adresse') && label.includes('cup')) {
       // "Adresse récupération" → adresse de ramassage distincte
       result.recAdresse = value;
     } else if (label.includes('adresse')) {
-      // "Adresse" (sans "récupération") → adresse de livraison
+      // "Adresse" (section Logistique, ni facturation ni récup) → adresse de LIVRAISON
       result.adresse = value;
       if (!result.logType) result.logType = 'livraison'; // champ adresse implique livraison
     } else if (label.includes('jour') && label.includes('livraison')) {
@@ -1395,8 +1397,12 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       const hasInfoClient = !!ic && (!!ic.adresse || !!ic.livCreneauDebut || !!ic.livDateISO);
       const livDateISO = ic?.livDateISO || order.livDateISO;
       const recDateISO = ic?.recDateISO || order.recDateISO;
-      const adresse = ic?.adresse || order.adresse;                 // adresse livraison
-      const recAdresse = ic?.recAdresse || ic?.adresse || order.adresse; // adresse récup (fallback sur livraison)
+      // L'adresse de livraison vient UNIQUEMENT du formulaire info-client (section
+      // Logistique). order.adresse (= `_otb_orders.address`) est l'adresse de
+      // FACTURATION → ne JAMAIS l'utiliser comme adresse de livraison. Si le client
+      // n'a pas encore rempli son formulaire, on laisse null (rempli au sync suivant).
+      const adresse = ic?.adresse || null;                 // adresse livraison (formulaire only)
+      const recAdresse = ic?.recAdresse || ic?.adresse || null; // adresse récup (repli livraison du formulaire)
       const contactNom = ic?.contactNom || order.takeContact;
       const contactTelephone = ic?.contactTelephone || order.phone;
       const creneauDebutLiv = ic?.livCreneauDebut || order.creneauDebutLiv;
