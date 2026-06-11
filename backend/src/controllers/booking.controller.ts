@@ -11,6 +11,7 @@ import { isDriveConfigured, listFolderThumbnails, scanAndMatchDriveFolders } fro
 import { syncCrmData, lastSyncResult } from '../services/crmSync.service.js';
 import { sendReviewLinkEmail, sendOldStyleReviewLinkEmail, sendGalleryDirectEmail } from '../services/email.service.js';
 import { notifyPhotosReady } from '../services/myShootnboxClient.service.js';
+import { resolveBookingBrand } from '../utils/brandUtils.js';
 
 // ===========================
 // PUBLIC ROUTES (no auth)
@@ -100,7 +101,7 @@ export const getBookingByToken = asyncHandler(async (req: Request, res: Response
     customerName: booking.customerName,
     eventDate: booking.eventDate,
     galleryUrl: booking.galleryUrl,
-    senderBrand: booking.senderBrand,
+    senderBrand: booking.senderBrand || resolveBookingBrand(booking),
     rating: booking.rating,
     hasGoogleReview: !!booking.googleReviewUrl,
     thumbnails,
@@ -224,16 +225,17 @@ export const handleReviewClick = asyncHandler(async (req: Request, res: Response
   }
 
   // Return the appropriate review URL based on platform
+  const brand = resolveBookingBrand(booking);
   let reviewUrl: string | null = null;
 
   if (reviewPlatform === 'trustpilot') {
-    reviewUrl = booking.senderBrand === 'SMAKK'
+    reviewUrl = brand === 'SMAKK'
       ? config.trustpilot.reviewUrlSmakk
       : config.trustpilot.reviewUrlShootnbox;
   } else {
     reviewUrl = booking.googleReviewUrl;
     if (!reviewUrl) {
-      reviewUrl = booking.senderBrand === 'SMAKK'
+      reviewUrl = brand === 'SMAKK'
         ? config.googleBusiness.reviewUrlSmakk
         : config.googleBusiness.reviewUrlShootnbox;
     }
@@ -242,7 +244,7 @@ export const handleReviewClick = asyncHandler(async (req: Request, res: Response
     }
   }
 
-  console.log(`[ReviewClick] platform=${reviewPlatform}, brand=${booking.senderBrand}, reviewUrl=${reviewUrl}`);
+  console.log(`[ReviewClick] platform=${reviewPlatform}, brand=${brand}, reviewUrl=${reviewUrl}`);
 
   return apiResponse.success(res, {
     redirect_url: reviewUrl || null,
@@ -540,8 +542,8 @@ export const manualSendGallery = asyncHandler(async (req: Request, res: Response
   }
 
   const brand = (requestedBrand === 'SMAKK' || requestedBrand === 'SHOOTNBOX')
-    ? requestedBrand
-    : (booking.senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
+    ? requestedBrand as 'SHOOTNBOX' | 'SMAKK'
+    : resolveBookingBrand(booking);
 
   // Cancel pending dispatches in background — don't block the response
   cancelPendingDispatches(booking.id).catch(err =>
@@ -917,7 +919,10 @@ export const sendMailAvis = asyncHandler(async (req: Request, res: Response) => 
 
   await prisma.booking.update({
     where: { id },
-    data: { customerEmail: email },
+    data: {
+      customerEmail: email,
+      senderBrand: brand,
+    },
   });
 
   return apiResponse.success(res, { message: `Mail avis envoyé à ${email} via ${brand}` });

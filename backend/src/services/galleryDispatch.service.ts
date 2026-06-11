@@ -2,6 +2,7 @@ import { prisma } from '../config/database.js';
 import { galleryQueue, areQueuesAvailable } from '../config/queue.js';
 import { config } from '../config/index.js';
 import { sendGalleryDirectEmail } from './email.service.js';
+import { resolveBookingBrand } from '../utils/brandUtils.js';
 
 /**
  * Schedule a gallery dispatch for a booking.
@@ -127,7 +128,7 @@ export async function sendGallery(dispatchId: string): Promise<void> {
 
   // Send email if customer has an email address
   if (booking.customerEmail) {
-    const brand = (booking.senderBrand === 'SMAKK' ? 'SMAKK' : 'SHOOTNBOX') as 'SHOOTNBOX' | 'SMAKK';
+    const brand = resolveBookingBrand(booking);
     try {
       await sendGalleryDirectEmail({
         to: booking.customerEmail,
