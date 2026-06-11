@@ -803,6 +803,7 @@ interface SmakkInfoClient {
   recCreneauFin: string | null;
   contactNom: string | null;
   contactTelephone: string | null;
+  notes: string | null;
 }
 
 function parseDateDDMMYYYY(dateStr: string): string | null {
@@ -816,7 +817,7 @@ function parseSmakkInfoClientHtml(html: string): SmakkInfoClient {
     logType: null,
     adresse: null, recAdresse: null, livDateISO: null, livCreneauDebut: null, livCreneauFin: null,
     recDateISO: null, recCreneauDebut: null, recCreneauFin: null,
-    contactNom: null, contactTelephone: null,
+    contactNom: null, contactTelephone: null, notes: null,
   };
   if (!html) return result;
 
@@ -854,6 +855,8 @@ function parseSmakkInfoClientHtml(html: string): SmakkInfoClient {
       const parts = value.split(/\s*[—–]\s*/);
       result.contactNom = parts[0]?.trim() || null;
       result.contactTelephone = parts[1]?.trim() || null;
+    } else if (label === 'notes') {
+      result.notes = value;
     }
   }
   return result;
@@ -1429,6 +1432,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       const creneauDebutRec = ic?.recCreneauDebut || order.creneauDebutRec;
       const creneauFinRec = ic?.recCreneauFin || order.creneauFinRec;
       const contactNomRec = ic?.contactNom || order.returnContact || order.takeContact;
+      const smkNotes = ic?.notes || null;
 
       // ── Livraison Smakk ──
       try {
@@ -1447,6 +1451,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             creneauFin: creneauFinLiv,
             contactNom,
             contactTelephone,
+            notes: smkNotes,
             quantiteBornes: smkQuantiteBornes,
             // manuallyEdited réservé aux éditions UI — pas posé par le sync.
             manuallyEdited: false,
@@ -1470,6 +1475,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               ...(creneauFinLiv && { creneauFin: creneauFinLiv }),
               ...(contactNom && { contactNom }),
               ...(contactTelephone && { contactTelephone }),
+              ...(smkNotes && { notes: smkNotes }),
             }),
           }});
           if (!existingLiv.manuallyEdited && hasInfoClient) result.enriched++;
@@ -1493,6 +1499,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             creneauFin: creneauFinRec,
             contactNom: contactNomRec,
             contactTelephone,
+            notes: smkNotes,
             quantiteBornes: smkQuantiteBornes,
             // manuallyEdited réservé aux éditions UI — pas posé par le sync.
             manuallyEdited: false,
@@ -1514,6 +1521,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               ...(creneauFinRec && { creneauFin: creneauFinRec }),
               ...(contactNomRec && { contactNom: contactNomRec }),
               ...(contactTelephone && { contactTelephone }),
+              ...(smkNotes && { notes: smkNotes }),
             }),
           }});
           if (!existingRec.manuallyEdited && hasInfoClient) result.enriched++;
