@@ -1131,6 +1131,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               // point n'a pas été édité manuellement via l'UI. Si le client met à
               // jour son formulaire dans manager2, OptiTour suit automatiquement.
               ...(!existingLiv.manuallyEdited && { date: ensureDateUTC(livDate) }),
+              ...(!existingLiv.manuallyEdited && order.boxType && { produitNom: order.boxType }),
               // H1 : l'adresse est désormais protégée par manuallyEdited (comme Smakk)
               // → une correction manuelle d'adresse n'est plus écrasée par le CRM.
               ...(!existingLiv.manuallyEdited && form && parsedLiv && {
@@ -1188,6 +1189,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               ...(borneRaw && { quantiteBornes }),
               // Re-sync depuis le CRM/formulaire à chaque passage tant que non édité via l'UI.
               ...(!existingRec.manuallyEdited && { date: ensureDateUTC(recDate) }),
+              ...(!existingRec.manuallyEdited && order.boxType && { produitNom: order.boxType }),
               // Adresse ramassage : repli sur l'adresse de livraison, MAIS protégée par
               // manuallyEdited (H1) → une correction manuelle n'est plus écrasée.
               ...(!existingRec.manuallyEdited && form && (parsedRec?.adresse || parsedLiv?.adresse) && { adresse: parsedRec?.adresse ?? parsedLiv?.adresse }),
@@ -1460,6 +1462,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             // info-client manque, sinon le point perd son adresse le temps du sync).
             ...(!existingLiv.manuallyEdited && {
               date: ensureDateUTC(livDateISO),
+              ...(order.boxType && { produitNom: order.boxType }),
               ...(adresse && { adresse }),
               ...(creneauDebutLiv && { creneauDebut: creneauDebutLiv }),
               ...(creneauFinLiv && { creneauFin: creneauFinLiv }),
@@ -1503,6 +1506,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             // Re-sync tant que non édité via l'UI. H5 : gardes par champ (cf. livraison).
             ...(!existingRec.manuallyEdited && {
               date: ensureDateUTC(recDateISO),
+              ...(order.boxType && { produitNom: order.boxType }),
               ...(recAdresse && { adresse: recAdresse }),
               ...(creneauDebutRec && { creneauDebut: creneauDebutRec }),
               ...(creneauFinRec && { creneauFin: creneauFinRec }),
