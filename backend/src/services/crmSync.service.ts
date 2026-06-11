@@ -44,7 +44,9 @@ interface SyncResult {
 // ─── Config ──────────────────────────────────────────────────────
 
 const SHOOTNBOX_BASE = 'https://shootnbox.fr/manager2';
-const SMAKK_MANAGER_BASE = 'https://www.smakk.fr/manager';
+// SANS www : depuis juin 2026, www.smakk.fr/manager/x.php redirige 301 vers
+// smakk.fr/x.php (perd /manager) → HTTP 404 sur tous les endpoints du manager.
+const SMAKK_MANAGER_BASE = 'https://smakk.fr/manager';
 const SMAKK_API_URL = `${SMAKK_MANAGER_BASE}/_otb_orders.php`;
 const SMAKK_API_KEY = 'opti2026smk_x7kR9qNv';
 
