@@ -120,48 +120,24 @@ pnpm install && pnpm dev
 - **DB** : `neondb` / **User** : `neondb_owner`
 - **28 tables** dont : users, tenants, tournees, points, clients, produits, vehicules, billing_configs, billing_entries, preparations, machines, pending_points, bookings, etc.
 
-## Google Calendar Sync (moteur d'import automatique)
+## Google Calendar Sync (DESACTIVEE depuis 2026-05-27)
 
-### Fonctionnement
-- **Service** : `backend/src/services/googleCalendar.service.ts`
-- **Demarrage** : `startGoogleCalendarSync()` appele dans `backend/src/app.ts:143`
-- **Frequence** : toutes les 15 min (configurable via `GOOGLE_CALENDAR_SYNC_INTERVAL`)
-- **Horizon** : aujourd'hui → +30 jours (configurable via `GOOGLE_CALENDAR_SYNC_DAYS_AHEAD`)
-- **Auth** : Service Account Google (`GOOGLE_SERVICE_ACCOUNT_BASE64`)
+**Source unique des pending_points : CRM Shootnbox + CRM Smakk.**
+Le service `googleCalendar.service.ts` existe toujours mais `startGoogleCalendarSync()` est commentee dans `app.ts`.
+L'endpoint `POST /api/pending-points/sync-google-calendar` retourne un no-op.
+Le bouton "Sync" dans `/planning` declenche desormais le CRM sync (`POST /pending-points/sync-crm`).
 
-### Calendriers sources
-- **Shootnbox (principal)** : `aureliedumas75@gmail.com`
-- **Smakk** : `faa39fa21157c487ef3a5007739b04b69a9309cffee9d8bfc4ff09c75958bbd1@group.calendar.google.com`
-
-### Detection des evenements
-- Filtre : titre commence par un tag entre parentheses → regex `^\([^)]*\)`
-- Exemples : `(LIR) Client X`, `(LIR MIROIR) Client Y`, `(R VEGAS) Client Z`, `(SMAKK) Client W`
-- Tags ignores (exact) : `TNT`, `SLIM` (pas de points crees)
-- Tags ignores (prefixe) : `CHRONO` → ignore tout tag contenant un mot commençant par CHRONO : `(LIR CHRONO)`, `(CHRONOPOST)`, `(LIR CHRONOPOST)`, etc.
-
-### Detection du produit (ordre de priorite)
-1. **Calendrier Smakk** → toujours produit Smakk (prioritaire sur tout)
-2. **Tag explicite** : `(LIR MIROIR)`→Miroir, `(LIR VEGAS)`→Vegas, `(R RING)`→Ring, etc.
-3. **Pieces jointes** : nom du fichier contient le produit
-4. **Prefixe par defaut** : `(LIR)` seul→Vegas, `(R)` seul→Ring (dernier recours)
-
-### Parsing de la description Google Calendar
-Fonction `parseDescription()` extrait automatiquement :
-- **Adresse** : detection par type de voie (rue, avenue, bd...) + code postal
-- **Contact** : nom + telephone (regex francais)
-- **Creneaux horaires** : livraison et recuperation (`10h-17h`, `de 9h30 a 11h`, etc.)
-- **Notes** : tout le reste
+Script de nettoyage DB : `cleanup-gcal-pending-points.sql` (soft-delete les points GCal non-dispatches restants).
 
 ### Table `pending_points` (PendingPoint)
-Chaque source genere des pending points :
-- **Google Calendar** : 2 points par evenement (`{googleEventId}_livraison` / `_ramassage`)
+Sources actives :
 - **CRM Shootnbox** : 2 points par commande (`snb_order_{orderId}_livraison` / `_ramassage`) — source = `crm_shootnbox`
 - **CRM Smakk** : 2 points par commande (`smk_order_{orderId}_livraison` / `_ramassage`) — source = `crm_smakk`
 
 Champs cles :
-- `dispatched` : true = deja dans une tournee (recalcule a chaque sync)
+- `dispatched` : true = deja dans une tournee. NE JAMAIS remettre a false dans les blocs UPDATE du sync CRM — l'etat dispatche est permanent jusqu'a action utilisateur.
 - `usedInPreparation` : true = utilise pour creer une preparation de borne
-- `produitNom` : Vegas, Ring, Smakk, Miroir, Spinner, Aircam, Playbox
+- `produitNom` : Vegas, Ring, Smakk, Miroir, Spinner, Aircam, Playbox (normalise via `normalizeBoxType()`). **Re-synchronise a chaque sync** depuis le box_type CRM (hors `manuallyEdited`) — avant le fix d1a8c6f (2026-06-11), il etait fige a la creation et ne suivait pas un changement de borne dans le CRM.
 - `eventName` : nom d'evenement issu de readiness.php (Shootnbox + Smakk)
 
 ### Regles de filtrage CRM → pending_points
@@ -195,6 +171,11 @@ Champs cles :
 | PATCH | `/api/pending-points/:id/dispatch` | JWT | admin+ : marquer dispatche |
 | DELETE | `/api/pending-points/:id` | JWT | admin+ : suppression |
 | POST | `/api/pending-points/sync-google-calendar` | JWT | admin+ : sync manuelle |
+| POST | `/api/pending-points/sync-crm` | JWT | admin+ : sync CRM manuelle |
+| GET | `/api/pending-points/sync-status` | JWT | Resultat du dernier sync CRM (cron ou manuel) |
+
+### Alerte panne sync CRM (`/planning`)
+Le resultat du dernier sync (`lastPendingPointsSyncResult`, in-memory) est expose via `GET /pending-points/sync-status`. `DailyPlanningPage` l'interroge au chargement puis toutes les 5 min : si `errors` non vide, **bandeau rouge** en haut de la page avec le detail et l'heure du dernier essai. Une panne du cron horaire n'est donc plus silencieuse (mis en place apres la panne Smakk www du 2026-06-11).
 
 ### Frontend
 - **Service** : `frontend/src/services/pendingPoints.service.ts`
@@ -243,9 +224,11 @@ Champs cles :
 - **OAuth Drive** : utilise `GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN` (le service account n'a pas de quota d'upload)
 
 ### Smakk
-- **URL CRM** : `https://www.smakk.fr/manager/`
-- **API JSON** : `https://www.smakk.fr/manager/_otb_orders.php?key=opti2026smk_x7kR9qNv` (pas de session, cle fixe)
+- **URL CRM** : `https://smakk.fr/manager/` — **SANS www** : depuis juin 2026, `www.smakk.fr/manager/x.php` redirige 301 vers `smakk.fr/x.php` (perd `/manager`) → 404 WordPress. Cette panne a bloque tout le sync Smakk pendant ~2 jours (erreur "Smakk API HTTP 404").
+- **Repli automatique** : tous les appels au manager Smakk passent par `smakkFetch()` (`crmSync.service.ts`) qui essaie `smakk.fr/manager` puis `www.smakk.fr/manager` et memorise la variante qui repond. Couvre : orders, readiness, mail-infos-smk, login, chronopost.
+- **API JSON** : `https://smakk.fr/manager/_otb_orders.php?key=opti2026smk_x7kR9qNv` (pas de session, cle fixe)
 - **Readiness** : `POST https://smakk.fr/manager/readiness_ajax.php` (draw=1&start=0&length=500, sans auth) — champ `box_id` = colonne N (IDs bornes assignees ex: "R3/P"), champ `delivery` = type HTML. `_otb_readiness.php` n'existe PAS (retourne WordPress).
+- **Formulaire info-client** : `mail-infos-smk.php?ajax=get_responses&order_id={id}` (session cookie) — source de verite pour adresse livraison, dates reelles, creneaux, contact et **notes** (champ "Notes" importe depuis 2026-06-11, commit 1c76e07).
 - **Cron pending_points** : toutes les heures via `syncCrmPendingPoints()` dans `crmSync.service.ts`
 - **Filtre livraison** : filtre POSITIF sur `delivery_options` — doit contenir "livraison" ou "installation". Vide ou "Retrait Boutique" → exclu. Voir section "Regles de filtrage" ci-dessus.
 
@@ -264,9 +247,19 @@ Champs cles :
 | `sendGalleryDirectEmail` | Envoyer Drive | Lien direct Drive (sans page avis) |
 
 ### Endpoints backend
-- `POST /api/bookings/:id/send-link-email` → `sendReviewLinkEmail`
-- `POST /api/bookings/:id/send-mail-avis` → `sendOldStyleReviewLinkEmail`
+- `POST /api/bookings/:id/send-link-email` → `sendReviewLinkEmail` (persiste `senderBrand` + `emailSentAt`)
+- `POST /api/bookings/:id/send-mail-avis` → `sendOldStyleReviewLinkEmail` (persiste `senderBrand`, pas `emailSentAt`)
 - `POST /api/bookings/:id/send-gallery` → `sendGalleryDirectEmail`
+
+### Resolution de marque (page avis publique + redirections)
+- `resolveBookingBrand()` (`backend/src/utils/brandUtils.ts`) : `senderBrand` sinon repli `crmBrand` (minuscules) sinon SHOOTNBOX. Utilise dans `handleReviewClick` (redirect avis), `getBookingByToken` (branding page), `manualSendGallery`, `galleryDispatch.service.ts`.
+- **Bug corrige (e8e660f, 2026-06-11)** : `send-mail-avis` ne persistait pas `senderBrand` → clients Smakk rediriges vers Trustpilot/MyBusiness de Shootnbox.
+- **URLs d'avis (env Coolify API)** :
+  - `GOOGLE_REVIEW_URL_SHOOTNBOX` = `https://g.page/r/CV9hJZofgnkSEAE/review`
+  - `GOOGLE_REVIEW_URL_SMAKK` = `https://g.page/r/CSz6ryamhiE4EAE/review`
+  - `TRUSTPILOT_REVIEW_URL_SMAKK` = `https://public.trustindex.io/review/write/www.smakk.fr` (Smakk utilise Trustindex, pas Trustpilot)
+  - `TRUSTPILOT_REVIEW_URL_SHOOTNBOX` : defaut hardcode dans `config/index.ts` (`fr.trustpilot.com/evaluate/shootnbox.fr`)
+- **Priorite Google** : `booking.googleReviewUrl` (si non null) > URL par marque > `GOOGLE_DEFAULT_REVIEW_URL` (non configuree).
 
 ### Variables d'environnement (Coolify)
 | Variable | Valeur |
@@ -299,6 +292,10 @@ Champs cles :
 - Google Calendar dispatched fantome: points marques dispatched a tort lors du re-sync → update recalcule dispatched selon presence reelle en tournee
 - GPS WhatsApp mauvaise adresse: Nominatim geocodait mal les adresses françaises atypiques (esplanades, rues recentes) → coordonnees stockees en DB pointaient vers un endroit different → liens Maps/Waze incorrects. Fix: BAN (api-adresse.data.gouv.fr) en geocodeur primaire + bouton "Recalculer GPS" dans fiche client pour corriger l'existant (`geocoding.service.ts` + `ClientsPage.tsx`)
 - Smakk retraits importes en points a dispatcher : filtre negatif `includes('retrait')` laissait passer les commandes avec `delivery_options=""` → remplace par filtre positif (doit contenir "livraison" ou "installation") + nettoyage auto a chaque sync (`crmSync.service.ts`)
+- Avis Smakk rediriges vers Shootnbox (e8e660f) : `send-mail-avis` ne persistait pas `senderBrand` → page avis resolvait la marque a null = Shootnbox. Fix : persistance + `resolveBookingBrand()` avec repli `crmBrand` (repare aussi les mails deja envoyes)
+- Sync Smakk en panne totale "HTTP 404" (9e5fd9f + 4d9836c) : changement Apache cote smakk.fr — www perdait `/manager` a la redirection. Fix : base sans www + `smakkFetch()` avec repli entre variantes + bandeau d'alerte sync dans `/planning`
+- produitNom fige a la creation (d1a8c6f) : un changement de borne dans le CRM apres le 1er import n'etait jamais reflete (cas Grollier FA5530 affiche "Vegas" au lieu de "Smakk") → re-sync a chaque passage hors `manuallyEdited`
+- Notes formulaire Smakk perdues (1c76e07) : la ligne "Notes" de mail-infos-smk n'etait pas parsee → champ ajoute a `SmakkInfoClient` + create/update liv/rec
 
 ## Ameliorations a implementer (backlog)
 
