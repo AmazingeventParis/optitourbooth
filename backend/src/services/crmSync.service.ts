@@ -44,11 +44,42 @@ interface SyncResult {
 // ─── Config ──────────────────────────────────────────────────────
 
 const SHOOTNBOX_BASE = 'https://shootnbox.fr/manager2';
-// SANS www : depuis juin 2026, www.smakk.fr/manager/x.php redirige 301 vers
-// smakk.fr/x.php (perd /manager) → HTTP 404 sur tous les endpoints du manager.
-const SMAKK_MANAGER_BASE = 'https://smakk.fr/manager';
-const SMAKK_API_URL = `${SMAKK_MANAGER_BASE}/_otb_orders.php`;
+// Variantes de base du manager Smakk. En juin 2026, l'Apache de smakk.fr a changé :
+// www.smakk.fr/manager/x.php redirige 301 vers smakk.fr/x.php (perd /manager) → 404.
+// Pour survivre à un changement dans un sens ou dans l'autre, smakkFetch() essaie
+// chaque variante et mémorise celle qui répond.
+const SMAKK_BASES = ['https://smakk.fr/manager', 'https://www.smakk.fr/manager'];
+const SMAKK_MANAGER_BASE = SMAKK_BASES[0]!;
 const SMAKK_API_KEY = 'opti2026smk_x7kR9qNv';
+
+let smakkBasePreferred = 0;
+
+/**
+ * fetch sur le manager Smakk avec repli automatique entre les variantes
+ * d'URL (avec/sans www). Une variante qui répond non-ok (404, 301 en
+ * redirect manual, ...) ou en erreur réseau fait basculer sur la suivante.
+ */
+async function smakkFetch(pathAndQuery: string, init?: RequestInit): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < SMAKK_BASES.length; attempt++) {
+    const idx = (smakkBasePreferred + attempt) % SMAKK_BASES.length;
+    try {
+      const response = await fetch(`${SMAKK_BASES[idx]}${pathAndQuery}`, init);
+      if (response.ok) {
+        if (idx !== smakkBasePreferred) {
+          console.warn(`[CRM Smakk] Bascule sur ${SMAKK_BASES[idx]} (variante précédente en échec)`);
+          smakkBasePreferred = idx;
+        }
+        return response;
+      }
+      lastError = new Error(`Smakk API HTTP ${response.status} (${SMAKK_BASES[idx]})`);
+    } catch (e: any) {
+      if (e?.name === 'AbortError' || e?.name === 'TimeoutError') throw e;
+      lastError = e instanceof Error ? e : new Error(String(e));
+    }
+  }
+  throw lastError ?? new Error('Smakk API injoignable');
+}
 
 const SHOOTNBOX_EMAIL = process.env.CRM_SHOOTNBOX_EMAIL || '';
 const SHOOTNBOX_PASSWORD = process.env.CRM_SHOOTNBOX_PASSWORD || '';
@@ -138,13 +169,17 @@ function parseCustomerField(raw: string): [string, string] {
 // ─── Generic CRM login ────────────────────────────────────────────
 
 async function crmLogin(baseUrl: string, email: string, password: string, brand: string, signal?: AbortSignal): Promise<string> {
-  const response = await fetch(`${baseUrl}/d26386b04e.php`, {
+  const loginInit: RequestInit = {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `event=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
     redirect: 'manual',
     signal,
-  });
+  };
+  // Smakk : passer par smakkFetch pour le repli www/sans-www
+  const response = SMAKK_BASES.includes(baseUrl)
+    ? await smakkFetch('/d26386b04e.php', loginInit)
+    : await fetch(`${baseUrl}/d26386b04e.php`, loginInit);
 
   const text = await response.text();
   if (text.trim() !== 'done') {
@@ -351,7 +386,7 @@ function buildAlbumRecords(
 async function fetchSmakkReadiness(signal?: AbortSignal): Promise<Map<string, { eventName: string; deliveryType: string; borne: string }>> {
   const map = new Map<string, { eventName: string; deliveryType: string; borne: string }>();
   try {
-    const response = await fetch(`${SMAKK_MANAGER_BASE}/readiness_ajax.php`, {
+    const response = await smakkFetch('/readiness_ajax.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'draw=1&start=0&length=500',
@@ -390,12 +425,7 @@ async function fetchSmakkOrders(signal?: AbortSignal): Promise<CrmRecord[]> {
   let total = 0;
 
   do {
-    const url = `${SMAKK_API_URL}?key=${SMAKK_API_KEY}&page=${page}&size=${PAGE_SIZE}`;
-    const response = await fetch(url, { signal });
-
-    if (!response.ok) {
-      throw new Error(`Smakk API returned HTTP ${response.status}`);
-    }
+    const response = await smakkFetch(`/_otb_orders.php?key=${SMAKK_API_KEY}&page=${page}&size=${PAGE_SIZE}`, { signal });
 
     const data = await response.json() as any;
 
@@ -870,11 +900,10 @@ async function fetchSmakkInfoClients(
   const map = new Map<string, SmakkInfoClient>();
   for (const orderId of orderIds) {
     try {
-      const resp = await fetch(
-        `${SMAKK_MANAGER_BASE}/mail-infos-smk.php?ajax=get_responses&order_id=${orderId}`,
+      const resp = await smakkFetch(
+        `/mail-infos-smk.php?ajax=get_responses&order_id=${orderId}`,
         { headers: { Cookie: cookie }, signal },
       );
-      if (!resp.ok) continue;
       const data = await resp.json() as any;
       if (!data.html) continue;
       map.set(orderId, parseSmakkInfoClientHtml(data.html));
@@ -1271,9 +1300,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
 
     let smkPage = 0; let smkTotal = 0;
     do {
-      const smkUrl = `${SMAKK_API_URL}?key=${SMAKK_API_KEY}&page=${smkPage}&size=${SMK_PAGE_SIZE}`;
-      const smkResp = await fetch(smkUrl, { signal: controller.signal });
-      if (!smkResp.ok) throw new Error(`Smakk API HTTP ${smkResp.status}`);
+      const smkResp = await smakkFetch(`/_otb_orders.php?key=${SMAKK_API_KEY}&page=${smkPage}&size=${SMK_PAGE_SIZE}`, { signal: controller.signal });
       const smkData = await smkResp.json() as any;
       smkTotal = smkData.total || 0;
       const smkRows: any[] = smkData.data || [];
@@ -1768,7 +1795,7 @@ async function fetchShootnboxReadinessEvents(signal?: AbortSignal): Promise<Read
 }
 
 async function fetchSmakkReadinessEvents(signal?: AbortSignal): Promise<ReadinessEvent[]> {
-  const response = await fetch(`${SMAKK_MANAGER_BASE}/readiness_ajax.php`, {
+  const response = await smakkFetch('/readiness_ajax.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'draw=1&start=0&length=1000',
@@ -2039,9 +2066,7 @@ export async function syncChronopostFromCrm(): Promise<ChronopostCrmSyncResult> 
     let page = 0;
     let total = 0;
     do {
-      const url = `${SMAKK_API_URL}?key=${SMAKK_API_KEY}&page=${page}&size=500`;
-      const response = await fetch(url, { signal: controller.signal });
-      if (!response.ok) throw new Error(`Smakk API HTTP ${response.status}`);
+      const response = await smakkFetch(`/_otb_orders.php?key=${SMAKK_API_KEY}&page=${page}&size=500`, { signal: controller.signal });
       const data = await response.json() as any;
       if (data.error) throw new Error(`Smakk API error: ${data.error}`);
       total = data.total || 0;

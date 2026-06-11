@@ -3,7 +3,7 @@ import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
 import { syncGoogleCalendarEvents } from '../services/googleCalendar.service.js';
-import { syncCrmPendingPoints, triggerCrmSyncDebounced, fetchReadinessEvents } from '../services/crmSync.service.js';
+import { syncCrmPendingPoints, triggerCrmSyncDebounced, fetchReadinessEvents, lastPendingPointsSyncResult } from '../services/crmSync.service.js';
 
 // ─── Helpers CRM import ──────────────────────────────────────────────────────
 
@@ -488,6 +488,14 @@ export async function syncCrmPendingPointsController(_req: Request, res: Respons
   } catch (error) {
     apiResponse.error(res, 'SYNC_ERROR', `Erreur sync CRM PendingPoints: ${(error as Error).message}`, 500);
   }
+}
+
+/**
+ * GET /api/pending-points/sync-status - Résultat du dernier sync CRM (manuel ou cron)
+ * Permet au frontend d'afficher une alerte si le sync automatique échoue en silence.
+ */
+export async function getCrmSyncStatus(_req: Request, res: Response): Promise<void> {
+  apiResponse.success(res, lastPendingPointsSyncResult);
 }
 
 /**

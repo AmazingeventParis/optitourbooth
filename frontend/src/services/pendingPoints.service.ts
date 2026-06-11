@@ -96,4 +96,11 @@ export const pendingPointsService = {
     );
     return response.data.data;
   },
+
+  async getSyncStatus(): Promise<{ errors: string[]; completedAt?: string } | null> {
+    const response = await api.get<ApiResponse<{ errors: string[]; completedAt?: string } | null>>(
+      '/pending-points/sync-status',
+    );
+    return response.data.data;
+  },
 };

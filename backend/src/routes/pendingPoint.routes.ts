@@ -16,6 +16,7 @@ router.post('/crm-webhook', apiKeyAuth, asyncHandler(controller.crmWebhook));
 router.post('/manual', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.createManualPendingPoint));
 router.get('/', authenticate, requireRole('preparateur', 'admin', 'warehouse', 'superadmin'), asyncHandler(controller.listPendingPoints));
 router.get('/calendar-events', authenticate, requireRole('preparateur', 'warehouse', 'admin', 'superadmin'), asyncHandler(controller.listCalendarEvents));
+router.get('/sync-status', authenticate, requireRole('preparateur', 'admin', 'warehouse', 'superadmin'), asyncHandler(controller.getCrmSyncStatus));
 router.delete('/:id', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.deletePendingPoint));
 router.patch('/:id/dispatch', authenticate, requireRole('admin', 'superadmin'), asyncHandler(controller.markDispatched));
 router.patch('/:id/use-in-preparation', authenticate, requireRole('preparateur', 'warehouse', 'admin', 'superadmin'), asyncHandler(controller.markUsedInPreparation));

@@ -1560,6 +1560,8 @@ export default function DailyPlanningPage() {
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
+  // Erreurs du dernier sync CRM (cron horaire ou manuel) — bandeau d'alerte
+  const [crmSyncStatus, setCrmSyncStatus] = useState<{ errors: string[]; completedAt?: string } | null>(null);
   const [selectedPendingIndex, setSelectedPendingIndex] = useState<number | null>(null);
   const [selectedDepotId, setSelectedDepotId] = useState<string | null>(null);
   const { success: toastSuccess, error: toastError } = useToast();
@@ -2010,6 +2012,20 @@ export default function DailyPlanningPage() {
     loadTournees(() => cancelled);
     return () => { cancelled = true; };
   }, [loadTournees]);
+
+  // Statut du dernier sync CRM (alerte si le cron échoue en silence), rafraîchi toutes les 5 min
+  useEffect(() => {
+    let cancelled = false;
+    const loadStatus = async () => {
+      try {
+        const status = await pendingPointsService.getSyncStatus();
+        if (!cancelled) setCrmSyncStatus(status);
+      } catch { /* endpoint indisponible → pas de bandeau */ }
+    };
+    loadStatus();
+    const interval = setInterval(loadStatus, 5 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   // Charger les entrées HF existantes pour les points des tournées
   const loadPointHfEntries = useCallback(async () => {
@@ -3652,6 +3668,17 @@ export default function DailyPlanningPage() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      {/* Alerte : le dernier sync CRM (cron ou manuel) a échoué */}
+      {crmSyncStatus && crmSyncStatus.errors.length > 0 && (
+        <div className="bg-red-600 text-white px-4 py-2 text-sm flex items-center gap-2 flex-shrink-0">
+          <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0" />
+          <span className="font-semibold">Le sync CRM échoue</span>
+          <span className="truncate">
+            — {crmSyncStatus.errors.join(' | ')}
+            {crmSyncStatus.completedAt && ` (dernier essai : ${new Date(crmSyncStatus.completedAt).toLocaleString('fr-FR')})`}
+          </span>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-white border-b px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
@@ -3682,6 +3709,8 @@ export default function DailyPlanningPage() {
                   // Recharger les points à dispatcher ET les tournées sans changer de date
                   loadPendingPoints();
                   loadTournees();
+                  // Mettre à jour le bandeau d'alerte sync
+                  setCrmSyncStatus({ errors: result.errors || [], completedAt: new Date().toISOString() });
                   setTimeout(() => { setSyncing(false); setSyncProgress(0); }, 1000);
                 } catch {
                   clearInterval(interval);
