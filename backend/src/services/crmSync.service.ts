@@ -1006,20 +1006,33 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     // 2. Formulaires mail-info-client soumis — fetch AVANT le filtre orders pour pouvoir
     //    utiliser logType comme fallback quand le champ delivery d'orders_ajax est vide.
     const lookupKey = process.env.CRM_LOOKUP_KEY || 'otb_crm_lookup_2026';
-    const formByNumId = new Map<string, { d: Record<string, string>; logType: string; hasLog: boolean }>();
+    const formByNumId = new Map<string, { d: Record<string, string>; logType: string; hasLog: boolean; score: number }>();
     try {
       const resp = await fetch(`https://shootnbox.fr/manager2/otb_cfg_bulk.php?key=${lookupKey}`, { signal: controller.signal });
       const body = await resp.json() as any[];
-      // ATTENTION : otb_cfg_bulk renvoie PLUSIEURS configs par commande (logistique +
-      // graphique "gfx" sans champs log_). On garde en PRIORITÉ l'entrée logistique :
-      // une config sans champ log_ ne doit jamais écraser une config logistique.
+      // ATTENTION : otb_cfg_bulk renvoie PLUSIEURS configs par commande :
+      //  - une config "gfx" (graphique) SANS champs log_
+      //  - un placeholder logistique créé à la commande, champs log_ présents mais VIDES
+      //  - la config logistique REMPLIE par le client (formulaire de réponse)
+      // On garde la config la PLUS REMPLIE = nombre de champs log_ non vides le plus
+      // élevé. Sinon le placeholder vide (rencontré en premier) masquait la version
+      // remplie : `hasLog` ne testait que la présence des clés, pas leur contenu →
+      // adresse/créneaux/contact restaient null malgré un formulaire rempli.
+      const logScore = (d: Record<string, string>) =>
+        Object.entries(d).filter(([k, v]) => k.startsWith('log_') && String(v ?? '').trim() !== '').length;
       for (const cfg of (Array.isArray(body) ? body : [])) {
         if (!cfg.num_id || !cfg.submitted_data) continue;
         const d = cfg.submitted_data as Record<string, string>;
         const hasLog = Object.keys(d).some((k) => k.startsWith('log_'));
+        const score = logScore(d);
         const existing = formByNumId.get(cfg.num_id);
-        if (existing && (existing.hasLog || !hasLog)) continue; // garde la meilleure entrée déjà retenue
-        formByNumId.set(cfg.num_id, { d, logType: cfg.logistique_type || 'classique', hasLog });
+        if (existing) {
+          // Remplacer seulement si strictement mieux rempli ; à score égal, une vraie
+          // config logistique (hasLog) prime sur une config gfx (préserve fix 8dccb46).
+          const better = score > existing.score || (score === existing.score && hasLog && !existing.hasLog);
+          if (!better) continue;
+        }
+        formByNumId.set(cfg.num_id, { d, logType: cfg.logistique_type || 'classique', hasLog, score });
       }
       console.log(`[CRM PendingPoints] ${formByNumId.size} formulaires disponibles pour enrichissement`);
     } catch (e) {
