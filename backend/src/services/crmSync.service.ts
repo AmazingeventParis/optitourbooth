@@ -15,6 +15,8 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '../config/database.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
+import { geocodingService } from './geocoding.service.js';
+import { optimizationService } from './optimization.service.js';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -920,6 +922,7 @@ export interface PendingPointsSyncResult {
   skipped: number;
   autoDispatched: number;
   clientsBackfilled?: number;
+  dispatchedPointsUpdated?: number;
   errors: string[];
   completedAt?: string;
 }
@@ -977,6 +980,149 @@ async function backfillClientContacts(result: PendingPointsSyncResult): Promise<
 
   result.clientsBackfilled = filled;
   if (filled > 0) console.log(`[CRM PendingPoints] Back-fill contacts → ${filled} fiche(s) Client complétée(s)`);
+}
+
+// ─── Propagation CRM → points déjà dispatchés ─────────────────────
+// Un pending_point copié dans une tournée (table Point) n'était plus re-synchronisé :
+// une modification CRM POSTÉRIEURE au dispatch n'arrivait jamais jusqu'au point de la
+// tournée. Cette passe propage les MAJ (adresse + coords, créneaux, bornes, notes) vers
+// les Points liés par externalId, tant qu'ils n'ont pas été édités manuellement et que
+// la tournée est encore modifiable (brouillon/planifiée). Les points édités à la main
+// (manuallyEdited) et les tournées en cours/terminées sont préservés.
+// On ne déplace JAMAIS un point entre tournées : un changement de DATE dans le CRM n'est
+// pas propagé (le point reste dans sa tournée d'origine — l'admin gère ce cas à la main).
+
+// "HH:MM" → Date (champ @db.Time). Même convention que le contrôleur (setHours local).
+function pendingTimeToDate(timeStr: string | null, base: Date): Date | null {
+  if (!timeStr) return null;
+  const m = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return new Date(new Date(base).setHours(parseInt(m[1]!, 10), parseInt(m[2]!, 10), 0, 0));
+}
+
+// Auto-lien des Points dispatchés AVANT cette fonctionnalité (externalId = null) à leur
+// pending_point d'origine. Match strict par nom client + type + date de tournée ; on ne
+// lie que si UN SEUL point candidat existe (évite tout faux lien sur homonymes).
+async function linkLegacyDispatchedPoints(
+  pendings: Array<{ externalId: string | null; clientName: string; type: string; date: Date }>,
+): Promise<number> {
+  let linked = 0;
+  for (const p of pendings) {
+    if (!p.externalId || !p.clientName) continue;
+    const candidates = await prisma.point.findMany({
+      where: {
+        externalId: null,
+        type: p.type as any,
+        tournee: { date: p.date, statut: { in: ['brouillon', 'planifiee'] } },
+        client: { OR: [
+          { nom: { equals: p.clientName, mode: 'insensitive' } },
+          { societe: { equals: p.clientName, mode: 'insensitive' } },
+        ] },
+      },
+      select: { id: true },
+    });
+    if (candidates.length === 1) {
+      await prisma.point.update({ where: { id: candidates[0]!.id }, data: { externalId: p.externalId } });
+      linked++;
+    }
+  }
+  if (linked > 0) console.log(`[CRM Propagate] ${linked} point(s) de tournée legacy liés au CRM`);
+  return linked;
+}
+
+async function propagateToDispatchedPoints(result: PendingPointsSyncResult): Promise<void> {
+  try {
+    const pendings = await prisma.pendingPoint.findMany({
+      where: {
+        source: { in: ['crm_shootnbox', 'crm_smakk'] },
+        dispatched: true,
+        deletedByUser: false,
+        externalId: { not: null },
+      },
+      select: {
+        externalId: true, clientName: true, type: true, date: true,
+        adresse: true, creneauDebut: true, creneauFin: true, quantiteBornes: true, notes: true,
+      },
+    });
+    if (pendings.length === 0) return;
+
+    // Lier les points legacy (créés avant le stockage d'externalId au dispatch)
+    await linkLegacyDispatchedPoints(pendings);
+
+    const byExt = new Map(pendings.map(p => [p.externalId!, p]));
+
+    const points = await prisma.point.findMany({
+      where: {
+        externalId: { in: [...byExt.keys()] },
+        manuallyEdited: false,
+        tournee: { statut: { in: ['brouillon', 'planifiee'] } },
+      },
+      select: {
+        id: true, externalId: true, tourneeId: true, adresse: true,
+        creneauDebut: true, creneauFin: true, quantiteBornes: true, notesInternes: true,
+        tournee: { select: { date: true } },
+      },
+    });
+
+    const affectedTournees = new Set<string>();
+    let propagated = 0;
+
+    for (const pt of points) {
+      const src = byExt.get(pt.externalId!);
+      if (!src) continue;
+      const data: Record<string, unknown> = {};
+
+      // Adresse de l'événement : si changée → re-géocoder pour mettre à jour les coords
+      const newAdresse = (src.adresse || '').trim();
+      if (newAdresse && newAdresse !== (pt.adresse || '').trim()) {
+        data.adresse = newAdresse;
+        try {
+          const geo = await geocodingService.geocodeAddress(newAdresse);
+          if (geo) { data.latitude = geo.latitude; data.longitude = geo.longitude; }
+          else console.warn(`[CRM Propagate] Géocodage sans résultat: "${newAdresse}"`);
+        } catch { /* coords inchangées si géocodage échoue */ }
+      }
+
+      // Créneaux : comparaison heures/minutes (les @db.Time se lisent en local, cf. contrôleur)
+      const cd = pendingTimeToDate(src.creneauDebut, pt.tournee.date);
+      const cf = pendingTimeToDate(src.creneauFin, pt.tournee.date);
+      if (cd && (!pt.creneauDebut ||
+        pt.creneauDebut.getHours() !== cd.getHours() || pt.creneauDebut.getMinutes() !== cd.getMinutes())) {
+        data.creneauDebut = cd;
+      }
+      if (cf && (!pt.creneauFin ||
+        pt.creneauFin.getHours() !== cf.getHours() || pt.creneauFin.getMinutes() !== cf.getMinutes())) {
+        data.creneauFin = cf;
+      }
+
+      // Nombre de bornes
+      if (src.quantiteBornes && src.quantiteBornes > 0 && src.quantiteBornes !== pt.quantiteBornes) {
+        data.quantiteBornes = src.quantiteBornes;
+      }
+
+      // Notes — ne jamais écraser par une valeur vide
+      if (src.notes && src.notes.trim() && src.notes !== (pt.notesInternes || '')) {
+        data.notesInternes = src.notes;
+      }
+
+      if (Object.keys(data).length === 0) continue;
+      await prisma.point.update({ where: { id: pt.id }, data });
+      affectedTournees.add(pt.tourneeId);
+      propagated++;
+      console.log(`[CRM Propagate] Point ${pt.externalId} ← CRM (${Object.keys(data).join(', ')})`);
+    }
+
+    // Recalcul des ETAs/stats des tournées modifiées (l'adresse/créneau peut changer le routage)
+    for (const tid of affectedTournees) {
+      try { await optimizationService.updateTourneeStats(tid); }
+      catch (e: any) { console.error(`[CRM Propagate] updateTourneeStats ${tid}:`, e?.message ?? e); }
+    }
+
+    result.dispatchedPointsUpdated = propagated;
+    if (propagated > 0) console.log(`[CRM Propagate] ${propagated} point(s) de tournée mis à jour depuis le CRM`);
+  } catch (e: any) {
+    result.errors.push(`Propagation points dispatchés: ${e.message}`);
+  }
 }
 
 export let lastPendingPointsSyncResult: PendingPointsSyncResult | null = null;
@@ -1573,6 +1719,10 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
     // dont le contact est encore vide (events dispatchés avant réponse au formulaire).
     await backfillClientContacts(result);
 
+    // Propager les MAJ CRM vers les points DÉJÀ dispatchés dans des tournées
+    // (non édités manuellement) : adresse, créneaux, bornes, notes.
+    await propagateToDispatchedPoints(result);
+
   } catch (e: any) {
     result.errors.push(e.message || 'Erreur inattendue');
   }
@@ -1580,7 +1730,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
   clearTimeout(masterTimeout);
   result.completedAt = new Date().toISOString();
   lastPendingPointsSyncResult = result;
-  console.log(`[CRM PendingPoints] Terminé: created=${result.created}, enriched=${result.enriched}, skipped=${result.skipped}, autoDispatched=${result.autoDispatched}, backfilled=${result.clientsBackfilled ?? 0}, errors=${result.errors.length}`);
+  console.log(`[CRM PendingPoints] Terminé: created=${result.created}, enriched=${result.enriched}, skipped=${result.skipped}, autoDispatched=${result.autoDispatched}, backfilled=${result.clientsBackfilled ?? 0}, pointsMAJ=${result.dispatchedPointsUpdated ?? 0}, errors=${result.errors.length}`);
 
   return result;
 }

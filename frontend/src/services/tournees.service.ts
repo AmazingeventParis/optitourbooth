@@ -48,6 +48,7 @@ interface CreatePointData {
   notesClient?: string;
   produits?: Array<{ produitId: string; quantite: number }>;
   attachments?: any;
+  externalId?: string; // lien pending_point CRM → re-propagation des MAJ au sync
 }
 
 interface UpdatePointData {
@@ -106,6 +107,7 @@ export interface ImportParsedPoint {
   produitFound: boolean;
   errors: string[];
   _backendId?: string; // ID du PendingPoint backend (Google Calendar, etc.)
+  externalId?: string; // externalId du PendingPoint CRM → lien re-propagation au dispatch
   quantiteBornes?: number;
   attachments?: Array<{ fileId: string | null; title: string; mimeType: string; iconLink: string | null; fileUrl: string | null }>;
 }
@@ -309,6 +311,7 @@ export const tourneesService = {
     notes?: string;
     contactNom?: string;
     contactTelephone?: string;
+    externalId?: string;
   }>): Promise<{
     success: boolean;
     totalDispatched: number;

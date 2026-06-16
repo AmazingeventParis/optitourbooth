@@ -70,6 +70,8 @@ export const createPointSchema = z.object({
   produits: z.array(pointProduitSchema).optional().default([]),
   options: z.array(pointOptionSchema).optional(),
   attachments: z.any().optional(),
+  // Lien vers le pending_point CRM d'origine (re-propagation des MAJ CRM au sync)
+  externalId: z.string().optional(),
 });
 
 export const updatePointSchema = z.object({

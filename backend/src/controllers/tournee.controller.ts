@@ -1548,6 +1548,7 @@ export const tourneeController = {
       notesClient?: string;
       dureePrevue: number;
       attachments?: any;
+      externalId?: string | null;
     } = {
       tourneeId: id,
       clientId: data.clientId,
@@ -1559,6 +1560,8 @@ export const tourneeController = {
       ...(data.quantiteBornes && data.quantiteBornes > 0 && { quantiteBornes: data.quantiteBornes }),
       dureePrevue: 30, // Sera recalculé
       ...(data.attachments && { attachments: data.attachments }),
+      // Lien CRM → re-propagation des MAJ CRM vers ce point dispatché
+      ...(data.externalId && { externalId: data.externalId }),
     };
 
     if (data.creneauDebut) {
@@ -1719,6 +1722,19 @@ export const tourneeController = {
         updateData.creneauFin = null;
       }
     }
+
+    // Marquer le point comme édité manuellement (admin) → le sync CRM ne réécrira
+    // plus son contenu. On exclut les changements de statut/signature/ordre faits par
+    // le chauffeur sur le terrain : ce ne sont pas des corrections de données CRM.
+    const isContentEdit =
+      data.type !== undefined ||
+      data.creneauDebut !== undefined ||
+      data.creneauFin !== undefined ||
+      data.notesInternes !== undefined ||
+      data.notesClient !== undefined ||
+      data.produits !== undefined ||
+      data.options !== undefined;
+    if (isContentEdit) updateData.manuallyEdited = true;
 
     // Mettre à jour le point
     await prisma.point.update({
@@ -2361,6 +2377,7 @@ export const tourneeController = {
         notes?: string;
         contactNom?: string;
         contactTelephone?: string;
+        externalId?: string;
       }>;
     };
 

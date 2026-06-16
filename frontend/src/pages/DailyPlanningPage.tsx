@@ -1845,6 +1845,7 @@ export default function DailyPlanningPage() {
           produitFound: !!matchedProduit,
           errors: !matchedProduit && bp.produitNom ? [`Produit "${bp.produitNom}" non trouvé`] : [],
           _backendId: bp.id,
+          externalId: bp.externalId,
           quantiteBornes: bp.quantiteBornes && bp.quantiteBornes > 1 ? bp.quantiteBornes : undefined,
           attachments: Array.isArray(bp.attachments) ? bp.attachments : [],
         };
@@ -2561,6 +2562,7 @@ export default function DailyPlanningPage() {
           ? pendingPoint.produitsIds.map(p => ({ produitId: p.id, quantite: 1 }))
           : pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : [],
         attachments: pendingPoint.attachments || undefined,
+        externalId: pendingPoint.externalId || undefined,
       }).then((updatedTournee: Tournee) => {
         // Marquer dispatché SEULEMENT si addPoint a réussi
         if (pendingPoint._backendId) {
@@ -3386,6 +3388,7 @@ export default function DailyPlanningPage() {
         notes: point.notes || undefined,
         contactNom: point.contactNom || undefined,
         contactTelephone: point.contactTelephone || undefined,
+        externalId: point.externalId || undefined,
       }));
 
       const result = await tourneesService.autoDispatch(selectedDate, pointsToDispatch);

@@ -317,6 +317,14 @@ model Point {
   ordre               Int         // Position dans la tournée
   statut              PointStatut @default(a_faire)
 
+  // Lien vers le pending_point CRM d'origine (snb_order_X_livraison / smk_order_X_ramassage).
+  // Posé au dispatch → permet au sync CRM de re-propager les mises à jour (adresse, créneaux,
+  // bornes, notes) vers ce point déjà placé dans une tournée.
+  externalId          String?     @map("external_id")
+  // Passe à true dès qu'un admin édite le contenu du point dans l'UI → le sync CRM
+  // ne réécrit plus ce point (protège une correction manuelle, comme PendingPoint).
+  manuallyEdited      Boolean     @default(false) @map("manually_edited")
+
   // Adresse PAR ÉVÉNEMENT (copiée du pending_point au dispatch). Un client récurrent
   // peut faire ses événements à des lieux différents : on n'utilise plus l'adresse
   // unique de la fiche Client mais celle-ci en priorité (repli sur le client si null).
@@ -371,6 +379,7 @@ model Point {
   @@index([tourneeId, ordre]) // Points d'une tournée triés par ordre
   @@index([tourneeId, statut]) // Points d'une tournée par statut
   @@index([clientId, tourneeId]) // Historique des tournées d'un client
+  @@index([externalId]) // Re-propagation CRM vers points dispatchés
   @@map("points")
 }
 

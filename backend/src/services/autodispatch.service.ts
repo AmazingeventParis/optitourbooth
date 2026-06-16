@@ -19,6 +19,7 @@ interface PendingPoint {
   contactNom?: string;
   contactTelephone?: string;
   attachments?: any;
+  externalId?: string;    // lien pending_point CRM → re-propagation des MAJ au sync
 }
 
 interface TourneeCandidate {
@@ -255,6 +256,7 @@ export const autoDispatchService = {
             dureePrevue,
             notesInternes: point.notes,
             attachments: point.attachments || [],
+            externalId: point.externalId || null,
           },
         });
 
