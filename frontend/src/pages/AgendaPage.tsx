@@ -864,6 +864,11 @@ function EventDetailModal({ block, onClose, onNavigateTournee }: {
           <div className="flex-1">
             <div className="font-bold text-gray-900">{block.produit}{block.machineNumero && ` — ${block.machineNumero}`}</div>
             <span className={clsx('inline-block px-2 py-0.5 rounded-full text-xs font-medium mt-0.5', statusInfo.color)}>{statusInfo.label}</span>
+            {block.quantiteBornes && block.quantiteBornes > 1 && (
+              <span className="inline-block ml-1.5 px-2 py-0.5 rounded-full text-xs font-medium mt-0.5 bg-amber-100 text-amber-800">
+                Événement à {block.quantiteBornes} bornes
+              </span>
+            )}
           </div>
         </div>
 

@@ -32,6 +32,8 @@ interface AllocationBlock {
   // Créneaux complets (plages) — timeStart = début livraison, timeEnd = fin récup
   livraisonCreneauFin: string | null;
   recuperationCreneauDebut: string | null;
+  // Nombre total de bornes de l'événement (1 cartouche est générée par borne)
+  quantiteBornes?: number;
 }
 
 function fmtTime(t: Date | string | null): string | null {
@@ -171,6 +173,32 @@ async function buildAllocations(dateFrom: string, dateTo: string): Promise<Alloc
     return null;
   }
 
+  // Liste DISTINCTE des machines préparées pour un événement (client+date) — pour
+  // les événements à plusieurs bornes : on distribue une machine par cartouche.
+  // Les bornes du bon type produit sont priorisées.
+  function findMachines(clientName: string, date: string, produitNom: string): { numero: string; type: string }[] {
+    const fw = clientFirstWord(clientName);
+    if (!fw || fw.length < 2) return [];
+    const key = `${fw}|${date}`;
+    const out: { numero: string; type: string }[] = [];
+    const preps = prepsByClient.get(key);
+    if (preps) {
+      const ordered = [...preps].sort(
+        (a, b) => Number(b.machine.type === produitNom) - Number(a.machine.type === produitNom)
+      );
+      for (const p of ordered) {
+        if (!out.some(m => m.numero === p.machine.numero)) {
+          out.push({ numero: p.machine.numero, type: p.machine.type });
+        }
+      }
+    }
+    if (out.length === 0) {
+      const pp = pendingByClientDate.get(key);
+      if (pp?.suggestedMachine) out.push({ numero: pp.suggestedMachine.numero, type: pp.suggestedMachine.type });
+    }
+    return out;
+  }
+
   // ========== Build blocks from point pairs ==========
   const blocks: AllocationBlock[] = [];
   const usedPickups = new Set<string>();
@@ -242,7 +270,7 @@ async function buildAllocations(dateFrom: string, dateTo: string): Promise<Alloc
     let status: AllocationBlock['status'] = 'immobilisee';
     if (delivery.statut === 'termine') status = 'livree';
 
-    const machine = findMachine(clientName, dDate, produitNom);
+    const eventMachines = findMachines(clientName, dDate, produitNom);
     usedDeliveryClients.add(fw + '|' + dDate);
 
     // Find preparateur name if prep exists
@@ -250,30 +278,53 @@ async function buildAllocations(dateFrom: string, dateTo: string): Promise<Alloc
     const linkedPreps = prepsByClient.get(prepKey);
     const preparateur = linkedPreps?.[0]?.preparateur || null;
 
-    blocks.push({
-      id: delivery.id,
-      client: clientName,
-      clientAdresse: delivery.client?.adresse ? `${delivery.client.adresse}, ${delivery.client.codePostal || ''} ${delivery.client.ville || ''}`.trim() : null,
-      clientVille: delivery.client?.ville || null,
-      clientTelephone: delivery.client?.telephone || delivery.client?.contactTelephone || null,
-      clientContactNom: delivery.client?.contactNom || null,
-      produit: produitNom,
-      produitCouleur: produitCouleur || '#6B7280',
-      dateStart, timeStart, dateEnd, timeEnd,
-      machineNumero: machine?.numero || null,
-      machineType: machine?.type || null,
-      status,
-      source: 'tournee',
-      tourneeId: delivery.tournee.id,
-      deliveryPointId: delivery.id,
-      pickupPointId: pickup?.id || null,
-      notesInternes: delivery.notesInternes || null,
-      preparateurNom: preparateur,
-      chauffeurLivraison: delivery.tournee?.chauffeur ? `${delivery.tournee.chauffeur.prenom}` : null,
-      chauffeurRecuperation: pickup?.tournee?.chauffeur ? `${pickup.tournee.chauffeur.prenom}` : null,
-      livraisonCreneauFin,
-      recuperationCreneauDebut,
-    });
+    // Nombre de bornes de l'événement : on prend le max entre la quantité du point,
+    // celle du pending (readiness CRM "V1,V2,V3"), et le nombre de machines préparées.
+    const ppForCount = pendingByClientDate.get(prepKey);
+    const nBornes = Math.max(
+      (delivery as any).quantiteBornes || 1,
+      ppForCount?.quantiteBornes || 1,
+      eventMachines.length,
+      1
+    );
+
+    const clientAdresse = delivery.client?.adresse
+      ? `${delivery.client.adresse}, ${delivery.client.codePostal || ''} ${delivery.client.ville || ''}`.trim()
+      : null;
+    const chauffeurLivraison = delivery.tournee?.chauffeur ? `${delivery.tournee.chauffeur.prenom}` : null;
+    const chauffeurRecuperation = pickup?.tournee?.chauffeur ? `${pickup.tournee.chauffeur.prenom}` : null;
+
+    // Une cartouche PAR borne : chaque sous-bloc est attribuable à une machine distincte.
+    // Le 1er garde l'id du point (préserve les attributions existantes), les suivants
+    // ont un id dérivé `${pointId}#2`, `#3`, … (clé AgendaAssignment dédiée).
+    for (let i = 0; i < nBornes; i++) {
+      const m = eventMachines[i] || null;
+      blocks.push({
+        id: i === 0 ? delivery.id : `${delivery.id}#${i + 1}`,
+        client: clientName,
+        clientAdresse,
+        clientVille: delivery.client?.ville || null,
+        clientTelephone: delivery.client?.telephone || delivery.client?.contactTelephone || null,
+        clientContactNom: delivery.client?.contactNom || null,
+        produit: produitNom,
+        produitCouleur: produitCouleur || '#6B7280',
+        dateStart, timeStart, dateEnd, timeEnd,
+        machineNumero: m?.numero || null,
+        machineType: m?.type || null,
+        status,
+        source: 'tournee',
+        tourneeId: delivery.tournee.id,
+        deliveryPointId: delivery.id,
+        pickupPointId: pickup?.id || null,
+        notesInternes: delivery.notesInternes || null,
+        preparateurNom: preparateur,
+        chauffeurLivraison,
+        chauffeurRecuperation,
+        livraisonCreneauFin,
+        recuperationCreneauDebut,
+        quantiteBornes: nBornes,
+      });
+    }
   }
 
   // ========== SOURCE 3: Bornes hors locaux SANS tournée (Chronopost/Slim + Retrait) ==========
