@@ -288,9 +288,14 @@ async function buildAllocations(dateFrom: string, dateTo: string): Promise<Alloc
       1
     );
 
-    const clientAdresse = delivery.client?.adresse
-      ? `${delivery.client.adresse}, ${delivery.client.codePostal || ''} ${delivery.client.ville || ''}`.trim()
-      : null;
+    // Adresse de l'événement (propre au point) prioritaire sur la fiche client partagée —
+    // sinon deux contrats d'un même client (ex CESAM 97 rue de l'Université vs 33 rue du
+    // Faubourg) afficheraient la même adresse et sembleraient n'être qu'un seul événement.
+    const clientAdresse = (delivery as any).adresse
+      ? String((delivery as any).adresse)
+      : delivery.client?.adresse
+        ? `${delivery.client.adresse}, ${delivery.client.codePostal || ''} ${delivery.client.ville || ''}`.trim()
+        : null;
     const chauffeurLivraison = delivery.tournee?.chauffeur ? `${delivery.tournee.chauffeur.prenom}` : null;
     const chauffeurRecuperation = pickup?.tournee?.chauffeur ? `${pickup.tournee.chauffeur.prenom}` : null;
 
