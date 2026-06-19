@@ -26,6 +26,7 @@ import {
   XMarkIcon,
   ArrowPathIcon,
   PaperClipIcon,
+  BuildingOffice2Icon,
 } from '@heroicons/react/24/outline';
 import { PointDetailSkeleton } from '@/components/ui/PageLoader';
 import PhotoLightbox from '@/components/ui/PhotoLightbox';
@@ -307,6 +308,20 @@ export default function ChauffeurPointPage() {
               )}
             </div>
           </div>
+
+          {(point.typeEtablissement || point.nomEtablissement) && (
+            <div className="flex items-start gap-3">
+              <BuildingOffice2Icon className="h-5 w-5 text-gray-400 mt-0.5" />
+              <div>
+                {point.nomEtablissement && (
+                  <p className="font-medium">{point.nomEtablissement}</p>
+                )}
+                {point.typeEtablissement && (
+                  <p className="text-sm text-gray-500">{point.typeEtablissement}</p>
+                )}
+              </div>
+            </div>
+          )}
 
           {(point.creneauDebut || point.creneauFin) && (
             <div className="flex items-center gap-3">

@@ -819,6 +819,57 @@ function parseSmakkCreneau(raw: string): [string | null, string | null] {
   return [null, null];
 }
 
+/**
+ * Extrait "Type d'établissement" et "Nom de l'établissement" d'un objet source
+ * (formulaire ShootNBox `submitted_data` ou ligne Smakk `orders_new`).
+ *
+ * Clés ShootNBox connues : log_etab_type / log_etab_nom (cf. SNB_LABELS dans
+ * orders_list.php). Repli heuristique tolérant (normalisation des clés + token
+ * `etab`) pour les colonnes Smakk dont le nom exact reste inconnu.
+ */
+export function extractEtablissement(
+  src: Record<string, any> | null | undefined,
+): { typeEtablissement: string | null; nomEtablissement: string | null } {
+  const out = { typeEtablissement: null as string | null, nomEtablissement: null as string | null };
+  if (!src || typeof src !== 'object') return out;
+
+  const clean = (v: any): string | null => {
+    if (v == null) return null;
+    const s = stripHtml(String(v)).trim();
+    return s || null;
+  };
+
+  // 1. Clés exactes connues — ShootNBox submitted_data (log_etab_type / log_etab_nom)
+  const knownType = ['log_etab_type', 'log_etablissement_type', 'type_etablissement', 'etablissement_type'];
+  const knownNom = ['log_etab_nom', 'log_etablissement_nom', 'nom_etablissement', 'etablissement_nom'];
+  for (const k of knownType) { if (!out.typeEtablissement) out.typeEtablissement = clean((src as any)[k]); }
+  for (const k of knownNom) { if (!out.nomEtablissement) out.nomEtablissement = clean((src as any)[k]); }
+
+  // 2. Repli heuristique pour clés inconnues (ex: colonnes Smakk orders_new)
+  if (!out.typeEtablissement || !out.nomEtablissement) {
+    const norm = (s: string) =>
+      s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+    for (const [key, rawVal] of Object.entries(src)) {
+      const val = clean(rawVal);
+      if (!val) continue;
+      const k = norm(key);
+      if (!k.includes('etab')) continue; // doit référencer "établissement" (etab / etabliss)
+      if (k.includes('type')) {
+        if (!out.typeEtablissement) out.typeEtablissement = val;
+      } else if (k.includes('nom')) {
+        if (!out.nomEtablissement) out.nomEtablissement = val;
+      } else if (!out.nomEtablissement) {
+        out.nomEtablissement = val; // clé "etablissement" seule → nom
+      }
+    }
+  }
+
+  if (out.typeEtablissement || out.nomEtablissement) {
+    console.log(`[CRM Etablissement] type="${out.typeEtablissement || ''}" nom="${out.nomEtablissement || ''}"`);
+  }
+  return out;
+}
+
 // ─── Smakk Info Client (mail-infos-smk.php) ──────────────────────
 // Données remplies par le client quand il répond au mail info logistique.
 // Source de vérité prioritaire sur _otb_orders.php pour les dates et l'adresse.
@@ -1042,6 +1093,7 @@ async function propagateToDispatchedPoints(result: PendingPointsSyncResult): Pro
       select: {
         externalId: true, clientName: true, type: true, date: true,
         adresse: true, creneauDebut: true, creneauFin: true, quantiteBornes: true, notes: true,
+        typeEtablissement: true, nomEtablissement: true,
       },
     });
     if (pendings.length === 0) return;
@@ -1060,6 +1112,7 @@ async function propagateToDispatchedPoints(result: PendingPointsSyncResult): Pro
       select: {
         id: true, externalId: true, tourneeId: true, adresse: true,
         creneauDebut: true, creneauFin: true, quantiteBornes: true, notesInternes: true,
+        typeEtablissement: true, nomEtablissement: true,
         tournee: { select: { date: true } },
       },
     });
@@ -1103,6 +1156,14 @@ async function propagateToDispatchedPoints(result: PendingPointsSyncResult): Pro
       // Notes — ne jamais écraser par une valeur vide
       if (src.notes && src.notes.trim() && src.notes !== (pt.notesInternes || '')) {
         data.notesInternes = src.notes;
+      }
+
+      // Établissement — ne jamais écraser par une valeur vide
+      if (src.typeEtablissement && src.typeEtablissement !== (pt.typeEtablissement || '')) {
+        data.typeEtablissement = src.typeEtablissement;
+      }
+      if (src.nomEtablissement && src.nomEtablissement !== (pt.nomEtablissement || '')) {
+        data.nomEtablissement = src.nomEtablissement;
       }
 
       if (Object.keys(data).length === 0) continue;
@@ -1271,6 +1332,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
 
       const parsedLiv = form ? pendingParseLogistics(form.d, 'livraison', form.logType) : null;
       const parsedRec = form ? pendingParseLogistics(form.d, 'ramassage', form.logType) : null;
+      const etab = form ? extractEtablissement(form.d) : { typeEtablissement: null, nomEtablissement: null };
 
       const livDate = parsedLiv?.date || order.eventDateISO;
       const recDate = parsedRec?.date || order.returnDateISO || order.eventDateISO;
@@ -1302,6 +1364,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               contactNom: parsedLiv?.contactNom || null,
               contactTelephone: parsedLiv?.contactTelephone || null,
               notes: parsedLiv?.notes || null,
+              typeEtablissement: etab.typeEtablissement,
+              nomEtablissement: etab.nomEtablissement,
               quantiteBornes,
               // manuallyEdited réservé aux éditions via l'UI (PATCH). Le sync ne le
               // pose jamais → le formulaire client reste re-synchronisable.
@@ -1335,6 +1399,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
                 ...(parsedLiv.contactTelephone && { contactTelephone: parsedLiv.contactTelephone }),
                 ...(parsedLiv.notes && { notes: parsedLiv.notes }),
               }),
+              ...(!existingLiv.manuallyEdited && etab.typeEtablissement && { typeEtablissement: etab.typeEtablissement }),
+              ...(!existingLiv.manuallyEdited && etab.nomEtablissement && { nomEtablissement: etab.nomEtablissement }),
             },
           });
           if (form && parsedLiv) result.enriched++;
@@ -1363,6 +1429,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
                 contactNom: parsedRec?.contactNom || null,
                 contactTelephone: parsedRec?.contactTelephone || null,
                 notes: parsedRec?.notes || null,
+                typeEtablissement: etab.typeEtablissement,
+                nomEtablissement: etab.nomEtablissement,
                 quantiteBornes,
                 // manuallyEdited réservé aux éditions UI — pas posé par le sync.
                 manuallyEdited: false,
@@ -1393,6 +1461,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
                 ...(parsedRec.contactTelephone && { contactTelephone: parsedRec.contactTelephone }),
                 ...(parsedRec.notes && { notes: parsedRec.notes }),
               }),
+              ...(!existingRec.manuallyEdited && etab.typeEtablissement && { typeEtablissement: etab.typeEtablissement }),
+              ...(!existingRec.manuallyEdited && etab.nomEtablissement && { nomEtablissement: etab.nomEtablissement }),
             },
           });
           if (form && parsedRec) result.enriched++;
@@ -1455,6 +1525,7 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       takeContact: string | null; returnContact: string | null;
       creneauDebutLiv: string | null; creneauFinLiv: string | null;
       creneauDebutRec: string | null; creneauFinRec: string | null;
+      typeEtablissement: string | null; nomEtablissement: string | null;
     }> = [];
 
     let smkPage = 0; let smkTotal = 0;
@@ -1517,6 +1588,9 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         const [cdLiv, cfLiv] = parseSmakkCreneau((row.take_time || '').trim());
         const [cdRec, cfRec] = parseSmakkCreneau((row.return_time || '').trim());
 
+        // Établissement (détection tolérante sur les colonnes orders_new)
+        const smkEtab = extractEtablissement(row);
+
         smakkEligible.push({
           orderId: String(row.id),
           clientName,
@@ -1531,6 +1605,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           creneauFinLiv: cfLiv,
           creneauDebutRec: cdRec,
           creneauFinRec: cfRec,
+          typeEtablissement: smkEtab.typeEtablissement,
+          nomEtablissement: smkEtab.nomEtablissement,
         });
       }
 
@@ -1638,6 +1714,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             contactNom,
             contactTelephone,
             notes: smkNotes,
+            typeEtablissement: order.typeEtablissement,
+            nomEtablissement: order.nomEtablissement,
             quantiteBornes: smkQuantiteBornes,
             // manuallyEdited réservé aux éditions UI — pas posé par le sync.
             manuallyEdited: false,
@@ -1662,6 +1740,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               ...(contactNom && { contactNom }),
               ...(contactTelephone && { contactTelephone }),
               ...(smkNotes && { notes: smkNotes }),
+              ...(order.typeEtablissement && { typeEtablissement: order.typeEtablissement }),
+              ...(order.nomEtablissement && { nomEtablissement: order.nomEtablissement }),
             }),
           }});
           if (!existingLiv.manuallyEdited && hasInfoClient) result.enriched++;
@@ -1686,6 +1766,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
             contactNom: contactNomRec,
             contactTelephone,
             notes: smkNotes,
+            typeEtablissement: order.typeEtablissement,
+            nomEtablissement: order.nomEtablissement,
             quantiteBornes: smkQuantiteBornes,
             // manuallyEdited réservé aux éditions UI — pas posé par le sync.
             manuallyEdited: false,
@@ -1708,6 +1790,8 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
               ...(contactNomRec && { contactNom: contactNomRec }),
               ...(contactTelephone && { contactTelephone }),
               ...(smkNotes && { notes: smkNotes }),
+              ...(order.typeEtablissement && { typeEtablissement: order.typeEtablissement }),
+              ...(order.nomEtablissement && { nomEtablissement: order.nomEtablissement }),
             }),
           }});
           if (!existingRec.manuallyEdited && hasInfoClient) result.enriched++;

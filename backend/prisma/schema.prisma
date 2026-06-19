@@ -356,6 +356,10 @@ model Point {
   notesInternes       String?     @map("notes_internes") @db.Text
   notesClient         String?     @map("notes_client") @db.Text
 
+  // Établissement (renseigné par le client dans le formulaire CRM)
+  typeEtablissement   String?     @map("type_etablissement")
+  nomEtablissement    String?     @map("nom_etablissement")
+
   // Pièces jointes Google Calendar
   attachments         Json?       @default("[]")
 
@@ -817,6 +821,8 @@ model PendingPoint {
   notes             String?  @db.Text
   contactNom        String?  @map("contact_nom")
   contactTelephone  String?  @map("contact_telephone")
+  typeEtablissement String?  @map("type_etablissement")
+  nomEtablissement  String?  @map("nom_etablissement")
   eventName         String?  @map("event_name")
   source            String   @default("google_calendar")
   calendarId        String?  @map("calendar_id")

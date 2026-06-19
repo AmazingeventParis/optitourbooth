@@ -3,7 +3,7 @@ import { prisma } from '../config/database.js';
 import { apiResponse } from '../utils/index.js';
 import { ensureDateUTC } from '../utils/dateUtils.js';
 import { syncGoogleCalendarEvents } from '../services/googleCalendar.service.js';
-import { syncCrmPendingPoints, triggerCrmSyncDebounced, fetchReadinessEvents, lastPendingPointsSyncResult } from '../services/crmSync.service.js';
+import { syncCrmPendingPoints, triggerCrmSyncDebounced, fetchReadinessEvents, lastPendingPointsSyncResult, extractEtablissement } from '../services/crmSync.service.js';
 
 // ─── Helpers CRM import ──────────────────────────────────────────────────────
 
@@ -113,6 +113,8 @@ export async function createPendingPoints(req: Request, res: Response): Promise<
         notes: point.notes || null,
         contactNom: point.contactNom || null,
         contactTelephone: point.contactTelephone || null,
+        typeEtablissement: point.typeEtablissement || null,
+        nomEtablissement: point.nomEtablissement || null,
         source: point.source || 'google_calendar',
         externalId: point.externalId || null,
       };
@@ -132,6 +134,8 @@ export async function createPendingPoints(req: Request, res: Response): Promise<
             notes: data.notes,
             contactNom: data.contactNom,
             contactTelephone: data.contactTelephone,
+            typeEtablissement: data.typeEtablissement,
+            nomEtablissement: data.nomEtablissement,
           },
           create: data,
         });
@@ -158,7 +162,7 @@ export async function createPendingPoints(req: Request, res: Response): Promise<
  * POST /api/pending-points/manual - Créer un point à dispatcher manuellement (admin)
  */
 export async function createManualPendingPoint(req: Request, res: Response): Promise<void> {
-  const { date, clientName, adresse, type, produitNom, creneauDebut, creneauFin, notes, contactNom, contactTelephone } = req.body;
+  const { date, clientName, adresse, type, produitNom, creneauDebut, creneauFin, notes, contactNom, contactTelephone, typeEtablissement, nomEtablissement } = req.body;
 
   if (!date || !clientName || !type) {
     apiResponse.badRequest(res, 'Champs requis: date, clientName, type');
@@ -177,6 +181,8 @@ export async function createManualPendingPoint(req: Request, res: Response): Pro
       notes: notes || null,
       contactNom: contactNom || null,
       contactTelephone: contactTelephone || null,
+      typeEtablissement: typeEtablissement || null,
+      nomEtablissement: nomEtablissement || null,
       source: 'manual',
     },
   });
@@ -303,7 +309,7 @@ export async function deletePendingPoint(req: Request, res: Response): Promise<v
  */
 export async function updatePendingPoint(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
-  const { clientName, adresse, type, date, creneauDebut, creneauFin, contactNom, contactTelephone, notes, produitNom, dispatched, quantiteBornes } = req.body;
+  const { clientName, adresse, type, date, creneauDebut, creneauFin, contactNom, contactTelephone, notes, produitNom, dispatched, quantiteBornes, typeEtablissement, nomEtablissement } = req.body;
 
   try {
     const updated = await prisma.pendingPoint.update({
@@ -319,6 +325,8 @@ export async function updatePendingPoint(req: Request, res: Response): Promise<v
         ...(contactTelephone !== undefined && { contactTelephone }),
         ...(notes !== undefined && { notes }),
         ...(produitNom !== undefined && { produitNom }),
+        ...(typeEtablissement !== undefined && { typeEtablissement }),
+        ...(nomEtablissement !== undefined && { nomEtablissement }),
         ...(dispatched !== undefined && { dispatched }),
         ...(quantiteBornes !== undefined && { quantiteBornes }),
         // Dès qu'un utilisateur modifie un champ, verrouiller contre la sync automatique
@@ -564,6 +572,7 @@ export async function importFromCRM(req: Request, res: Response): Promise<void> 
 
   const parsedLiv = parseLogisticsPayload(d, 'livraison', logType);
   const parsedRec = parseLogisticsPayload(d, 'ramassage', logType);
+  const etab = extractEtablissement(d);
 
   // Dates à chercher: livraison, ramassage + date de l'événement (format DD.MM.YYYY)
   const eventDateISO = normalizeDateDMY(cfgData.event_date || '');
@@ -637,6 +646,8 @@ export async function importFromCRM(req: Request, res: Response): Promise<void> 
         contactNom:       payload.contactNom,
         contactTelephone: payload.contactTelephone,
         notes:            payload.notes,
+        typeEtablissement: etab.typeEtablissement,
+        nomEtablissement:  etab.nomEtablissement,
       } : null,
     };
   });
@@ -731,6 +742,7 @@ export async function bulkImportFromCRM(req: Request, res: Response): Promise<vo
 
     const parsedLiv = parseLogisticsPayload(d, 'livraison', logType);
     const parsedRec = parseLogisticsPayload(d, 'ramassage', logType);
+    const etab = extractEtablissement(d);
 
     if (!parsedLiv && !parsedRec) {
       skipped.push({ numId, reason: `logistique_type=${logType} ignoré (retrait)` });
@@ -805,6 +817,8 @@ export async function bulkImportFromCRM(req: Request, res: Response): Promise<vo
             contactNom:       payload.contactNom,
             contactTelephone: payload.contactTelephone,
             notes:            payload.notes,
+            typeEtablissement: etab.typeEtablissement,
+            nomEtablissement:  etab.nomEtablissement,
           },
         });
       }

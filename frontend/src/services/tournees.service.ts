@@ -46,6 +46,8 @@ interface CreatePointData {
   dureePrevue?: number;
   notesInternes?: string;
   notesClient?: string;
+  typeEtablissement?: string | null;
+  nomEtablissement?: string | null;
   produits?: Array<{ produitId: string; quantite: number }>;
   attachments?: any;
   externalId?: string; // lien pending_point CRM → re-propagation des MAJ au sync
@@ -59,6 +61,8 @@ interface UpdatePointData {
   dureePrevue?: number;
   notesInternes?: string;
   notesClient?: string;
+  typeEtablissement?: string | null;
+  nomEtablissement?: string | null;
   signatureData?: string;
   signatureNom?: string;
   produits?: { produitId: string; quantite: number }[];
@@ -100,6 +104,8 @@ export interface ImportParsedPoint {
   contactNom?: string;
   contactTelephone?: string;
   notes?: string;
+  typeEtablissement?: string;
+  nomEtablissement?: string;
   clientId?: string;
   produitId?: string;
   produitsIds?: { id: string; nom: string }[];
@@ -311,6 +317,8 @@ export const tourneesService = {
     notes?: string;
     contactNom?: string;
     contactTelephone?: string;
+    typeEtablissement?: string;
+    nomEtablissement?: string;
     externalId?: string;
   }>): Promise<{
     success: boolean;

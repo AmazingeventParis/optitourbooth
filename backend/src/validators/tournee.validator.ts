@@ -67,6 +67,8 @@ export const createPointSchema = z.object({
   creneauFin: z.string().regex(/^\d{2}:\d{2}$/, 'Format heure invalide (HH:MM)').optional(),
   notesInternes: z.string().optional(),
   notesClient: z.string().optional(),
+  typeEtablissement: z.string().optional().nullable(),
+  nomEtablissement: z.string().optional().nullable(),
   produits: z.array(pointProduitSchema).optional().default([]),
   options: z.array(pointOptionSchema).optional(),
   attachments: z.any().optional(),
@@ -83,6 +85,8 @@ export const updatePointSchema = z.object({
   creneauFin: z.string().regex(/^\d{2}:\d{2}$/, 'Format heure invalide (HH:MM)').optional().nullable(),
   notesInternes: z.string().optional().nullable(),
   notesClient: z.string().optional().nullable(),
+  typeEtablissement: z.string().optional().nullable(),
+  nomEtablissement: z.string().optional().nullable(),
   produits: z.array(pointProduitSchema).optional(),
   options: z.array(pointOptionSchema).optional(),
   // Signature client (chauffeur)

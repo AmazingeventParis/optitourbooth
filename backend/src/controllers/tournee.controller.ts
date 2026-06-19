@@ -430,6 +430,8 @@ export const tourneeController = {
               creneauDebut: true,
               creneauFin: true,
               notesInternes: true,
+              typeEtablissement: true,
+              nomEtablissement: true,
               attachments: true,
               client: {
                 select: {
@@ -1546,6 +1548,8 @@ export const tourneeController = {
       creneauFin?: Date;
       notesInternes?: string;
       notesClient?: string;
+      typeEtablissement?: string | null;
+      nomEtablissement?: string | null;
       dureePrevue: number;
       attachments?: any;
       externalId?: string | null;
@@ -1580,6 +1584,8 @@ export const tourneeController = {
 
     if (data.notesInternes) pointData.notesInternes = data.notesInternes;
     if (data.notesClient) pointData.notesClient = data.notesClient;
+    if (data.typeEtablissement !== undefined) pointData.typeEtablissement = data.typeEtablissement;
+    if (data.nomEtablissement !== undefined) pointData.nomEtablissement = data.nomEtablissement;
 
     // Créer le point avec ses produits et options
     const point = await prisma.point.create({
@@ -1680,6 +1686,8 @@ export const tourneeController = {
     if (data.ordre !== undefined) updateData.ordre = data.ordre;
     if (data.notesInternes !== undefined) updateData.notesInternes = data.notesInternes;
     if (data.notesClient !== undefined) updateData.notesClient = data.notesClient;
+    if (data.typeEtablissement !== undefined) updateData.typeEtablissement = data.typeEtablissement;
+    if (data.nomEtablissement !== undefined) updateData.nomEtablissement = data.nomEtablissement;
 
     // Signature client
     if (data.signatureData !== undefined) {
@@ -2377,6 +2385,8 @@ export const tourneeController = {
         notes?: string;
         contactNom?: string;
         contactTelephone?: string;
+        typeEtablissement?: string | null;
+        nomEtablissement?: string | null;
         externalId?: string;
       }>;
     };

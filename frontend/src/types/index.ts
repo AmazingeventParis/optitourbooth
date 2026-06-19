@@ -172,6 +172,8 @@ export interface Point {
   signatureDate?: string;
   notesInternes?: string;
   notesClient?: string;
+  typeEtablissement?: string;
+  nomEtablissement?: string;
   attachments?: Attachment[];
   produits?: PointProduit[];
   photos?: Photo[];

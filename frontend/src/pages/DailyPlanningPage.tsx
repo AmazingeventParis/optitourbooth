@@ -361,6 +361,13 @@ const PendingPointCard = memo(function PendingPointCard({ point, index, isOverla
           </span>
         )}
       </div>
+      {/* Ligne 3: établissement */}
+      {(point.nomEtablissement || point.typeEtablissement) && (
+        <div className="flex items-center gap-1 mt-0.5 text-[11px] text-gray-500 truncate" title={[point.nomEtablissement, point.typeEtablissement].filter(Boolean).join(' · ')}>
+          <span className="flex-shrink-0">🏢</span>
+          <span className="truncate">{[point.nomEtablissement, point.typeEtablissement].filter(Boolean).join(' · ')}</span>
+        </div>
+      )}
     </div>
   );
 });
@@ -1841,6 +1848,8 @@ export default function DailyPlanningPage() {
           notes: bp.notes,
           contactNom: bp.contactNom,
           contactTelephone: bp.contactTelephone,
+          typeEtablissement: bp.typeEtablissement,
+          nomEtablissement: bp.nomEtablissement,
           clientFound: false,
           produitFound: !!matchedProduit,
           errors: !matchedProduit && bp.produitNom ? [`Produit "${bp.produitNom}" non trouvé`] : [],
@@ -2558,6 +2567,8 @@ export default function DailyPlanningPage() {
         creneauDebut: toApiHeure(pendingPoint.creneauDebut),
         creneauFin: toApiHeure(pendingPoint.creneauFin),
         notesInternes: pendingPoint.notes || undefined,
+        typeEtablissement: pendingPoint.typeEtablissement || undefined,
+        nomEtablissement: pendingPoint.nomEtablissement || undefined,
         produits: pendingPoint.produitsIds && pendingPoint.produitsIds.length > 0
           ? pendingPoint.produitsIds.map(p => ({ produitId: p.id, quantite: 1 }))
           : pendingPoint.produitId ? [{ produitId: pendingPoint.produitId, quantite: 1 }] : [],
@@ -3388,6 +3399,8 @@ export default function DailyPlanningPage() {
         notes: point.notes || undefined,
         contactNom: point.contactNom || undefined,
         contactTelephone: point.contactTelephone || undefined,
+        typeEtablissement: point.typeEtablissement || undefined,
+        nomEtablissement: point.nomEtablissement || undefined,
         externalId: point.externalId || undefined,
       }));
 

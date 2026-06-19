@@ -381,6 +381,12 @@ export default function ChauffeurTourneePage() {
                         {eventNav(point).address}
                       </p>
 
+                      {(point.nomEtablissement || point.typeEtablissement) && (
+                        <p className="text-sm text-gray-600 mb-2 truncate">
+                          🏢 {[point.nomEtablissement, point.typeEtablissement].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+
                       <div className="flex items-center gap-3 text-xs text-gray-500">
                         <span className="px-2 py-0.5 bg-gray-100 rounded">
                           {getTypeLabel(point.type)}

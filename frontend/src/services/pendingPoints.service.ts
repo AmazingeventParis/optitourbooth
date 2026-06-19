@@ -12,6 +12,8 @@ export interface BackendPendingPoint {
   notes?: string;
   contactNom?: string;
   contactTelephone?: string;
+  typeEtablissement?: string;
+  nomEtablissement?: string;
   source: string;
   externalId?: string;
   quantiteBornes?: number;
@@ -26,6 +28,8 @@ export interface CalendarEvent {
   produitNom?: string;
   adresse?: string;
   externalId?: string;
+  typeEtablissement?: string | null;
+  nomEtablissement?: string | null;
   suggestedMachineId?: string | null;
 }
 
@@ -67,6 +71,8 @@ export const pendingPointsService = {
     notes?: string;
     contactNom?: string;
     contactTelephone?: string;
+    typeEtablissement?: string;
+    nomEtablissement?: string;
   }): Promise<BackendPendingPoint> {
     const response = await api.post<ApiResponse<BackendPendingPoint>>('/pending-points/manual', data);
     return response.data.data;

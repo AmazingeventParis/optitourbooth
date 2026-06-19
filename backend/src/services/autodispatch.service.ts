@@ -18,6 +18,8 @@ interface PendingPoint {
   notes?: string;
   contactNom?: string;
   contactTelephone?: string;
+  typeEtablissement?: string | null;
+  nomEtablissement?: string | null;
   attachments?: any;
   externalId?: string;    // lien pending_point CRM → re-propagation des MAJ au sync
 }
@@ -255,6 +257,8 @@ export const autoDispatchService = {
             creneauFin: point.creneauFin ? this.parseTime(point.creneauFin) : null,
             dureePrevue,
             notesInternes: point.notes,
+            typeEtablissement: point.typeEtablissement ?? null,
+            nomEtablissement: point.nomEtablissement ?? null,
             attachments: point.attachments || [],
             externalId: point.externalId || null,
           },
