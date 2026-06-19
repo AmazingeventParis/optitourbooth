@@ -5,10 +5,10 @@ const config: CapacitorConfig = {
   appName: 'OptiTour',
   webDir: 'dist',
   server: {
-    // In production, the app loads from the built files
-    // For dev, uncomment to use live reload:
-    // url: 'http://192.168.x.x:5173',
-    // cleartext: true,
+    // L'APK charge le frontend déployé en direct → les correctifs web (Coolify)
+    // arrivent automatiquement sans reconstruire/réinstaller l'APK.
+    // NB: nécessite une connexion réseau au lancement (pas de repli hors-ligne).
+    url: 'https://optitourbooth.swipego.app',
     androidScheme: 'https',
   },
   plugins: {
