@@ -41,6 +41,16 @@ Le build prend environ 2-3 minutes par app.
 
 ### Build APK Android (local)
 
+**⚠️ Depuis le 2026-06-19, l'APK charge le web en direct** (`server.url = https://optitourbooth.swipego.app` dans `capacitor.config.ts`, commit `5d823c3`). Conséquence : un correctif **frontend déployé est visible sur l'APK sans rebuild**. On ne reconstruit l'APK QUE pour un changement de config native (plugins, server.url, permissions, icône) — pas pour un bug de code applicatif. Contrepartie : l'app a besoin du réseau au lancement (pas de repli hors-ligne).
+
+**⚠️ JDK 21 + Gradle :** le dossier `frontend/android/` est régénéré par `npx cap add android` avec **Gradle 8.2.1**, qui **plante sous JDK 21** (« Unsupported class file / could not determine java version »). Avant `assembleDebug`, monter le wrapper à **8.7** (compatible JDK 21 et AGP 8.2.1) :
+```powershell
+# frontend/android/gradle/wrapper/gradle-wrapper.properties
+# distributionUrl=...gradle-8.7-all.zip   (au lieu de 8.2.1)
+(Get-Content android\gradle\wrapper\gradle-wrapper.properties) -replace 'gradle-8\.2\.1-all\.zip','gradle-8.7-all.zip' | Set-Content android\gradle\wrapper\gradle-wrapper.properties
+```
+Alternative : utiliser un JDK 17. (Ces fichiers étant git-ignorés, ce correctif est à refaire à chaque régénération du dossier `android/`.)
+
 **Prérequis installés le 2026-05-18 :**
 - JDK 21 : `C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot`
 - Android SDK : `C:\Users\shoot\AppData\Local\Android\Sdk` (build-tools 34.0.0 + platform android-34)
