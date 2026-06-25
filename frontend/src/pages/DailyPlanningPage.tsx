@@ -2387,7 +2387,11 @@ export default function DailyPlanningPage() {
     setDragOverPendingZone(false);
 
     const { active, over } = event;
-    if (!over) return;
+    if (!over) {
+      // [DIAG TEMPORAIRE — à retirer]
+      toastError('DIAG drop', `over=NULL (atterri hors zone) activeType=${active.data.current?.type ?? '-'}`);
+      return;
+    }
 
     const activeData = active.data.current;
     const overData = over.data.current;
@@ -2447,11 +2451,12 @@ export default function DailyPlanningPage() {
       } else if (overData?.tourneeId) {
         targetTourneeId = overData.tourneeId as string;
       }
-      if (!targetTourneeId) return;
-
       // Utiliser la ref pour avoir l'état actuel
       const currentTournees = tourneesRef.current;
-      const targetTournee = currentTournees.find(t => t.id === targetTourneeId);
+      const targetTournee = targetTourneeId ? currentTournees.find(t => t.id === targetTourneeId) : undefined;
+      // [DIAG TEMPORAIRE — à retirer] révèle pourquoi un drop « rebondit »
+      toastError('DIAG drop', `overId=${overId} | ovType=${overData?.type ?? '-'} | ovTid=${overData?.tourneeId ?? '-'} | tid=${targetTourneeId ?? '-'} | found=${!!targetTournee} | nTour=${currentTournees.length} | cid=${pendingPoint.clientId ?? '-'} | bId=${pendingPoint._backendId ?? '-'}`);
+      if (!targetTourneeId) return;
       if (!targetTournee) return;
 
       // Créer l'ID optimiste
