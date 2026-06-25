@@ -1908,7 +1908,20 @@ export default function DailyPlanningPage() {
         }
       }
       if (changed && !stale()) {
-        setPendingPoints(resolvedPoints);
+        // Fusion (et non remplacement) : on injecte uniquement le clientId résolu
+        // dans la liste ACTUELLE, par _backendId. Ne JAMAIS réécrire la liste avec
+        // cet instantané périmé : si l'utilisateur a dispatché/retiré un point
+        // pendant la résolution (qui dure plusieurs secondes), il a disparu de la
+        // liste actuelle et ne doit pas être ré-injecté (sinon il "rebondit" dans
+        // « à dispatcher » alors qu'il est déjà dans une tournée).
+        const resolvedById = new Map(
+          resolvedPoints.filter(rp => rp._backendId && rp.clientId).map(rp => [rp._backendId, rp.clientId])
+        );
+        setPendingPoints(current => current.map(cp => {
+          if (cp.clientId || !cp._backendId) return cp;
+          const clientId = resolvedById.get(cp._backendId);
+          return clientId ? { ...cp, clientId, clientFound: true } : cp;
+        }));
       }
     }).catch((err) => {
       if (stale()) return;
