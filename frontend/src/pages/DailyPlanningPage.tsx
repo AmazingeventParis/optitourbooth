@@ -2327,8 +2327,6 @@ export default function DailyPlanningPage() {
     const data = active.data.current;
 
     if (data?.type === 'pending') {
-      // [DIAG TEMPORAIRE — à retirer]
-      toastError('DIAG START', `idx=${data.index} client=${(data.pendingPoint as ImportParsedPoint)?.clientName ?? '-'}`);
       setActivePendingPoint({ point: data.pendingPoint, index: data.index });
     } else if (data?.point) {
       setActivePoint(data.point as Point);
@@ -2389,11 +2387,7 @@ export default function DailyPlanningPage() {
     setDragOverPendingZone(false);
 
     const { active, over } = event;
-    if (!over) {
-      // [DIAG TEMPORAIRE — à retirer]
-      toastError('DIAG drop', `over=NULL (atterri hors zone) activeType=${active.data.current?.type ?? '-'}`);
-      return;
-    }
+    if (!over) return;
 
     const activeData = active.data.current;
     const overData = over.data.current;
@@ -2453,12 +2447,11 @@ export default function DailyPlanningPage() {
       } else if (overData?.tourneeId) {
         targetTourneeId = overData.tourneeId as string;
       }
+      if (!targetTourneeId) return;
+
       // Utiliser la ref pour avoir l'état actuel
       const currentTournees = tourneesRef.current;
-      const targetTournee = targetTourneeId ? currentTournees.find(t => t.id === targetTourneeId) : undefined;
-      // [DIAG TEMPORAIRE — à retirer] révèle pourquoi un drop « rebondit »
-      toastError('DIAG drop', `overId=${overId} | ovType=${overData?.type ?? '-'} | ovTid=${overData?.tourneeId ?? '-'} | tid=${targetTourneeId ?? '-'} | found=${!!targetTournee} | nTour=${currentTournees.length} | cid=${pendingPoint.clientId ?? '-'} | bId=${pendingPoint._backendId ?? '-'}`);
-      if (!targetTourneeId) return;
+      const targetTournee = currentTournees.find(t => t.id === targetTourneeId);
       if (!targetTournee) return;
 
       // Créer l'ID optimiste
@@ -3800,7 +3793,6 @@ export default function DailyPlanningPage() {
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
-            onDragCancel={(e) => { toastError('DIAG CANCEL', `annule idx=${(e.active.data.current as { index?: number })?.index ?? '-'} type=${e.active.data.current?.type ?? '-'}`); }}
           >
             {/* Section 1: Points à dispatcher (timeline horizontale) - Zone de drop fichier */}
             {!isWarehouseOnly && <div

@@ -1475,8 +1475,8 @@ export const tourneeController = {
       return;
     }
 
-    if (tournee.statut !== 'planifiee' && tournee.statut !== 'brouillon') {
-      apiResponse.badRequest(res, 'Cette tournée ne peut plus être modifiée');
+    if (tournee.statut === 'annulee') {
+      apiResponse.badRequest(res, 'Cette tournée est annulée et ne peut pas être modifiée');
       return;
     }
 
@@ -1664,9 +1664,9 @@ export const tourneeController = {
       return;
     }
 
-    // Vérifications selon le statut
-    if (point.tournee.statut === 'terminee' || point.tournee.statut === 'annulee') {
-      apiResponse.badRequest(res, 'Cette tournée ne peut plus être modifiée');
+    // Vérifications selon le statut (seules les tournées annulées sont verrouillées)
+    if (point.tournee.statut === 'annulee') {
+      apiResponse.badRequest(res, 'Cette tournée est annulée et ne peut pas être modifiée');
       return;
     }
 
@@ -1829,8 +1829,8 @@ export const tourneeController = {
       return;
     }
 
-    if (point.tournee.statut !== 'planifiee' && point.tournee.statut !== 'brouillon') {
-      apiResponse.badRequest(res, 'Cette tournée ne peut plus être modifiée');
+    if (point.tournee.statut === 'annulee') {
+      apiResponse.badRequest(res, 'Cette tournée est annulée et ne peut pas être modifiée');
       return;
     }
 
@@ -1891,8 +1891,8 @@ export const tourneeController = {
       return;
     }
 
-    if (tournee.statut !== 'planifiee' && tournee.statut !== 'brouillon') {
-      apiResponse.badRequest(res, 'Cette tournée ne peut plus être modifiée');
+    if (tournee.statut === 'annulee') {
+      apiResponse.badRequest(res, 'Cette tournée est annulée et ne peut pas être modifiée');
       return;
     }
 
@@ -1961,8 +1961,8 @@ export const tourneeController = {
       return;
     }
 
-    if (!['brouillon', 'planifiee'].includes(point.tournee.statut)) {
-      apiResponse.badRequest(res, 'La tournée source ne peut plus être modifiée');
+    if (point.tournee.statut === 'annulee') {
+      apiResponse.badRequest(res, 'La tournée source est annulée et ne peut pas être modifiée');
       return;
     }
 
@@ -1979,8 +1979,8 @@ export const tourneeController = {
       return;
     }
 
-    if (targetTournee.statut !== 'planifiee' && targetTournee.statut !== 'brouillon') {
-      apiResponse.badRequest(res, 'La tournée cible ne peut plus être modifiée');
+    if (targetTournee.statut === 'annulee') {
+      apiResponse.badRequest(res, 'La tournée cible est annulée et ne peut pas être modifiée');
       return;
     }
 
@@ -2130,8 +2130,8 @@ export const tourneeController = {
       return;
     }
 
-    if (tournee.statut !== 'planifiee' && tournee.statut !== 'brouillon') {
-      apiResponse.badRequest(res, 'Cette tournée ne peut plus être modifiée');
+    if (tournee.statut === 'annulee') {
+      apiResponse.badRequest(res, 'Cette tournée est annulée et ne peut pas être modifiée');
       return;
     }
 
