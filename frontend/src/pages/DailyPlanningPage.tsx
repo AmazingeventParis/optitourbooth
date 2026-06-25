@@ -2327,6 +2327,8 @@ export default function DailyPlanningPage() {
     const data = active.data.current;
 
     if (data?.type === 'pending') {
+      // [DIAG TEMPORAIRE — à retirer]
+      toastError('DIAG START', `idx=${data.index} client=${(data.pendingPoint as ImportParsedPoint)?.clientName ?? '-'}`);
       setActivePendingPoint({ point: data.pendingPoint, index: data.index });
     } else if (data?.point) {
       setActivePoint(data.point as Point);
@@ -3798,6 +3800,7 @@ export default function DailyPlanningPage() {
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
+            onDragCancel={(e) => { toastError('DIAG CANCEL', `annule idx=${(e.active.data.current as { index?: number })?.index ?? '-'} type=${e.active.data.current?.type ?? '-'}`); }}
           >
             {/* Section 1: Points à dispatcher (timeline horizontale) - Zone de drop fichier */}
             {!isWarehouseOnly && <div
