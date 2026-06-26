@@ -1291,22 +1291,26 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
           const numId = numIdMatch ? numIdMatch[0] : null;
           const debugId = numId || orderId || '?';
 
-          // Exclure explicitement Retrait et Chronopost
-          if (deliveryVal.includes('retrait') || deliveryVal.includes('chronopost')) {
+          // Le formulaire client (otb_cfg_bulk) est la SOURCE DE VÉRITÉ : il prime sur la
+          // colonne "delivery" d'orders_ajax, souvent restée sur "Retrait" alors que le
+          // client a rempli une vraie livraison (symétrique du fix Smakk FA2266 Maison Opale).
+          const form = numId ? formByNumId.get(numId) : undefined;
+          const formSaysDelivery = !!form && form.logType !== 'chronopost' && form.logType !== 'retrait';
+
+          // Exclure Retrait et Chronopost — SAUF si le formulaire client indique une livraison.
+          if ((deliveryVal.includes('retrait') || deliveryVal.includes('chronopost')) && !formSaysDelivery) {
             console.log(`[CRM PendingPoints] SKIP ${debugId} — retrait/chronopost: "${deliveryVal}"`);
             continue;
           }
 
-          // Filtre positif sur delivery — OU fallback sur logType du formulaire client
-          const form = numId ? formByNumId.get(numId) : undefined;
+          // Filtre positif sur delivery — OU fallback sur le formulaire client (livraison)
           const deliveryOk = deliveryVal.includes('livraison') || deliveryVal.includes('installation');
-          const formOk = form && form.logType !== 'chronopost' && form.logType !== 'retrait';
-          if (!deliveryOk && !formOk) {
+          if (!deliveryOk && !formSaysDelivery) {
             console.log(`[CRM PendingPoints] SKIP ${debugId} — delivery non éligible: "${deliveryVal}" (pas de formulaire client éligible)`);
             continue;
           }
-          if (!deliveryOk && formOk) {
-            console.log(`[CRM PendingPoints] INCLUDE ${debugId} — delivery vide mais formulaire client logType="${form!.logType}"`);
+          if (!deliveryOk && formSaysDelivery) {
+            console.log(`[CRM PendingPoints] INCLUDE ${debugId} — delivery "${deliveryVal || 'vide'}" mais formulaire client logType="${form!.logType}"`);
           }
 
           if (rawBoxType === 'Vegas Slim') continue;
@@ -1680,20 +1684,28 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
       const smkBorneRaw = readinessEntry?.borne || '';
       const smkQuantiteBornes = smkBorneRaw ? smkBorneRaw.split(',').filter(Boolean).length : 1;
 
-      // Filtre colonne "Livraison" de readiness.php
-      if (readinessEntry && readinessEntry.deliveryType) {
+      // Merge : info client (réponse mail) prioritaire sur _otb_orders.php ET sur la
+      // colonne readiness. Le formulaire info-client est la SOURCE DE VÉRITÉ pour
+      // livraison vs retrait (adresse, dates, créneaux).
+      const ic = smakkInfoClientMap.get(order.orderId);
+
+      // Le client a explicitement demandé retrait/chronopost dans son formulaire → skip.
+      if (ic?.logType === 'retrait' || ic?.logType === 'chronopost') {
+        result.skipped++;
+        continue;
+      }
+
+      // Filtre colonne "Livraison" de readiness.php — appliqué SEULEMENT si le formulaire
+      // info-client n'indique pas explicitement une livraison. Le formulaire prime :
+      // cas réel FA2266 (Maison Opale) où la colonne readiness est restée sur
+      // "Retrait boutique" alors que le client a rempli une vraie livraison (adresse
+      // Paris 16e, créneaux). Sans formulaire livraison, on retombe sur readiness.
+      if (ic?.logType !== 'livraison' && readinessEntry && readinessEntry.deliveryType) {
         const dt = readinessEntry.deliveryType.toLowerCase();
         if (!dt.includes('livraison') && !dt.includes('installation')) {
           result.skipped++;
           continue;
         }
-      }
-
-      // Merge : info client (réponse mail) prioritaire sur _otb_orders.php
-      const ic = smakkInfoClientMap.get(order.orderId);
-      if (ic?.logType === 'retrait' || ic?.logType === 'chronopost') {
-        result.skipped++;
-        continue;
       }
       const hasInfoClient = !!ic && (!!ic.adresse || !!ic.livCreneauDebut || !!ic.livDateISO);
       const livDateISO = ic?.livDateISO || order.livDateISO;
