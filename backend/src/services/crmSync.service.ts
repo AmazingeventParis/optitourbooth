@@ -904,6 +904,13 @@ function parseSmakkInfoClientHtml(html: string): SmakkInfoClient {
   };
   if (!html) return result;
 
+  // Même règle d'import que Shootnbox (otb_cfg_bulk) : si le client a soumis le
+  // formulaire plusieurs fois, on retient la CORRECTION LA PLUS RÉCENTE. mail-infos-smk
+  // renvoie les réponses empilées de la plus ancienne à la plus récente ; en parcourant
+  // les lignes dans l'ordre du document et en réécrivant chaque champ à sa dernière
+  // valeur non vide, la dernière soumission gagne automatiquement (champ par champ).
+  // En pratique Smakk ne renvoie qu'une réponse par commande, mais ce comportement
+  // garantit le bon choix si plusieurs réponses apparaissaient.
   const rows = [...html.matchAll(/<td[^>]*>(.*?)<\/td>\s*<td[^>]*>(.*?)<\/td>/gis)];
   for (const [, rawLabel, rawValue] of rows) {
     const label = (rawLabel || '').replace(/<[^>]+>/g, '').replace(/&[^;]+;/g, '').trim().toLowerCase();
@@ -1234,9 +1241,19 @@ export async function syncCrmPendingPoints(): Promise<PendingPointsSyncResult> {
         const score = logScore(d);
         const existing = formByNumId.get(cfg.num_id);
         if (existing) {
-          // Remplacer seulement si strictement mieux rempli ; à score égal, une vraie
-          // config logistique (hasLog) prime sur une config gfx (préserve fix 8dccb46).
-          const better = score > existing.score || (score === existing.score && hasLog && !existing.hasLog);
+          // Choix de la config à conserver quand une commande en a plusieurs :
+          //  1. score (nb de champs log_ non vides) le plus élevé l'emporte ;
+          //  2. à score égal, une vraie config logistique (hasLog) prime sur une
+          //     config gfx (préserve fix 8dccb46) ;
+          //  3. à score ET hasLog égaux, on garde la PLUS RÉCENTE = la dernière de la
+          //     liste (otb_cfg_bulk renvoie les soumissions de la plus ancienne à la
+          //     plus récente → la dernière est la correction du client). Cas réel :
+          //     FA14241 (Nilusmas) avec 2 formulaires remplis à 17 champs, livraison
+          //     27.06 puis corrigée 26.06 — on doit retenir la 26.06.
+          let better: boolean;
+          if (score !== existing.score) better = score > existing.score;
+          else if (hasLog !== existing.hasLog) better = hasLog;
+          else better = true; // tout égal → la dernière soumission gagne
           if (!better) continue;
         }
         formByNumId.set(cfg.num_id, { d, logType: cfg.logistique_type || 'classique', hasLog, score });
