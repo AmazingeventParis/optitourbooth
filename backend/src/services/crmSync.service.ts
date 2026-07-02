@@ -758,7 +758,9 @@ type PendingLogistics = {
 };
 
 function pendingDateDMY(dmy: string): string | null {
-  const m = (dmy || '').match(/^(\d{1,2})[.\-](\d{1,2})[.\-](\d{4})$/);
+  // Tolère une heure en suffixe (ex: "07.07.2026 00:00" côté Smakk) : on ne matche
+  // que la partie date, sans ancre de fin, sinon la commande est perdue (cas Swen FA2283).
+  const m = (dmy || '').trim().match(/^(\d{1,2})[.\-](\d{1,2})[.\-](\d{4})\b/);
   if (!m) return null;
   return `${m[3]}-${(m[2] || '01').padStart(2, '0')}-${(m[1] || '01').padStart(2, '0')}`;
 }
